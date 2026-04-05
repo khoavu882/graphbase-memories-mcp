@@ -1,0 +1,18 @@
+{
+  "_comment": "Preferred: uvx — no pip install needed, UV manages the isolated env automatically.",
+  "mcpServers": {
+    "graphbase-memories": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from", "/home/<you>/Workspace/my-templates/graphbase-memories-mcp",
+        "graphbase-memories-mcp"
+      ],
+      "env": {
+        "GRAPHBASE_DATA_DIR":  "~/.graphbase-memories",
+        "GRAPHBASE_BACKEND":   "sqlite",
+        "GRAPHBASE_LOG_LEVEL": "WARNING"
+      }
+    }
+  }
+}

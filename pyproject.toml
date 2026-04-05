@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "graphbase-memories-mcp"
+version = "0.1.0"
+description = "Graph-backed coding agent memory as an MCP server (stdio)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=2.0.0,<3.0.0",
+]
+
+[project.optional-dependencies]
+neo4j = ["neo4j>=5.0,<6.0"]
+dev   = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+graphbase-memories     = "graphbase_memories.__main__:main"
+graphbase-memories-mcp = "graphbase_memories.__main__:server_main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/graphbase_memories"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+
+# Local agent state
+.codex
+.serena/
+
+# Runtime data
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# Docs internals
+claudedocs/
+neo4j-data/
+
+# uv lockfile (local-only; not tracking for this template project)
+uv.lock
