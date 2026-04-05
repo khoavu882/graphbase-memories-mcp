@@ -1,18 +1,17 @@
-# graphbase-memories
+# Graphbase Memories
 
 Graph-backed episodic memory for coding agents — an MCP server (stdio) that stores sessions, decisions, and patterns as a knowledge graph and injects relevant context at session start.
 
 ## Problem
 
-Serena stores project-level and symbol-level notes well, but loses episodic memory: *why* a design was chosen, *which* patterns were adopted, *what* was tried and failed. After a context compaction, all of that is gone.
+Coding agents lose episodic memory on every context compaction: *why* a design was chosen, *which* patterns were adopted, *what* was tried and failed — all gone.
 
 **graphbase-memories** stores episodic memory as a graph, survives compactions, and injects a token-budgeted YAML summary into every session via a hook.
 
 ## Architecture in one line
 
 ```
-SQLite + FTS5 (v1) → GraphEngine ABC → 10 MCP tools → FastMCP stdio server
-                                     → inject CLI    → session-start.sh hook
+SQLite + FTS5 (v1) → GraphEngine ABC → 22 MCP tools → FastMCP stdio server
 ```
 
 ---
@@ -59,7 +58,7 @@ python3 -m graphbase_memories server   # verify server starts
         "graphbase-memories-mcp"
       ],
       "env": {
-        "GRAPHBASE_DATA_DIR":  "~/.graphbase-memories",
+        "GRAPHBASE_DATA_DIR":  "~/.graphbase",
         "GRAPHBASE_BACKEND":   "sqlite",
         "GRAPHBASE_LOG_LEVEL": "WARNING"
       }
@@ -78,7 +77,7 @@ python3 -m graphbase_memories server   # verify server starts
       "command": "python3",
       "args": ["-m", "graphbase_memories", "server"],
       "env": {
-        "GRAPHBASE_DATA_DIR": "~/.graphbase-memories",
+        "GRAPHBASE_DATA_DIR": "~/.graphbase",
         "GRAPHBASE_BACKEND": "sqlite",
         "GRAPHBASE_LOG_LEVEL": "WARNING"
       }
@@ -105,6 +104,17 @@ See `.mcp.json.example` for the copy-paste template.
 | `get_stale_memories` | Analysis | List memories not updated in N days and flag them `is_expired=1` |
 | `purge_expired_memories` | Analysis | **IRREVERSIBLE** — permanently DELETE expired memories older than N days |
 | `get_context` | Context | Return a token-budgeted YAML context block (for hook injection or agent use) |
+| `upsert_entity` | Entity | Create or update an entity node by `(name, type, project)` — full metadata replacement |
+| `get_entity` | Entity | Direct entity lookup — returns `{found: true, ...}` or `{found: false}` |
+| `link_entities` | Entity | Create a directed entity→entity edge (`DEPENDS_ON` / `IMPLEMENTS`) — idempotent |
+| `unlink_entities` | Entity | Delete an entity→entity edge — returns `{deleted: bool}` |
+| `upsert_entity_with_deps` | Entity | Upsert entity + create dependency edges in one call; auto-creates missing deps, preserves their metadata |
+| `store_session_with_learnings` | Session | Atomic commit: session memory + decisions (with SUPERSEDES dedup) + patterns, all LEARNED_DURING edges |
+| `resolve_active_project` | Lifecycle | Map workspace path → canonical Graphbase project ID (5-step resolution with collision detection) |
+| `ensure_project` | Lifecycle | Create or validate project storage (idempotent — writes `project.json`, initializes DB) |
+| `get_lifecycle_context` | Lifecycle | Return startup-ready context bundle: YAML block + structured decisions/patterns/sessions/entities |
+| `save_session_context` | Lifecycle | High-level save: session + decisions + patterns + context items + entity facts (all LEARNED_DURING linked) |
+| `list_available_tools` | Lifecycle | Static categorized tool inventory with API version for capability detection |
 
 ### Memory types
 
@@ -147,20 +157,47 @@ The old memory remains retrievable via `get_memory(memory_id, include_deleted=Fa
 
 ---
 
-## Serena Boundary [Q1 — Parallel Operation]
+## Lifecycle Tools (Phase 8)
 
-graphbase-memories and Serena run **in parallel** — they own different memory types:
+The lifecycle layer provides agent-agnostic session persistence and project bootstrapping. Agent skills call these tools instead of implementing their own load/save logic.
 
-| Layer | Owner | What it stores |
-|---|---|---|
-| Symbol memory | **Serena** | Code symbols, file content, project structure |
-| Project notes | **Serena** | Architecture docs, session summaries (`project/context`) |
-| Episodic memory | **graphbase-memories** | Sessions, decisions, patterns, entity facts |
-| Graph edges | **graphbase-memories** | SUPERSEDES / RELATES_TO / LEARNED_DURING relationships |
+### 3-Call Load Protocol
 
-**Rule**: If you're storing *why* a decision was made, *what* was tried, or *what pattern* was adopted → use graphbase-memories. If you're storing notes about code structure or symbols → use Serena.
+```python
+# Step 1: Resolve workspace → project identity
+resolved = resolve_active_project(workspace_root="/home/user/my-project")
+# → {project_id: "my-project", exists: true, identity_mode: "workspace-derived", ...}
 
-Do **not** migrate Serena memories to graphbase-memories automatically in v1 — see [Post-MVP Roadmap](#post-mvp-roadmap).
+# Step 2: Bootstrap storage (idempotent — safe to call every session)
+ensure_project(project_id=resolved["project_id"], workspace_root="/home/user/my-project")
+# → {created: false, db_initialized: true, context_seeded: false}
+
+# Step 3: Assemble startup context
+ctx = get_lifecycle_context(project_id=resolved["project_id"])
+# → {bootstrap_state: "existing", yaml_context: "...", decisions: [...], patterns: [...],
+#    recent_sessions: [...], stale_warnings: [...], tool_inventory: {...}}
+```
+
+### Save Workflow
+
+```python
+# Single call stores session + decisions + patterns + context items + entity facts
+save_session_context(
+    project_id="my-project",
+    session={"title": "Session: implement auth", "content": "Added JWT...", "entities": ["auth-service"], "tags": ["feature"]},
+    decisions=[{"title": "Use JWT for auth", "content": "Stateless, scalable.", "entities": ["auth-service"], "tags": ["security"]}],
+    patterns=[{"title": "Middleware auth pattern", "content": "Express middleware for token validation.", "entities": [], "tags": []}],
+    entity_facts=[{"title": "Auth uses Redis", "content": "Token revocation backed by Redis.", "entity_name": "auth-service"}],
+)
+# → {session_id: "...", decisions: [{id, superseded_id}], patterns: [{id}], context_items: [...], entity_facts: [...], errors: []}
+```
+
+### Capability Discovery
+
+```python
+list_available_tools()
+# → {api_version: "8.0", write: ["store_memory", ...], lifecycle: ["resolve_active_project", ...], ...}
+```
 
 ---
 
@@ -191,7 +228,7 @@ The inject call outputs a priority-ordered YAML block (decisions → patterns �
 | Variable | Default | Description |
 |---|---|---|
 | `GRAPHBASE_BACKEND` | `sqlite` | Storage backend (`sqlite` only in v1) |
-| `GRAPHBASE_DATA_DIR` | `~/.graphbase-memories` | Root directory for all project DBs |
+| `GRAPHBASE_DATA_DIR` | `~/.graphbase` | Root directory for all project DBs |
 | `GRAPHBASE_LOG_LEVEL` | `WARNING` | Log level for `graphbase.log` |
 | `GRAPHBASE_PYTHON` | `python3` | Python binary used by hook |
 
@@ -200,9 +237,10 @@ The inject call outputs a priority-ordered YAML block (decisions → patterns �
 ## Data Layout
 
 ```
-~/.graphbase-memories/
+~/.graphbase/
 └── {project-slug}/
     ├── memories.db      # SQLite + FTS5 (WAL mode)
+    ├── project.json     # Workspace mapping + timestamps (Phase 8)
     └── graphbase.log    # Structured JSON log (RotatingFileHandler, 1MB × 3)
 ```
 
@@ -218,11 +256,26 @@ Migration: `PRAGMA user_version` tracks schema version; `_run_migrations()` runs
 graphbase-memories server
 python3 -m graphbase_memories         # same
 
+# MCP server + optional DevTools sidecar
+graphbase-memories server --devtools --devtools-project <slug>
+graphbase-memories server --transport sse --devtools --devtools-project <slug> --open-browser
+
 # Inject context YAML to stdout (used by session-start.sh hook)
 graphbase-memories inject --project <slug> [--entity <name>] [--max-tokens 400]
 
 # List memories (developer inspection)
 graphbase-memories inspect --project <slug> [--limit 20]
+
+# Standalone HTTP DevTools UI — browser-based memory inspector
+graphbase-memories devtools --project <slug> [--host 127.0.0.1] [--port 3001]
+graphbase-memories devtools --project <slug> --open-browser
+
+# Health check (Python version, schema, WAL, FTS5)
+graphbase-memories doctor [--project <slug>]
+
+# Export / import (JSON, full fidelity)
+graphbase-memories export --project <slug> [--output file.json]
+graphbase-memories import --file file.json [--merge | --replace]
 ```
 
 ---
@@ -299,7 +352,6 @@ make neo4j-down
 
 ## Post-MVP Roadmap
 
-- **`import_from_serena`**: Migration tool to bulk-import Serena markdown memories. Deferred — type mapping is fragile, no rollback path. [R6]
 - **Sentence-transformers**: `all-MiniLM-L6-v2` (22MB, CPU-only) alongside BM25 for semantic vector search.
 - **HTTP/SSE transport**: FastMCP supports this natively — needed only for multi-session concurrent access.
 - **PyPI publish**: Package is ready; publish to PyPI to enable `uvx graphbase-memories-mcp`.
@@ -330,4 +382,4 @@ make neo4j-test-full
 GRAPHBASE_LOG_LEVEL=DEBUG graphbase-memories inject --project my-project
 ```
 
-Tests (as of Phase 3): 91 SQLite tests passing (added 5 search contract tests), 30 Neo4j contract tests (run with `make neo4j-test`).
+Tests: 157 SQLite tests passing (including 23 lifecycle tests), 30 Neo4j contract tests (run with `make neo4j-test`).

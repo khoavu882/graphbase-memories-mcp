@@ -23,12 +23,12 @@ Design decisions:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastmcp import FastMCP
 
 from graphbase_memories._provider import get_engine
+from graphbase_memories._utils import _now
 from graphbase_memories.graph.engine import Edge, MemoryNode, VALID_MEMORY_TYPES
 
 # ---------------------------------------------------------------------------
@@ -49,10 +49,6 @@ _RELATION_RULES: dict[str, dict[str, set[str] | None]] = {
         "to_types":   {"session"},
     },
 }
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +96,7 @@ def register_write_tools(mcp: FastMCP) -> None:
         entity_names: list[str] = entities or []
         memory_tags: list[str] = tags or []
 
+        now = _now()
         node = MemoryNode(
             id=str(uuid4()),
             project=project,
@@ -107,8 +104,8 @@ def register_write_tools(mcp: FastMCP) -> None:
             title=title,
             content=content,
             tags=memory_tags,
-            created_at=_now(),
-            updated_at=_now(),
+            created_at=now,
+            updated_at=now,
             valid_until=valid_until,
             is_deleted=False,
         )
@@ -154,6 +151,17 @@ def register_write_tools(mcp: FastMCP) -> None:
             raise ValueError("from_id and to_id must be different memories.")
 
         engine = get_engine(project)
+
+        # Idempotency: O(log n) probe via idx_rel_lookup — no fan-out scan
+        existing = engine.find_edge(from_id, to_id, relationship)
+        if existing is not None:
+            return {
+                "id":         existing.id,
+                "from_id":    existing.from_id,
+                "to_id":      existing.to_id,
+                "type":       existing.type,
+                "created_at": existing.created_at,
+            }
 
         # Load both nodes to validate direction constraints
         from_mem = engine.get_memory(from_id, include_deleted=True)

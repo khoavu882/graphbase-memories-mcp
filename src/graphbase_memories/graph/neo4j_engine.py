@@ -36,9 +36,11 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from graphbase_memories._utils import _now
 from graphbase_memories.config import Config
 from graphbase_memories.graph.engine import (
     VALID_EDGE_TYPES,
+    VALID_ENTITY_TYPES,
     VALID_MEMORY_TYPES,
     BlastRadiusResult,
     Edge,
@@ -56,8 +58,8 @@ except ImportError as _neo4j_import_error:  # pragma: no cover
     ) from _neo4j_import_error
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+# Valid edge types for entity→entity relationships (subset of VALID_EDGE_TYPES)
+_ENTITY_EDGE_TYPES: frozenset[str] = frozenset({"DEPENDS_ON", "IMPLEMENTS"})
 
 
 def _row_to_memory(rec: dict[str, Any]) -> MemoryNode:
@@ -84,6 +86,7 @@ def _row_to_entity(rec: dict[str, Any]) -> EntityNode:
         project=rec["project"],
         metadata=json.loads(rec.get("metadata_json") or "{}"),
         created_at=rec["created_at"],
+        updated_at=rec.get("updated_at"),
     )
 
 
@@ -277,6 +280,177 @@ class Neo4jEngine(GraphEngine):
         self._log.info(f"purge_expired project={project!r} older_than={older_than_days}d purged={count}")
         return count
 
+    def upsert_entity(
+        self,
+        name: str,
+        type: str,
+        project: str,
+        metadata: dict[str, Any],
+    ) -> EntityNode:
+        """
+        Create or update entity by (name, type, project).
+        Full metadata replacement. Sets updated_at = now() on create and update.
+
+        Raises ValueError if type not in VALID_ENTITY_TYPES.
+        """
+        if type not in VALID_ENTITY_TYPES:
+            raise ValueError(
+                f"Invalid entity type {type!r}. "
+                f"Must be one of: {sorted(VALID_ENTITY_TYPES)}"
+            )
+        now = _now()
+        eid = str(uuid4())
+        metadata_json = json.dumps(metadata)
+
+        def _write(tx):
+            result = tx.run(
+                """
+                MERGE (e:Entity {name: $name, type: $type, project: $project})
+                ON CREATE SET
+                  e.id           = $eid,
+                  e.metadata_json = $metadata_json,
+                  e.created_at   = $now,
+                  e.updated_at   = $now
+                ON MATCH SET
+                  e.metadata_json = $metadata_json,
+                  e.updated_at    = $now
+                RETURN e
+                """,
+                name=name, type=type, project=project,
+                eid=eid, metadata_json=metadata_json, now=now,
+            )
+            rec = result.single()
+            return _row_to_entity(dict(rec["e"]))
+
+        with self._driver.session() as s:
+            return s.execute_write(_write)
+
+    def link_entities(
+        self,
+        from_name: str,
+        from_type: str,
+        to_name: str,
+        to_type: str,
+        project: str,
+        edge_type: str,
+        properties: dict[str, Any],
+    ) -> Edge:
+        """
+        Create a directed entity→entity edge (ENTITY_EDGE relationship).
+        Idempotent: MERGE on (from, to, edge_type). Returns existing or new edge.
+
+        Raises ValueError if either entity missing or edge_type invalid.
+        """
+        if edge_type not in _ENTITY_EDGE_TYPES:
+            raise ValueError(
+                f"Invalid entity edge type {edge_type!r}. "
+                f"Must be one of: {sorted(_ENTITY_EDGE_TYPES)}"
+            )
+        from_ent = self.get_entity(from_name, from_type, project)
+        if from_ent is None:
+            raise ValueError(
+                f"Entity not found: name={from_name!r} type={from_type!r} project={project!r}"
+            )
+        to_ent = self.get_entity(to_name, to_type, project)
+        if to_ent is None:
+            raise ValueError(
+                f"Entity not found: name={to_name!r} type={to_type!r} project={project!r}"
+            )
+        return self.link_entities_by_id(
+            from_id=from_ent.id,
+            from_type="entity",
+            to_id=to_ent.id,
+            to_type="entity",
+            project=project,
+            edge_type=edge_type,
+            properties=properties,
+        )
+
+    def link_entities_by_id(
+        self,
+        from_id: str,
+        from_type: str,
+        to_id: str,
+        to_type: str,
+        project: str,
+        edge_type: str,
+        properties: dict[str, Any],
+    ) -> Edge:
+        if edge_type not in _ENTITY_EDGE_TYPES:
+            raise ValueError(
+                f"Invalid entity edge type {edge_type!r}. "
+                f"Must be one of: {sorted(_ENTITY_EDGE_TYPES)}"
+            )
+        if from_type != "entity" or to_type != "entity":
+            raise ValueError(
+                "link_entities_by_id requires discriminator types "
+                "'entity' for both endpoints"
+            )
+
+        def _write(tx):
+            now = _now()
+            eid = str(uuid4())
+            result = tx.run(
+                """
+                MATCH (from:Entity {id: $from_id, project: $project})
+                MATCH (to:Entity {id: $to_id, project: $project})
+                MERGE (from)-[r:ENTITY_EDGE {type: $edge_type}]->(to)
+                ON CREATE SET r.id = $eid, r.properties_json = $props, r.created_at = $now
+                RETURN r, from.id AS fid, to.id AS tid
+                """,
+                from_id=from_id,
+                to_id=to_id,
+                project=project,
+                edge_type=edge_type,
+                eid=eid,
+                props=json.dumps(properties),
+                now=now,
+            )
+            rec = result.single()
+            return Edge(
+                id=rec["r"]["id"],
+                from_id=rec["fid"],
+                from_type=from_type,
+                to_id=rec["tid"],
+                to_type=to_type,
+                type=rec["r"]["type"],
+                properties=json.loads(rec["r"].get("properties_json") or "{}"),
+                created_at=rec["r"]["created_at"],
+            )
+
+        with self._driver.session() as s:
+            return s.execute_write(_write)
+
+    def unlink_entities(
+        self,
+        from_name: str,
+        from_type: str,
+        to_name: str,
+        to_type: str,
+        project: str,
+        edge_type: str,
+    ) -> bool:
+        """
+        Hard-delete the entity→entity ENTITY_EDGE. Returns True if deleted.
+        """
+        def _write(tx):
+            result = tx.run(
+                """
+                MATCH (from:Entity {name: $from_name, type: $from_type, project: $project})
+                      -[r:ENTITY_EDGE {type: $edge_type}]->
+                      (to:Entity {name: $to_name, type: $to_type, project: $project})
+                DELETE r
+                RETURN count(r) AS deleted
+                """,
+                from_name=from_name, from_type=from_type,
+                to_name=to_name, to_type=to_type,
+                project=project, edge_type=edge_type,
+            )
+            return result.single()["deleted"] > 0
+
+        with self._driver.session() as s:
+            return s.execute_write(_write)
+
     # -----------------------------------------------------------------------
     # Read
     # -----------------------------------------------------------------------
@@ -414,7 +588,7 @@ class Neo4jEngine(GraphEngine):
         def _read(tx):
             result = tx.run(
                 "MATCH (m:Memory {id: $id})-[r:EDGE]->(n) "
-                "RETURN r ORDER BY r.created_at",
+                "RETURN r, n.id AS tid ORDER BY r.created_at",
                 id=memory_id,
             )
             return [
@@ -422,7 +596,7 @@ class Neo4jEngine(GraphEngine):
                     id=r["r"]["id"],
                     from_id=memory_id,
                     from_type=r["r"].get("from_type", "memory"),
-                    to_id=r["r"]["to_id"] if "to_id" in r["r"] else "",
+                    to_id=r["tid"],   # [fix] read target node id from the matched node
                     to_type=r["r"].get("to_type", "memory"),
                     type=r["r"]["type"],
                     properties=json.loads(r["r"].get("properties_json") or "{}"),
@@ -430,6 +604,37 @@ class Neo4jEngine(GraphEngine):
                 )
                 for r in result
             ]
+
+        with self._driver.session() as s:
+            return s.execute_read(_read)
+
+    def find_edge(self, from_id: str, to_id: str, edge_type: str) -> Edge | None:
+        def _read(tx):
+            result = tx.run(
+                """
+                MATCH (from {id: $from_id})-[r:EDGE]->(to {id: $to_id})
+                WHERE r.type = $edge_type
+                RETURN r
+                LIMIT 1
+                """,
+                from_id=from_id,
+                to_id=to_id,
+                edge_type=edge_type,
+            )
+            rec = result.single()
+            if rec is None:
+                return None
+            rel = rec["r"]
+            return Edge(
+                id=rel["id"],
+                from_id=from_id,
+                from_type=rel.get("from_type", "memory"),
+                to_id=to_id,
+                to_type=rel.get("to_type", "memory"),
+                type=rel["type"],
+                properties=json.loads(rel.get("properties_json") or "{}"),
+                created_at=rel["created_at"],
+            )
 
         with self._driver.session() as s:
             return s.execute_read(_read)
@@ -456,6 +661,24 @@ class Neo4jEngine(GraphEngine):
                     name=entity_name, project=project,
                 )
             return [_row_to_entity(dict(r["e"])) for r in result]
+
+        with self._driver.session() as s:
+            return s.execute_read(_read)
+
+    def get_entity(
+        self,
+        name: str,
+        type: str,
+        project: str,
+    ) -> EntityNode | None:
+        """Direct entity lookup by (name, type, project). Returns None if not found."""
+        def _read(tx):
+            result = tx.run(
+                "MATCH (e:Entity {name: $name, type: $type, project: $project}) RETURN e",
+                name=name, type=type, project=project,
+            )
+            rec = result.single()
+            return _row_to_entity(dict(rec["e"])) if rec else None
 
         with self._driver.session() as s:
             return s.execute_read(_read)

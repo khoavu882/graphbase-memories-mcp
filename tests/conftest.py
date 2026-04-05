@@ -44,7 +44,7 @@ def engine(tmp_path):
     """Fresh SQLiteEngine in a temp directory, cleared from global pool after test."""
     from graphbase_memories.config import Config
     from graphbase_memories.graph.sqlite_engine import SQLiteEngine
-    from graphbase_memories._provider import _clear_engines
+    from graphbase_memories._provider import _clear_engines, _set_config_for_test
 
     _clear_engines()
     cfg = Config(
@@ -53,9 +53,12 @@ def engine(tmp_path):
         log_level="WARNING",
         log_to_file=False,
     )
+    # Inject test config into provider so lifecycle tools use the same data_dir
+    _set_config_for_test(cfg)
     eng = SQLiteEngine(cfg, PROJECT)
     yield eng
     _clear_engines()
+    _set_config_for_test(Config())  # restore default
 
 
 @pytest.fixture

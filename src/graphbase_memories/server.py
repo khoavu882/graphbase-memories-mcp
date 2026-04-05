@@ -19,7 +19,12 @@ mcp = FastMCP(
         "Tools: store_memory, relate_memories (Phase 2+), "
         "get_memory, list_memories, search_memories, delete_memory (Phase 3+), "
         "get_blast_radius, get_stale_memories, purge_expired_memories (Phase 4+), "
-        "get_context (Phase 5+)."
+        "get_context (Phase 5+), "
+        "upsert_entity, get_entity, link_entities, unlink_entities, "
+        "upsert_entity_with_deps (Phase 6+), "
+        "store_session_with_learnings (Phase 7+), "
+        "resolve_active_project, ensure_project, get_lifecycle_context, "
+        "save_session_context, list_available_tools (Phase 8+)."
     ),
 )
 
@@ -42,6 +47,18 @@ register_context_tools(mcp)
 # --- Phase 2 (P2-B): Graph view tool ---
 from graphbase_memories.tools.graph_tools import register_graph_tools  # noqa: E402
 register_graph_tools(mcp)
+
+# --- Phase 6: Entity management tools ---
+from graphbase_memories.tools.entity_tools import register_entity_tools  # noqa: E402
+register_entity_tools(mcp)
+
+# --- Phase 7: Session batch tools ---
+from graphbase_memories.tools.session_tools import register_session_tools  # noqa: E402
+register_session_tools(mcp)
+
+# --- Phase 8: Lifecycle tools ---
+from graphbase_memories.tools.lifecycle_tools import register_lifecycle_tools  # noqa: E402
+register_lifecycle_tools(mcp)
 
 
 def get_mcp() -> FastMCP:

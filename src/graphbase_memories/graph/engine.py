@@ -14,6 +14,7 @@ Design decisions:
 
 from __future__ import annotations
 
+import contextlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -47,6 +48,7 @@ class EntityNode:
     project: str
     metadata: dict[str, Any]
     created_at: str
+    updated_at: str | None = None   # None on pre-v2 rows; set by upsert_entity
 
 
 @dataclass
@@ -77,8 +79,11 @@ class GraphData:
     memories: list[MemoryNode]
     entities: list[EntityNode]
     edges: list[Edge]
-    total_memories: int         # non-deleted count (may exceed len(memories) if limit applied)
-    generated_at: str           # ISO-8601 UTC timestamp
+    total_memories: int                         # non-deleted count (may exceed len(memories) if limit applied)
+    generated_at: str                           # ISO-8601 UTC timestamp
+    memory_entity_links: list[tuple[str, str]] = field(default_factory=list)
+    # [(memory_id, entity_id), ...] — pre-fetched join for O(1) lookups in graph_view.
+    # Avoids N+1 queries when building the memory→entity link list. [P0-1]
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +152,125 @@ class GraphEngine(ABC):
         Irreversible — caller should call get_stale_memories() first.
         """
         ...
+
+    @abstractmethod
+    def upsert_entity(
+        self,
+        name: str,
+        type: str,
+        project: str,
+        metadata: dict[str, Any],
+    ) -> EntityNode:
+        """
+        Create or update an entity by (name, type, project) key.
+
+        Full metadata replacement — not partial merge. The caller owns the
+        complete metadata dict. Sets updated_at = now() on both create and update.
+
+        Intentional exception to append-only design [Q5]: EntityNode.metadata
+        represents current real-world state (service dependencies, databases),
+        not a historical record. Prior metadata values are NOT preserved.
+
+        Raises ValueError if type is not in VALID_ENTITY_TYPES.
+        """
+        ...
+
+    @abstractmethod
+    def link_entities(
+        self,
+        from_name: str,
+        from_type: str,
+        to_name: str,
+        to_type: str,
+        project: str,
+        edge_type: str,
+        properties: dict[str, Any],
+    ) -> Edge:
+        """
+        Create a directed entity→entity edge.
+
+        Idempotent: (from_id, to_id, edge_type) is unique among entity edges.
+        If the edge already exists, returns the existing Edge without inserting
+        a duplicate.
+
+        Raises ValueError if either entity does not exist in the project.
+        Raises ValueError if edge_type is not DEPENDS_ON or IMPLEMENTS.
+        Does NOT auto-create missing entities — use upsert_entity() first.
+        """
+        ...
+
+    @abstractmethod
+    def unlink_entities(
+        self,
+        from_name: str,
+        from_type: str,
+        to_name: str,
+        to_type: str,
+        project: str,
+        edge_type: str,
+    ) -> bool:
+        """
+        Delete the entity→entity edge matching (from_id, to_id, edge_type).
+
+        Hard-delete — not soft-delete. Returns True if the edge was found and
+        deleted, False if no matching edge existed.
+        """
+        ...
+
+    @abstractmethod
+    def find_edge(
+        self,
+        from_id: str,
+        to_id: str,
+        edge_type: str,
+    ) -> Edge | None:
+        """
+        Look up a single directed edge by (from_id, to_id, edge_type).
+
+        Returns the matching Edge if found, None if no edge exists.
+        O(log n) via idx_rel_lookup — does NOT load all edges for from_id.
+
+        Unlike get_edges_for_memory(), this method is cross-type:
+        it matches any edge regardless of from_type/to_type.
+        Used exclusively for idempotency checks in relate_memories.
+        """
+        ...
+
+    @abstractmethod
+    def link_entities_by_id(
+        self,
+        from_id: str,
+        from_type: str,
+        to_id: str,
+        to_type: str,
+        project: str,
+        edge_type: str,
+        properties: dict[str, Any],
+    ) -> Edge:
+        """
+        Create a directed entity→entity edge using pre-resolved entity UUIDs.
+
+        Identical semantics to link_entities() — same idempotency, same
+        edge_type validation, same return type.
+
+        Use when the caller already holds entity IDs to avoid redundant
+        SELECT per call. Does NOT validate entity existence — the caller
+        is responsible for ensuring both IDs are valid.
+
+        Raises ValueError if edge_type is not DEPENDS_ON or IMPLEMENTS.
+        """
+        ...
+
+    @contextlib.contextmanager
+    def batch_write(self):
+        """
+        No-op default implementation. Subclasses override for commit batching.
+
+        The default yields immediately — callers get per-call commit semantics
+        (correct but not optimised). Neo4jEngine inherits this default since
+        Neo4j transactions have different semantics.
+        """
+        yield
 
     # -----------------------------------------------------------------------
     # Read
@@ -219,6 +343,22 @@ class GraphEngine(ABC):
         """
         Return entities for a project, optionally co-occurring with entity_name
         (i.e. sharing at least one memory reference).
+        """
+        ...
+
+    @abstractmethod
+    def get_entity(
+        self,
+        name: str,
+        type: str,
+        project: str,
+    ) -> EntityNode | None:
+        """
+        Direct entity lookup by (name, type, project).
+
+        Returns None if not found — callers must treat None as "no prior history"
+        and use a hard-coded type constant (not a variable) to avoid ambiguity
+        between "wrong type" and "entity does not exist".
         """
         ...
 

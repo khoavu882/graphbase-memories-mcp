@@ -5,7 +5,8 @@ render_context() builds a compact YAML block for hook injection.
 
 Design decisions:
   [Q3] Hard token cap with priority ordering:
-       P1 decisions → P2 patterns → P3 stale_warnings → P4 related_entities → P5 recent sessions
+       P1 decisions → P2 service_metadata → P3 patterns → P4 stale_warnings
+       → P5 related_entities → P6 recent sessions
        Each priority block is only included if remaining budget permits.
 
   Token counting: len(text) // 4 (GPT-3.5 heuristic, ±15% — sufficient for
@@ -73,6 +74,31 @@ def _render_patterns(patterns: list[MemoryNode], budget_chars: int) -> str:
     return _render_memory_list(patterns, "patterns", 100, budget_chars)
 
 
+def _render_service_metadata(metadata: dict, budget_chars: int) -> str:
+    """Render entity metadata as a flat YAML block (P2 priority).
+
+    Only includes scalar values (str, int, float, bool) to keep output compact.
+    Lists are joined as comma-separated strings. Nested dicts are skipped.
+    """
+    if not metadata:
+        return ""
+    lines = ["service_metadata:"]
+    for key, value in metadata.items():
+        if isinstance(value, dict):
+            continue   # skip nested objects — too noisy for context injection
+        if isinstance(value, list):
+            rendered_val = repr(", ".join(str(v) for v in value))
+        else:
+            rendered_val = repr(str(value))
+        entry = f"  {key}: {rendered_val}"
+        if budget_chars - len("\n".join(lines)) - len(entry) < 0:
+            break
+        lines.append(entry)
+    if len(lines) == 1:
+        return ""
+    return "\n".join(lines)
+
+
 def _render_stale_warnings(stale: list[MemoryNode]) -> str:
     """Render stale memory warning list (titles only — brief by design)."""
     if not stale:
@@ -124,20 +150,25 @@ def render_context(
     stale: list[MemoryNode],
     focus_entity: str | None,
     max_tokens: int,
+    entity_metadata: dict | None = None,
 ) -> str:
     """
     Build a priority-ordered YAML context block hard-capped at max_tokens. [Q3]
 
     Priority order:
-      P1: decisions   (~100 tokens, always included if they fit)
-      P2: patterns    (~80 tokens)
-      P3: stale_warnings  (~60 tokens — is_expired memories needing review)
-      P4: related_entities (~40 tokens)
-      P5: recent session titles (~40 tokens, filler)
+      P1: decisions        (~100 tokens, always included if they fit)
+      P2: service_metadata (~60 tokens — current real-world state of focus entity)
+      P3: patterns         (~80 tokens)
+      P4: stale_warnings   (~60 tokens — is_expired memories needing review)
+      P5: related_entities (~40 tokens)
+      P6: recent session titles (~40 tokens, filler)
+
+    entity_metadata: dict from EntityNode.metadata for the focus entity.
+                     Passed separately so this function stays a pure formatter.
 
     Returns empty string if no memories exist (graceful degradation).
     """
-    if not memories and not stale and not entities:
+    if not memories and not stale and not entities and not entity_metadata:
         return ""
 
     budget = max_tokens * _CHARS_PER_TOKEN   # work in characters throughout
@@ -150,7 +181,14 @@ def render_context(
         sections.append(block)
         budget -= len(block)
 
-    # P2: patterns (only if budget remains)
+    # P2: service_metadata (current entity state — highest practical value per token)
+    if budget > 60 * _CHARS_PER_TOKEN and entity_metadata:
+        block = _render_service_metadata(entity_metadata, budget)
+        if block:
+            sections.append(block)
+            budget -= len(block)
+
+    # P3: patterns (only if budget remains)
     if budget > 80 * _CHARS_PER_TOKEN:
         patterns = [m for m in memories if m.type == "pattern"]
         block = _render_patterns(patterns, budget)
@@ -158,21 +196,21 @@ def render_context(
             sections.append(block)
             budget -= len(block)
 
-    # P3: stale warnings
+    # P4: stale warnings
     if budget > 60 * _CHARS_PER_TOKEN and stale:
         block = _render_stale_warnings(stale)
         if block:
             sections.append(block)
             budget -= len(block)
 
-    # P4: related entities
+    # P5: related entities
     if budget > 40 * _CHARS_PER_TOKEN and entities:
         block = _render_entities(entities, budget)
         if block:
             sections.append(block)
             budget -= len(block)
 
-    # P5: recent session titles (filler)
+    # P6: recent session titles (filler)
     if budget > 40 * _CHARS_PER_TOKEN:
         block = _render_sessions(memories, budget)
         if block:

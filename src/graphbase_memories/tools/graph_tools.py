@@ -17,6 +17,7 @@ from __future__ import annotations
 from fastmcp import FastMCP
 
 from graphbase_memories._provider import get_engine
+from graphbase_memories.graph.engine import EntityNode
 
 
 def register_graph_tools(mcp: FastMCP) -> None:
@@ -58,25 +59,37 @@ def register_graph_tools(mcp: FastMCP) -> None:
         engine = get_engine(project)
         data = engine.get_graph_data(project, limit=limit)
 
+        # [P0-1] Build memory_id → {entity_id} lookup from pre-fetched links.
+        # Replaces N+1 get_entities_for_memory() calls with a single dict lookup.
+        entity_id_by_memory: dict[str, set[str]] = {}
+        for memory_id, entity_id in data.memory_entity_links:
+            entity_id_by_memory.setdefault(memory_id, set()).add(entity_id)
+
+        # Build entity_id → EntityNode lookup for name resolution
+        entity_by_id: dict[str, EntityNode] = {e.id: e for e in data.entities}
+
         # Build node list — memories first, then entities
         nodes = []
         seen_entity_ids: set[str] = set()
 
         for m in data.memories:
-            # Apply entity_filter: keep only memories that reference the entity
+            # Apply entity_filter: keep only memories referencing the named entity
             if entity_filter is not None:
+                linked_entity_ids = entity_id_by_memory.get(m.id, set())
                 entity_names = {
-                    e.name for e in engine.get_entities_for_memory(m.id)
+                    entity_by_id[eid].name
+                    for eid in linked_entity_ids
+                    if eid in entity_by_id
                 }
                 if entity_filter not in entity_names:
                     continue
             nodes.append({
-                "id":        m.id,
-                "label":     m.title,
-                "node_type": "memory",
-                "type":      m.type,
-                "tags":      m.tags,
-                "project":   m.project,
+                "id":         m.id,
+                "label":      m.title,
+                "node_type":  "memory",
+                "type":       m.type,
+                "tags":       m.tags,
+                "project":    m.project,
                 "updated_at": m.updated_at,
                 "is_expired": m.is_expired,
             })
@@ -106,15 +119,13 @@ def register_graph_tools(mcp: FastMCP) -> None:
             if edge.from_id in all_node_ids and edge.to_id in all_node_ids
         ]
 
-        # Also add implicit memory→entity links from memory_entities
-        for m in data.memories:
-            if m.id not in included_memory_ids:
-                continue
-            for entity in engine.get_entities_for_memory(m.id):
-                if entity.id in all_node_ids:
+        # Add memory→entity REFERENCES links using the pre-fetched join (0 extra queries)
+        for memory_id in included_memory_ids:
+            for entity_id in entity_id_by_memory.get(memory_id, set()):
+                if entity_id in all_node_ids:
                     links.append({
-                        "source": m.id,
-                        "target": entity.id,
+                        "source": memory_id,
+                        "target": entity_id,
                         "type":   "REFERENCES",
                     })
 

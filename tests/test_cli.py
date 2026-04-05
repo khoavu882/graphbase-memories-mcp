@@ -124,3 +124,10 @@ def test_inspect_lists_memories(tmp_path):
     assert result.returncode == 0
     assert "Retry pattern" in result.stdout
     assert "pattern" in result.stdout
+
+
+def test_server_open_browser_requires_devtools(tmp_path):
+    """server must reject --open-browser unless --devtools is enabled."""
+    result = _run_cli(["server", "--open-browser"], tmp_path)
+    assert result.returncode == 2
+    assert "--open-browser requires --devtools" in result.stderr

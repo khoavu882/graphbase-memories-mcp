@@ -1,18 +1,16 @@
 # graphbase-memories — Architecture
 
-**Status**: Phase 3 | 2026-04-05
+**Status**: Phase 12 | 2026-04-06
 **Source**: `~/Workspace/my-templates/graphbase-memories-mcp`
 **MCP name**: `graphbase-memories`
 **Transport**: stdio (local process)
-**Tests**: 91 SQLite passing + 30 Neo4j contract (Docker) | Coverage: ~88%
+**Tests**: 157 SQLite passing + 30 Neo4j contract (Docker) | Coverage: ~90%
 
 ---
 
 ## 1. Problem Statement
 
-The current coding agent memory system (Serena MCP) stores memories as flat markdown files with a
-namespace convention (`project/context`, `session/history/<ts>`, etc.). This works for simple
-key-value retrieval but fails at:
+Flat-file or key-value agent memory systems work for simple retrieval but fail at:
 
 | Pain Point | Concrete Symptom |
 |---|---|
@@ -23,8 +21,8 @@ key-value retrieval but fails at:
 | No semantic search | Must know exact key to retrieve a memory |
 | Cross-session drift | Agent re-discovers the same patterns each session |
 
-`graphbase-memories` solves this by replacing flat file storage with a **graph-backed memory
-engine** exposed as an MCP server (stdio) with 10 focused tools.
+`graphbase-memories` solves this with a **graph-backed memory engine** exposed as an MCP server
+(stdio) with 22 focused tools.
 
 ---
 
@@ -66,13 +64,14 @@ engine** exposed as an MCP server (stdio) with 10 focused tools.
             │  WAL mode    │    │  Cypher N-hop    │
             └─────────────┘    └──────────────────┘
                     │
-         ~/.graphbase-memories/
+         ~/.graphbase/               (default root; no legacy runtime fallback)
          └── <project>/
              ├── memories.db     (SQLite + FTS5, WAL mode, ACID)
+             ├── project.json    (workspace mapping — Phase 8)
              └── graphbase.log   (JSON, RotatingFileHandler 1MB×3)
 ```
 
-**Key architectural principle**: The 10 MCP tools never touch storage directly — they go through
+**Key architectural principle**: The 22 MCP tools never touch storage directly — they go through
 the `GraphEngine` interface. This means the V2 Neo4j migration is a one-file swap with zero
 API changes.
 
@@ -83,8 +82,9 @@ API changes.
 | Layer | Module | Responsibility |
 |---|---|---|
 | **CLI / Entry** | `__main__.py` | Dispatch: `server` (MCP), `inject` (hook), `inspect` (dev) |
-| **MCP Server** | `server.py` | FastMCP singleton; registers all 10 tools |
-| **Tools** | `tools/{write,read,analysis,context}_tools.py` | MCP wire protocol; call `_provider.get_engine()` only |
+| **MCP Server** | `server.py` | FastMCP singleton; registers all 22 tools via 8 `register_*_tools()` calls |
+| **Tools** | `tools/{write,read,analysis,context,graph,entity,session,lifecycle}_tools.py` + `_types.py` | MCP wire protocol; call `_provider.get_engine()` only |
+| **Lifecycle** | `lifecycle/{resolver,coordinator,assembler,inventory}.py` | Project resolution, bootstrap, context assembly, tool inventory |
 | **Provider** | `_provider.py` | Lazy engine lifecycle; backend selection; test injection |
 | **Config** | `config.py` | Env-aware dataclass (backend, data_dir, log_level) |
 | **Formatter** | `formatters/yaml_context.py` | **Pure function** — token-capped YAML rendering, no I/O |
@@ -120,8 +120,9 @@ EntityNode ─── named real-world object a memory references
   name        : canonical name (e.g. "PaymentService")
   type        : 'service' | 'file' | 'feature' | 'concept' | 'table' | 'topic'
   project     : project slug
-  metadata    : dict  (arbitrary JSON properties)
+  metadata    : dict  (arbitrary JSON properties — full replacement on upsert [Q5])
   created_at  : ISO-8601
+  updated_at  : ISO-8601 | None  (set on upsert; backfilled from created_at by v2 migration)
   UNIQUE (name, type, project)
 
 Edge ─── directed relationship between two nodes
@@ -137,18 +138,18 @@ Edge ─── directed relationship between two nodes
 
 ### 4.2 Edge Types
 
-| Edge type | `relate_memories` tool | Allowed direction |
-|---|---|---|
-| `SUPERSEDES` | ✓ | newer → older (any memory type) |
-| `RELATES_TO` | ✓ | any memory → any memory |
-| `LEARNED_DURING` | ✓ | `{decision,pattern,context,entity_fact}` → `{session}` |
-| `DEPENDS_ON` | engine only | entity → entity |
-| `IMPLEMENTS` | engine only | entity → entity |
+| Edge type | `relate_memories` tool | `link_entities` tool | Allowed direction |
+|---|---|---|---|
+| `SUPERSEDES` | ✓ | — | newer → older (any memory type) |
+| `RELATES_TO` | ✓ | — | any memory → any memory |
+| `LEARNED_DURING` | ✓ | — | `{decision,pattern,context,entity_fact}` → `{session}` |
+| `DEPENDS_ON` | — | ✓ | entity → entity |
+| `IMPLEMENTS` | — | ✓ | entity → entity |
 
-`DEPENDS_ON` and `IMPLEMENTS` are valid in the storage engine for entity-level graph edges
-(e.g., service dependency maps) but are not exposed via the `relate_memories` tool.
+`DEPENDS_ON` and `IMPLEMENTS` are exposed via `link_entities` / `unlink_entities` for building
+service dependency graphs. They are not valid in `relate_memories` (memory-to-memory only).
 
-### 4.3 SQLite Schema (v1)
+### 4.3 SQLite Schema (v2)
 
 ```sql
 CREATE TABLE memories (
@@ -172,6 +173,7 @@ CREATE TABLE entities (
     project     TEXT NOT NULL,
     metadata    TEXT NOT NULL DEFAULT '{}',
     created_at  TEXT NOT NULL,
+    updated_at  TEXT,                         -- [v2] set on upsert; backfilled from created_at
     UNIQUE (name, type, project)
 );
 
@@ -211,7 +213,19 @@ CREATE INDEX idx_memories_updated  ON memories(updated_at);
 CREATE INDEX idx_entities_project  ON entities(project, type);
 CREATE INDEX idx_rel_from          ON relationships(from_id, from_type);
 CREATE INDEX idx_rel_to            ON relationships(to_id, to_type);
+
+-- [v2] Partial UNIQUE: prevents duplicate entity→entity edges without restricting
+-- memory→memory edges (SUPERSEDES chains need duplicates with different IDs)
+CREATE UNIQUE INDEX idx_rel_entity_edge_unique
+    ON relationships(from_id, to_id, type)
+    WHERE from_type = 'entity' AND to_type = 'entity';
 ```
+
+**v1 → v2 migration** (runs automatically on connection open when `PRAGMA user_version = 1`):
+1. `ALTER TABLE entities ADD COLUMN updated_at TEXT`
+2. `UPDATE entities SET updated_at = created_at` (backfill existing rows)
+3. `CREATE UNIQUE INDEX idx_rel_entity_edge_unique ...`
+4. `PRAGMA user_version = 2`
 
 **Schema migration**: `PRAGMA user_version` tracks schema version.
 `_init_db()` runs on every connection open:
@@ -221,7 +235,7 @@ CREATE INDEX idx_rel_to            ON relationships(to_id, to_type);
 
 ---
 
-## 5. MCP Tool API (10 tools — as implemented)
+## 5. MCP Tool API (22 tools — as implemented)
 
 ### 5.1 Write Tools
 
@@ -304,13 +318,136 @@ purge_expired_memories(
 
 ```python
 get_context(
-    project:    str,
-    entity:     str | None = None,   # focus on a specific entity
-    max_tokens: int = 500,           # hard token cap [Q3]
+    project:     str,
+    entity:      str | None = None,   # focus on a specific entity
+    entity_type: str = "service",     # entity type for metadata lookup
+    max_tokens:  int = 500,           # hard token cap [Q3]
 ) -> str   # compact YAML block (see §6 for format)
 ```
 
-### 5.5 Tool Name Mapping (as seen in Claude Code)
+### 5.5 Entity Tools
+
+```python
+upsert_entity(
+    project:  str,
+    name:     str,
+    type:     str,            # 'service'|'file'|'feature'|'concept'|'table'|'topic'
+    metadata: dict = {},      # full replacement on every call [Q5]
+) -> dict   # {id, name, type, project, metadata, created_at, updated_at}
+
+get_entity(
+    project: str,
+    name:    str,
+    type:    str,
+) -> dict   # {found: True, id, name, ...} | {found: False}
+
+link_entities(
+    project:   str,
+    from_name: str,  from_type: str,
+    to_name:   str,  to_type:   str,
+    edge_type: str,             # 'DEPENDS_ON' | 'IMPLEMENTS'
+    properties: dict = {},
+) -> dict   # {id, from_id, from_type, to_id, to_type, type, created_at}
+            # Idempotent — second call returns the same edge id (partial UNIQUE index [v2])
+
+unlink_entities(
+    project:   str,
+    from_name: str,  from_type: str,
+    to_name:   str,  to_type:   str,
+    edge_type: str,
+) -> dict   # {deleted: bool}
+
+upsert_entity_with_deps(
+    project:    str,
+    name:       str,
+    type:       str,          # 'service'|'file'|'feature'|'concept'|'table'|'topic'
+    metadata:   dict,         # full replacement on entity — dep metadata NOT overwritten [Q5]
+    depends_on: list[str],    # dep entity names (required — no default type assumed)
+    dep_type:   str,          # entity type for all deps (required)
+    edge_type:  str = "DEPENDS_ON",  # 'DEPENDS_ON'|'IMPLEMENTS'
+) -> dict   # {entity_id, created_edges: [{from_id, to_id, type}], errors: [{index, message}]}
+            # Auto-creates missing dep entities (guarded: existing dep metadata preserved)
+            # Idempotent DEPENDS_ON edges — safe to call multiple times
+```
+
+### 5.6 Session Tools
+
+```python
+store_session_with_learnings(
+    project:   str,
+    session:   MemoryInput,    # {title, content, entities: list[str], tags: list[str]}
+    decisions: list[MemoryInput],
+    patterns:  list[MemoryInput],
+) -> dict   # {session_id, decisions: [{id, superseded_id}], patterns: [{id}], errors: [{index, type, message}]}
+```
+
+Composite workflow tool — encapsulates the graph mechanics that skills should not own:
+- Stores session memory first (atomic — raises on failure)
+- For each decision: BM25 + exact-title SUPERSEDES dedup, stores memory, creates LEARNED_DURING edge
+- For each pattern: stores memory, creates LEARNED_DURING edge
+- Returns partial results on per-item failure; session commit is not rolled back
+
+**Dedup strategy** (hybrid, handles cold-start corpus):
+1. Exact title equality — corpus-size-independent (BM25 IDF → 0 when N = df = 1)
+2. BM25 score > 1.5 — post-negation positive score from FTS5 rank
+
+**Input types** (`tools/_types.py`): `MemoryInput`, `DecisionResult`, `PatternResult`, `ItemError`
+are TypedDicts — FastMCP derives the JSON Schema from them, not from bare `dict`.
+
+### 5.8 Lifecycle Tools (Phase 8)
+
+```python
+resolve_active_project(
+    workspace_root:   str = "",        # absolute path to workspace root
+    cwd:              str | None = None, # reserved for monorepo sub-project
+    project_override: str | None = None, # skip all heuristics — use this ID
+) -> dict   # {project_id, project_slug, workspace_root, storage_path, exists, identity_mode}
+            # identity_mode: "override" | "project-json" | "legacy-slug" | "workspace-derived"
+
+ensure_project(
+    project_id:         str,            # canonical ID from resolve_active_project
+    workspace_root:     str | None = None,
+    initialize_context: bool = False,   # seed a bootstrap context memory
+) -> dict   # {project_id, created, db_initialized, context_seeded}
+            # Idempotent — safe to call every session start
+
+get_lifecycle_context(
+    project_id:              str,
+    entity:                  str | None = None,
+    entity_type:             str = "service",
+    max_tokens:              int = 500,
+    include_recent_sessions: bool = True,
+    include_inventory:       bool = True,
+) -> dict   # {project_id, bootstrap_state, yaml_context,
+            #  recent_sessions, decisions, patterns, entities,
+            #  stale_warnings, tool_inventory}
+
+save_session_context(
+    project_id:    str,
+    session:       MemoryInput,
+    decisions:     list[MemoryInput],
+    patterns:      list[MemoryInput],
+    context_items: list[MemoryInput] | None = None,
+    entity_facts:  list[dict] | None = None,
+) -> dict   # {session_id, decisions, patterns, context_items, entity_facts, errors}
+
+list_available_tools(
+) -> dict   # {api_version: "8.0", write: [...], read: [...], lifecycle: [...], ...}
+            # Static — no project context required
+```
+
+**Resolution precedence** (5 steps):
+1. `project_override` (explicit) → `identity_mode = "override"`
+2. `project.json` mapping for `workspace_root` → `identity_mode = "project-json"`
+3. Legacy slug directory lookup → `identity_mode = "legacy-slug"`
+4. Repo-basename slug → `identity_mode = "workspace-derived"`
+5. Collision detection: basename + stable 8-char hash suffix
+
+**3-call load protocol**: `resolve_active_project` → `ensure_project` → `get_lifecycle_context`
+
+**Atomic writes**: `project.json` uses temp-file + `os.rename()` pattern.
+
+### 5.9 Tool Name Mapping (as seen in Claude Code)
 
 | Implemented Tool | Claude Code name |
 |---|---|
@@ -324,8 +461,19 @@ get_context(
 | `get_stale_memories` | `mcp__graphbase-memories__get_stale_memories` |
 | `purge_expired_memories` | `mcp__graphbase-memories__purge_expired_memories` |
 | `get_context` | `mcp__graphbase-memories__get_context` |
+| `upsert_entity` | `mcp__graphbase-memories__upsert_entity` |
+| `get_entity` | `mcp__graphbase-memories__get_entity` |
+| `link_entities` | `mcp__graphbase-memories__link_entities` |
+| `unlink_entities` | `mcp__graphbase-memories__unlink_entities` |
+| `upsert_entity_with_deps` | `mcp__graphbase-memories__upsert_entity_with_deps` |
+| `store_session_with_learnings` | `mcp__graphbase-memories__store_session_with_learnings` |
+| `resolve_active_project` | `mcp__graphbase-memories__resolve_active_project` |
+| `ensure_project` | `mcp__graphbase-memories__ensure_project` |
+| `get_lifecycle_context` | `mcp__graphbase-memories__get_lifecycle_context` |
+| `save_session_context` | `mcp__graphbase-memories__save_session_context` |
+| `list_available_tools` | `mcp__graphbase-memories__list_available_tools` |
 
-**Not implemented**: `import_from_serena` was deferred to post-MVP (see §11).
+**Not implemented**: bulk import was deferred to post-MVP (see §14).
 
 ---
 
@@ -335,17 +483,22 @@ get_context(
 
 ```yaml
 decisions:
-  - title: "Tier A always loaded, Tier B gated at 72h"
-    content: "Load project/context unconditionally; session/history…"
+  - title: "Single get_context call covers decisions, patterns, and entity metadata"
+    content: "get_context(project, entity, entity_type, max_tokens) returns…"
   - title: "_GCX_MEM_* constants = single source of truth"
     content: "Constants defined in graph-context.sh _init block…"
 
+service_metadata:
+  owner: 'platform-team'
+  primary_db: 'postgres'
+  depends_on: 'auth-service, redis'
+
 patterns:
-  - title: "Serena-only mode when no _index/ found"
-    content: "Do not abort on missing _index/; degrade to serena-only…"
+  - title: "Memories-only mode when no _index/ found"
+    content: "Do not abort on missing _index/; use memories-only mode…"
 
 stale_warnings:
-  - 'project/architecture — not yet written'  # expired
+  - 'project/architecture — last updated >30 days ago'  # expired
 
 related_entities:
   - name: 'do:save'
@@ -354,15 +507,16 @@ related_entities:
     type: 'file'
 
 recent_sessions:
-  - 'Session 2026-04-04: implemented Phase 4-5'
+  - 'Session 2026-04-05: implemented Phase 3-11'
 ```
 
-Priority order (P1 → P5) with per-section budget gates:
+Priority order (P1 → P6) with per-section budget gates:
 - P1 `decisions` — always included if they fit
-- P2 `patterns` — if budget > 80 tokens
-- P3 `stale_warnings` — if budget > 60 tokens
-- P4 `related_entities` — if budget > 40 tokens (entity filter only)
-- P5 `recent_sessions` — filler if budget > 40 tokens
+- P2 `service_metadata` — if entity has metadata AND budget > 80 tokens (new in Phase 4)
+- P3 `patterns` — if budget > 80 tokens
+- P4 `stale_warnings` — if budget > 60 tokens
+- P5 `related_entities` — if budget > 40 tokens (entity filter only)
+- P6 `recent_sessions` — filler if budget > 40 tokens
 
 Token counting: `len(text) // 4` (GPT-3.5 heuristic, ±15%).
 
@@ -386,10 +540,22 @@ graphbase-memories-mcp/
 │       │   └── neo4j_engine.py    # v2 — Lucene FTS, Cypher N-hop, MERGE upserts
 │       ├── tools/
 │       │   ├── __init__.py
+│       │   ├── _types.py          # TypedDicts for composite tool I/O (MemoryInput, DecisionResult, …)
 │       │   ├── write_tools.py     # store_memory, relate_memories
 │       │   ├── read_tools.py      # get_memory, list_memories, search_memories, delete_memory
 │       │   ├── analysis_tools.py  # get_blast_radius, get_stale_memories, purge_expired_memories
-│       │   └── context_tools.py   # get_context
+│       │   ├── context_tools.py   # get_context
+│       │   ├── graph_tools.py     # get_graph_view
+│       │   ├── entity_tools.py    # upsert_entity, get_entity, link_entities, unlink_entities, upsert_entity_with_deps
+│       │   ├── session_tools.py   # store_session_with_learnings (delegates to _session_batch)
+│       │   ├── _session_batch.py  # Shared session batch logic (Phase 7 extract — review C1)
+│       │   └── lifecycle_tools.py # resolve_active_project, ensure_project, get_lifecycle_context, save_session_context, list_available_tools
+│       ├── lifecycle/
+│       │   ├── __init__.py
+│       │   ├── resolver.py        # Workspace → project-ID resolution (5-step precedence)
+│       │   ├── coordinator.py     # Project bootstrap + high-level session save
+│       │   ├── assembler.py       # Structured context bundle assembly
+│       │   └── inventory.py       # Static tool inventory with API version
 │       └── formatters/
 │           ├── __init__.py
 │           └── yaml_context.py    # Pure function: render_context() token-budgeted YAML
@@ -398,9 +564,12 @@ graphbase-memories-mcp/
 │   ├── test_write_tools.py        # store_memory, relate_memories (11 tests)
 │   ├── test_read_tools.py         # get_memory, list_memories, search, delete (16 tests)
 │   ├── test_analysis_tools.py     # blast radius, stale, purge (9 tests)
-│   ├── test_context_tools.py      # get_context (9 tests)
+│   ├── test_context_tools.py      # get_context (11 tests)
+│   ├── test_entity_tools.py       # upsert_entity, get_entity, link/unlink, upsert_entity_with_deps
+│   ├── test_session_tools.py      # store_session_with_learnings (9 tests incl. UC-1/UC-2 regressions)
+│   ├── test_lifecycle_tools.py    # lifecycle tools (23 tests: resolution, bootstrap, context, save, inventory)
 │   ├── test_cli.py                # inject + inspect subcommands (6 tests)
-│   └── test_engine_schema.py      # WAL, schema version, migrations, FTS5, edges (10 tests)
+│   └── test_engine_schema.py      # WAL, schema version, migrations, FTS5, edges (18 tests)
 ├── claudedocs/
 │   ├── graphbase_memories_agent_mcp_research.md
 │   └── workflow_graphbase_memories.md
@@ -452,6 +621,19 @@ class GraphEngine(ABC):
     @abstractmethod
     def get_related_entities(self, project: str, entity_name: str | None = None) -> list[EntityNode]: ...
 
+    # Entity management (Phase 3+)
+    @abstractmethod
+    def upsert_entity(self, name: str, type: str, project: str,
+                      metadata: dict[str, Any]) -> EntityNode: ...
+    @abstractmethod
+    def get_entity(self, name: str, type: str, project: str) -> EntityNode | None: ...
+    @abstractmethod
+    def link_entities(self, from_name: str, from_type: str, to_name: str, to_type: str,
+                      project: str, edge_type: str, properties: dict) -> Edge: ...
+    @abstractmethod
+    def unlink_entities(self, from_name: str, from_type: str, to_name: str, to_type: str,
+                        project: str, edge_type: str) -> bool: ...
+
     # Analysis
     @abstractmethod
     def get_blast_radius(self, entity_name: str, project: str, depth: int) -> BlastRadiusResult: ...
@@ -468,7 +650,7 @@ class GraphEngine(ABC):
     def _backdate(self, memory_id: str, days: int) -> None: ...
 ```
 
-**Adding a new backend** (e.g., DuckDB): implement the 20 abstract methods above in a new
+**Adding a new backend** (e.g., DuckDB): implement the 24 abstract methods above in a new
 `graph/duckdb_engine.py` file, then add 3 lines to `_provider.get_engine()`. Zero tool changes.
 
 ---
@@ -485,7 +667,7 @@ class GraphEngine(ABC):
       "command": "python3",
       "args": ["-m", "graphbase_memories", "server"],
       "env": {
-        "GRAPHBASE_DATA_DIR": "~/.graphbase-memories",
+        "GRAPHBASE_DATA_DIR": "~/.graphbase",
         "GRAPHBASE_BACKEND": "sqlite",
         "GRAPHBASE_LOG_LEVEL": "WARNING"
       }
@@ -505,7 +687,7 @@ if command -v "$GRAPHBASE_PYTHON" >/dev/null 2>&1; then
     timeout 3 "$GRAPHBASE_PYTHON" -m graphbase_memories inject \
       --project "${GCX_STATE_PROJECT_NAME:-$(basename "$PWD")}" \
       ${GCX_STATE_SERVICE:+--entity "$GCX_STATE_SERVICE"} \
-      --max-tokens 400 \
+      --max-tokens 600 \
       2>/dev/null
   ) || MEMORIES_CONTEXT=""
 fi
@@ -521,7 +703,7 @@ to avoid importing the full MCP server stack. Always uses SQLite regardless of
 {
   "env": {
     "GRAPHBASE_BACKEND":   "sqlite",
-    "GRAPHBASE_DATA_DIR":  "~/.graphbase-memories",
+    "GRAPHBASE_DATA_DIR":  "~/.graphbase",
     "GRAPHBASE_LOG_LEVEL": "WARNING",
     "GRAPHBASE_PYTHON":    "python3"
   }
@@ -534,10 +716,10 @@ to avoid importing the full MCP server stack. Always uses SQLite regardless of
 
 | # | Decision | Resolution |
 |---|---|---|
-| Q1 | Serena memories: replace or parallel? | **Parallel** — graphbase-memories owns episodic memory (sessions, decisions, patterns); Serena owns symbol and project notes |
-| Q2 | `import_from_serena` in v1 or post-MVP? | **Post-MVP** — type mapping is fragile; manual `store_memory()` is the v1 path [R6] |
+| Q1 | Scope of episodic memory | graphbase-memories owns sessions, decisions, patterns, and entity facts. Code symbols, file content, and project structure are out of scope. |
 | Q3 | Token budget: hard-cap or best-effort? | **Hard cap** (`len(text) // 4`; ±15%) — hook injection must not overrun context window |
 | Q4 | `valid_until` decay: auto-delete or flag-only? | **Flag-only** (`is_expired=1`) — `get_stale_memories` flags, `purge_expired_memories` deletes. Two-step prevents silent data loss |
+| Q5 | EntityNode metadata: append or replace? | **Full replacement** on every `upsert_entity` call — EntityNode tracks current real-world state (owner, db, port), not history. History is captured in MemoryNode (append-only). |
 | M1 | Thread safety on `get_engine()` | **Double-checked locking** (`threading.Lock`) — serialises lazy init; fast path skips lock after first access |
 | M2 | Schema downgrade handling | **RuntimeError** when `current > SCHEMA_VERSION` — clear error instead of silent mis-match |
 | B1 | Polymorphic edges (memory↔entity) | **No FK constraints** — `from_type`/`to_type` discriminators; all edges in one `relationships` table |
@@ -588,14 +770,14 @@ Neo4j V2 requirements:
 - **No REST/HTTP transport** — stdio only. FastMCP supports SSE natively for v2.
 - **No UI/dashboard** — CLI inspection via `python3 -m graphbase_memories inspect`.
 - **No auto-indexing of codebase** — `Entity` is for manually linked concepts only.
-- **No `import_from_serena`** — manual migration via `store_memory()` is the v1 path.
+- **No bulk import** — `store_memory()` is the v1 ingestion path; batch import is post-MVP.
 
 ---
 
 ## 14. Post-MVP Roadmap
 
-- **`import_from_serena` [R6]**: Bulk-import Serena markdown memories. Deferred due to fragile
-  type-mapping (`project/context` → which `MemoryNode.type`?) and no rollback path.
+- **Bulk import**: Batch ingestion of existing memories from other stores. Deferred — type mapping
+  is fragile and there is no rollback path in v1.
 - **Neo4jEngine**: V2 backend. Implemented at `graph/neo4j_engine.py`. Activate via
   `GRAPHBASE_BACKEND=neo4j`. Requires Docker — see `make neo4j-up`.
 - **Sentence-transformers**: `all-MiniLM-L6-v2` (22MB, CPU) for semantic search alongside FTS5.

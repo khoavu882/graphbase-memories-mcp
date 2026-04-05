@@ -9,11 +9,17 @@ description = "Graph-backed coding agent memory as an MCP server (stdio)"
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=2.0.0,<3.0.0",
+    "typing_extensions>=4.0; python_version < '3.12'",
 ]
 
 [project.optional-dependencies]
 neo4j = ["neo4j>=5.0,<6.0"]
 dev   = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+docs  = ["mkdocs-material>=9.0", "mkdocstrings[python]>=0.24"]
+
+[project.entry-points."graphbase_memories.backends"]
+sqlite = "graphbase_memories.graph.sqlite_engine:SQLiteEngine"
+neo4j  = "graphbase_memories.graph.neo4j_engine:Neo4jEngine"
 
 [project.scripts]
 graphbase-memories     = "graphbase_memories.__main__:main"

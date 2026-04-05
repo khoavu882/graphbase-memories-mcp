@@ -17,8 +17,9 @@ htmlcov/
 .idea/
 
 # Local agent state
+.claude
 .codex
-.serena/
+.serena
 
 # Runtime data
 *.db
@@ -27,8 +28,12 @@ htmlcov/
 *.log
 
 # Docs internals
-claudedocs/
+agent-docs/
 neo4j-data/
+CLAUDE.md
 
 # uv lockfile (local-only; not tracking for this template project)
 uv.lock
+
+# Local MCP state
+.mcp.json

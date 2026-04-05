@@ -3,16 +3,26 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+def _default_data_dir() -> Path:
+    """
+    Resolve the Graphbase data directory.
+
+    Priority:
+      1. GRAPHBASE_DATA_DIR env var (explicit override)
+      2. ~/.graphbase (default)
+    """
+    explicit = os.getenv("GRAPHBASE_DATA_DIR")
+    if explicit:
+        return Path(explicit).expanduser()
+    return Path("~/.graphbase").expanduser()
+
+
 @dataclass
 class Config:
     backend: str = field(
         default_factory=lambda: os.getenv("GRAPHBASE_BACKEND", "sqlite")
     )
-    data_dir: Path = field(
-        default_factory=lambda: Path(
-            os.getenv("GRAPHBASE_DATA_DIR", "~/.graphbase-memories")
-        ).expanduser()
-    )
+    data_dir: Path = field(default_factory=_default_data_dir)
     log_level: str = field(
         default_factory=lambda: os.getenv("GRAPHBASE_LOG_LEVEL", "WARNING")
     )

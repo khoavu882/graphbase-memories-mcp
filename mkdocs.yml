@@ -1,0 +1,74 @@
+site_name: graphbase-memories
+site_description: Graph-backed coding agent memory as an MCP server
+site_url: https://graphbase-memories.readthedocs.io
+repo_url: https://github.com/khoavu882/graphbase-memories-mcp
+repo_name: graphbase-memories-mcp
+edit_uri: edit/master/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - search.highlight
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
+            docstring_style: google
+            show_root_heading: true
+            show_root_full_path: false
+            show_category_heading: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+
+nav:
+  - Home: index.md
+  - Quick Start: quickstart.md
+  - How It Works: how-it-works.md
+  - Guides:
+    - Claude Code Setup: guides/claude-code.md
+    - Session Workflows: guides/workflows.md
+    - Multi-Project: guides/multi-project.md
+  - Tools:
+    - Write Tools: tools/write-tools.md
+    - Read Tools: tools/read-tools.md
+    - Entity Tools: tools/entity-tools.md
+    - Graph Tools: tools/graph-tools.md
+    - Maintenance Tools: tools/maintenance-tools.md
+  - CLI Reference: cli.md
+  - Backends:
+    - SQLite (default): backends/sqlite.md
+    - Neo4j: backends/neo4j.md
+    - Custom Backend: backends/custom.md
+  - Troubleshooting: troubleshooting.md

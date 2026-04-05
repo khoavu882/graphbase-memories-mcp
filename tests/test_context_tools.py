@@ -116,3 +116,46 @@ async def test_get_context_includes_session_type(mcp):
     ctx = parse(r)
     assert ctx is not None
     assert "recent_sessions" in ctx or "Sprint 42" in ctx
+
+
+async def test_get_context_service_metadata_included(mcp, engine):
+    """[P2] service_metadata appears when entity has metadata and entity_type is given."""
+    engine.upsert_entity(
+        "auth-service", "service", PROJECT,
+        {"owner": "platform-team", "db": "postgres", "port": "8080"},
+    )
+    await _store(mcp, title="Auth JWT decision",
+                 content="Use JWT.", type="decision", entities=["auth-service"])
+
+    r = await mcp.call_tool("get_context", {
+        "project": PROJECT,
+        "entity": "auth-service",
+        "entity_type": "service",
+        "max_tokens": 500,
+    })
+    ctx = parse(r)
+    assert ctx is not None
+    assert "service_metadata:" in ctx
+    assert "platform-team" in ctx
+
+
+async def test_get_context_service_metadata_before_patterns(mcp, engine):
+    """[P2 > P3] service_metadata must appear before patterns in output."""
+    engine.upsert_entity(
+        "cache-svc", "service", PROJECT,
+        {"owner": "infra", "cache": "redis"},
+    )
+    await _store(mcp, title="Retry pattern", content="Exponential backoff.", type="pattern",
+                 entities=["cache-svc"])
+    await _store(mcp, title="Cache decision", content="Use redis.", type="decision",
+                 entities=["cache-svc"])
+
+    r = await mcp.call_tool("get_context", {
+        "project": PROJECT, "entity": "cache-svc", "entity_type": "service",
+        "max_tokens": 500,
+    })
+    ctx = parse(r)
+    assert ctx is not None
+    assert "service_metadata:" in ctx
+    assert "patterns:" in ctx
+    assert ctx.index("service_metadata:") < ctx.index("patterns:")

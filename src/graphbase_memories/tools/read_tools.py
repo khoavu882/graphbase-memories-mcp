@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
-from graphbase_memories._provider import get_engine
+from graphbase_memories._provider import get_engine, get_all_known_projects
 
 
 # ---------------------------------------------------------------------------
@@ -194,11 +194,12 @@ def register_read_tools(mcp: FastMCP) -> None:
                 for m, score in results
             ]
         else:
-            # No project specified: search across all engines currently loaded
-            from graphbase_memories._provider import _engines
+            # No project specified: search across all known projects on disk
             all_results: list[tuple] = []
-            for eng in _engines.values():
-                all_results.extend(eng.search_memories(query, None, type, limit))
+            for proj in get_all_known_projects():
+                all_results.extend(
+                    get_engine(proj).search_memories(query, None, type, limit)
+                )
             all_results.sort(key=lambda x: x[1], reverse=True)
             return [
                 {
