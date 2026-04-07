@@ -1,82 +1,74 @@
 """
-Shared pytest fixtures for graphbase-memories integration tests.
-
-Fixtures:
-  engine(tmp_path)  — isolated SQLiteEngine per test
-  mcp(engine)       — MCPTestClient wrapping FastMCP with call_tool compat
-  parse(r)          — module-level helper: parse ToolResult -> Python object
-
-FastMCP 2.x removed mcp.call_tool(name, args). MCPTestClient restores the
-old API via: tool = await mcp.get_tool(name); result = await tool.run(args).
-All test files continue to use `await mcp.call_tool(name, args)` unchanged.
+Integration test fixtures — function-scoped async driver to avoid event loop scope issues.
+Uses the 'neo4j' database against the running local Neo4j 5 Community container.
 """
+
 from __future__ import annotations
 
-import json
-import pytest
+import pathlib
+import sys
 
-PROJECT = "test"
+from neo4j import AsyncGraphDatabase
+import pytest_asyncio
 
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
 
-class MCPTestClient:
-    """
-    Thin wrapper around FastMCP that restores the call_tool(name, args) test
-    helper removed in FastMCP 2.x.
+NEO4J_URI = "bolt://localhost:7687"
+NEO4J_USER = "neo4j"
+NEO4J_PASSWORD = "graphbase"
+TEST_DB = "neo4j"
 
-    FastMCP 2.x API: `tool = await mcp.get_tool(name); result = await tool.run(args)`
-    This wrapper keeps existing test code unchanged.
-    """
-
-    def __init__(self, mcp):
-        self._mcp = mcp
-
-    async def call_tool(self, name: str, args: dict) -> object:
-        tool = await self._mcp.get_tool(name)
-        return await tool.run(args)
-
-    def __getattr__(self, name: str):
-        # Delegate any other attribute access (get_tools, add_tool, etc.) to mcp
-        return getattr(self._mcp, name)
+TEST_PROJECT_ID = "test-project-integration"
 
 
-@pytest.fixture
-def engine(tmp_path):
-    """Fresh SQLiteEngine in a temp directory, cleared from global pool after test."""
-    from graphbase_memories.config import Config
-    from graphbase_memories.graph.sqlite_engine import SQLiteEngine
-    from graphbase_memories._provider import _clear_engines, _set_config_for_test
+@pytest_asyncio.fixture
+async def driver():
+    """Function-scoped async driver — one connection per test."""
+    d = AsyncGraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+    await d.verify_connectivity()
 
-    _clear_engines()
-    cfg = Config(
-        backend="sqlite",
-        data_dir=tmp_path,
-        log_level="WARNING",
-        log_to_file=False,
-    )
-    # Inject test config into provider so lifecycle tools use the same data_dir
-    _set_config_for_test(cfg)
-    eng = SQLiteEngine(cfg, PROJECT)
-    yield eng
-    _clear_engines()
-    _set_config_for_test(Config())  # restore default
+    # Ensure schema is applied
+    from graphbase_memories.graph.driver import SCHEMA_DDL, split_statements
+
+    async with d.session(database=TEST_DB) as session:
+        for stmt in split_statements(SCHEMA_DDL):
+            await session.run(stmt)
+
+    yield d
+    await d.close()
 
 
-@pytest.fixture
-def mcp(engine):
-    """MCPTestClient wrapping FastMCP singleton with test engine injected."""
-    from graphbase_memories.server import get_mcp
-    from graphbase_memories._provider import _set_engine_for_test, _clear_engines
-
-    _set_engine_for_test(PROJECT, engine)
-    yield MCPTestClient(get_mcp())
-    _clear_engines()
-
-
-def parse(r) -> object:
-    """Parse a FastMCP ToolResult into a Python object."""
-    if not r.content:
-        return r.structured_content.get("result")
-    try:
-        return json.loads(r.content[0].text)
-    except Exception:
-        return r.content[0].text
+@pytest_asyncio.fixture
+async def fresh_project(driver):
+    """Per-test fixture: wipe and re-create the test project node."""
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            MATCH (n)-[:BELONGS_TO]->(p:Project {id: $pid})
+            DETACH DELETE n
+            """,
+            pid=TEST_PROJECT_ID,
+        )
+        await session.run(
+            "MERGE (p:Project {id: $pid}) ON CREATE SET p.name = $pid, p.created_at = datetime()",
+            pid=TEST_PROJECT_ID,
+        )
+    yield TEST_PROJECT_ID
+    # Cleanup after test: project data + any global test artifacts
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            MATCH (n)-[:BELONGS_TO]->(p:Project {id: $pid})
+            DETACH DELETE n
+            WITH p DETACH DELETE p
+            """,
+            pid=TEST_PROJECT_ID,
+        )
+        # Remove global-scope artifacts written during this test
+        await session.run(
+            """
+            MATCH (n:Decision)-[:BELONGS_TO]->(g:GlobalScope)
+            DETACH DELETE n
+            """
+        )
+        await session.run("MATCH (t:GovernanceToken) DETACH DELETE t")

@@ -1,19 +1,15 @@
 {
-  "_comment": "Preferred: uvx — no pip install needed, UV manages the isolated env automatically. Add --devtools/--devtools-project in args if you want the optional DevTools sidecar.",
   "mcpServers": {
-    "graphbase-memories": {
-      "type": "stdio",
+    "serena": {
       "command": "uvx",
       "args": [
-        "--from", "/home/<you>/Workspace/my-templates/graphbase-memories-mcp",
-        "graphbase-memories-mcp"
-      ],
-      "env": {
-        "GRAPHBASE_PROJECT":   "your-project-slug",
-        "GRAPHBASE_DATA_DIR":  "~/.graphbase",
-        "GRAPHBASE_BACKEND":   "sqlite",
-        "GRAPHBASE_LOG_LEVEL": "WARNING"
-      }
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "claude-code"
+      ]
     }
   }
 }

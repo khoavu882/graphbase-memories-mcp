@@ -31,6 +31,7 @@ htmlcov/
 agent-docs/
 neo4j-data/
 CLAUDE.md
+REQUIREMENT.md
 
 # uv lockfile (local-only; not tracking for this template project)
 uv.lock

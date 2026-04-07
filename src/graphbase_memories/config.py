@@ -1,51 +1,22 @@
-import os
-from dataclasses import dataclass, field
-from pathlib import Path
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def _default_data_dir() -> Path:
-    """
-    Resolve the Graphbase data directory.
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="GRAPHBASE_")
 
-    Priority:
-      1. GRAPHBASE_DATA_DIR env var (explicit override)
-      2. ~/.graphbase (default)
-    """
-    explicit = os.getenv("GRAPHBASE_DATA_DIR")
-    if explicit:
-        return Path(explicit).expanduser()
-    return Path("~/.graphbase").expanduser()
+    backend: str = "neo4j"
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: SecretStr = SecretStr("graphbase")
+    neo4j_database: str = "neo4j"
+    neo4j_max_pool_size: int = 10  # S-3: safe for Community single-node
+    neo4j_connection_timeout: float = 5.0  # S-3
+
+    retrieval_timeout_s: float = 5.0  # FR-23
+    retrieval_max_retries: int = 1  # FR-24
+    write_max_retries: int = 1  # FR-52
+    governance_token_ttl_s: int = 60  # GovernanceToken expiry
 
 
-@dataclass
-class Config:
-    backend: str = field(
-        default_factory=lambda: os.getenv("GRAPHBASE_BACKEND", "sqlite")
-    )
-    data_dir: Path = field(default_factory=_default_data_dir)
-    log_level: str = field(
-        default_factory=lambda: os.getenv("GRAPHBASE_LOG_LEVEL", "WARNING")
-    )
-    log_to_file: bool = True
-
-    # Neo4j connection (v2 only — ignored when backend=sqlite)
-    neo4j_uri: str = field(
-        default_factory=lambda: os.getenv("GRAPHBASE_NEO4J_URI", "bolt://localhost:7687")
-    )
-    neo4j_user: str = field(
-        default_factory=lambda: os.getenv("GRAPHBASE_NEO4J_USER", "neo4j")
-    )
-    neo4j_password: str | None = field(
-        default_factory=lambda: os.getenv("GRAPHBASE_NEO4J_PASSWORD")
-    )
-
-    def project_dir(self, project: str) -> Path:
-        p = self.data_dir / project
-        p.mkdir(parents=True, exist_ok=True)
-        return p
-
-    def db_path(self, project: str) -> Path:
-        return self.project_dir(project) / "memories.db"
-
-    def log_path(self, project: str) -> Path:
-        return self.project_dir(project) / "graphbase.log"
+settings = Settings()
