@@ -8,3 +8,70 @@ version = "1.0.0"
 description = "Graph-backed coding agent memory as an MCP server (stdio)"
 authors = [{ name = "Kai Vu", email = "kai.vu.dev@gmail.com" }]
 readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=2.0",
+    "neo4j>=5.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "typer>=0.12",
+    "uvicorn>=0.29",
+    "fastapi>=0.111",
+    "anyio>=4.0",
+]
+
+[project.scripts]
+graphbase-memories-mcp = "graphbase_memories.main:app"
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/graphbase_memories"]
+
+# ── Ruff ──────────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+indent-width = 4
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes (unused imports, undefined names)
+    "I",      # isort (import ordering)
+    "N",      # pep8-naming
+    "UP",     # pyupgrade (modernise syntax for Python ≥ 3.11)
+    "ASYNC",  # flake8-async (async best practices — critical for Neo4j async driver)
+    "B",      # flake8-bugbear (common bug patterns)
+    "SIM",    # flake8-simplify
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",   # line-too-long — handled by formatter; long Cypher strings are unavoidable
+    "SIM108", # ternary operator — subjective; sometimes hurts readability
+    "B008",   # function call in default argument — FastMCP uses this pattern intentionally
+    "RUF012", # ClassVar annotation — not required for Pydantic v2 field defaults
+]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]        # re-exports in __init__ are intentional
+"tests/**/*.py" = ["S101"]      # assert in tests is expected
+
+[tool.ruff.lint.isort]
+known-first-party = ["graphbase_memories"]
+force-sort-within-sections = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
