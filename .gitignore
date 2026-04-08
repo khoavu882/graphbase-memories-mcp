@@ -27,12 +27,16 @@ htmlcov/
 *.db-shm
 *.log
 
+# MkDocs build output (deployed via gh-deploy to gh-pages branch)
+site/
+
 # Docs internals
 agent-docs/
-site/
 neo4j-data/
+AGENTS.md
 ARCHITECTURE.md
 CLAUDE.md
+CHANGELOG.md
 REQUIREMENT.md
 
 # uv lockfile (local-only; not tracking for this template project)
@@ -43,4 +47,6 @@ uv.lock
 
 # Frontend verification artifacts
 .playwright-mcp/
+local-site-*.png
 docs-*.png
+page-*.png

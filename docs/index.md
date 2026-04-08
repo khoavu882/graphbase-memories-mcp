@@ -1,4 +1,4 @@
-# graphbase-memories-mcp
+# Graphbase Memories MCP
 
 **Graph-backed persistent memory for AI coding agents, exposed as an MCP server.**
 

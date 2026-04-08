@@ -8,6 +8,8 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  favicon: images/favicon.png
+  font: false
   palette:
     - scheme: default
       primary: deep purple
