@@ -47,17 +47,17 @@ graph TD
 
 ---
 
+## Requirements
+
+- Python 3.11+
+- Neo4j 5 Community (or Enterprise) — local or remote
+- An MCP-compatible agent host (Claude Code, Cursor, Cline, etc.)
+
+---
+
 ## Quick links
 
 - [Quick Start](quickstart.md) — up and running in 3 steps
 - [MCP Tools Overview](tools/index.md) — all 12 tools with call sequence
 - [Memory Model](concepts/memory-model.md) — scopes, artifacts, graph edges
 - [Configuration](configuration.md) — all `GRAPHBASE_*` environment variables
-
----
-
-## Requirements
-
-- Python 3.11+
-- Neo4j 5 Community (or Enterprise) — local or remote
-- An MCP-compatible agent host (Claude Code, Cursor, Cline, etc.)

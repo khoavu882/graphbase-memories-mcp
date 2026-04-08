@@ -26,7 +26,6 @@ theme:
   features:
     - navigation.tabs
     - navigation.sections
-    - navigation.expand
     - navigation.top
     - search.highlight
     - search.suggest
@@ -63,11 +62,10 @@ plugins:
       minify_html: true
 
 nav:
-  - Home: index.md
   - Getting Started:
     - Quick Start: quickstart.md
     - Configuration: configuration.md
-    - Connect to Claude Code: connect.md
+    - Connect to Your Agent: connect.md
   - MCP Tools:
     - Overview: tools/index.md
     - Retrieval: tools/retrieval.md
