@@ -179,3 +179,9 @@ ruff format src/
 ```
 
 Tests are integration tests and require a live Neo4j instance at `bolt://localhost:7687` with credentials `neo4j` / `graphbase`.
+
+---
+
+## License
+
+This repository is licensed under the MIT License. See `LICENSE` for the full text.

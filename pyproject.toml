@@ -8,6 +8,8 @@ version = "1.0.0"
 description = "Graph-backed coding agent memory as an MCP server (stdio)"
 authors = [{ name = "Kai Vu", email = "kai.vu.dev@gmail.com" }]
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=2.0",
