@@ -29,6 +29,7 @@ htmlcov/
 
 # Docs internals
 agent-docs/
+site/
 neo4j-data/
 ARCHITECTURE.md
 CLAUDE.md
@@ -39,3 +40,7 @@ uv.lock
 
 # Local MCP state
 .mcp.json
+
+# Frontend verification artifacts
+.playwright-mcp/
+docs-*.png

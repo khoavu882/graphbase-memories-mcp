@@ -1,0 +1,19 @@
+/* WCAG AA fix #1: tab nav links on deep purple primary background.
+   Material default (#d8cced on #7e56c2) = 3.44:1 — fails 4.5:1 AA threshold.
+   Solid white (#ffffff on #7e56c2) = 4.69:1 — passes AA. */
+.md-tabs__link,
+.md-tabs__link--active,
+.md-tabs__link:hover,
+.md-tabs__link:focus {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+/* WCAG AA fix #2: footer copyright text.
+   md-footer-meta uses a fixed dark background (#171717) in both light AND dark modes.
+   Material default (#7f7f7f on #171717) = 4.47:1 — 0.03 below 4.5:1.
+   #828282 on #171717 = 4.63:1 — passes AA. */
+.md-copyright,
+.md-copyright a {
+  color: #828282 !important;
+}

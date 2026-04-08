@@ -1,0 +1,85 @@
+site_name: Graphbase Memories MCP
+site_description: Graph-backed persistent memory for AI coding agents, exposed as an MCP server
+site_author: Kai Vu
+site_url: https://khoavu882.github.io/graphbase-memories-mcp/
+repo_url: https://github.com/khoavu882/graphbase-memories-mcp
+repo_name: khoavu882/graphbase-memories-mcp
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.tabs.link
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - tables
+  - attr_list
+  - md_in_html
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/accessibility.js
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quick Start: quickstart.md
+    - Configuration: configuration.md
+    - Connect to Claude Code: connect.md
+  - MCP Tools:
+    - Overview: tools/index.md
+    - Retrieval: tools/retrieval.md
+    - Session: tools/session.md
+    - Artifacts: tools/artifacts.md
+    - Entity: tools/entity.md
+    - Governance: tools/governance.md
+    - Analysis: tools/analysis.md
+    - Hygiene: tools/hygiene.md
+  - Concepts:
+    - Memory Model: concepts/memory-model.md
+    - Scope Resolution: concepts/scope-resolution.md
+  - Architecture:
+    - System Overview: architecture/system.md
+    - Engine Specs: architecture/engines.md
+    - Graph Schema: architecture/graph-schema.md
+  - Development: development.md

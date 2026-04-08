@@ -1,0 +1,36 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-mkdocs-${{ hashFiles('mkdocs.yml') }}
+
+      - name: Install MkDocs
+        run: pip install "mkdocs-material>=9.5" "mkdocs-minify-plugin>=0.8"
+
+      - name: Deploy to GitHub Pages
+        run: mkdocs gh-deploy --force
