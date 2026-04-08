@@ -1,15 +1,14 @@
 {
   "mcpServers": {
-    "serena": {
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/oraios/serena",
-        "serena",
-        "start-mcp-server",
-        "--context",
-        "claude-code"
-      ]
+    "graphbase-memories": {
+      "command": "/absolute/path/to/.venv/bin/graphbase-memories-mcp",
+      "args": ["serve"],
+      "env": {
+        "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",
+        "GRAPHBASE_NEO4J_USER": "neo4j",
+        "GRAPHBASE_NEO4J_PASSWORD": "graphbase",
+        "GRAPHBASE_NEO4J_DATABASE": "neo4j"
+      }
     }
   }
 }

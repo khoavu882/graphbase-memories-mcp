@@ -30,6 +30,7 @@ htmlcov/
 # Docs internals
 agent-docs/
 neo4j-data/
+ARCHITECTURE.md
 CLAUDE.md
 REQUIREMENT.md
 
