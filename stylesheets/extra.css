@@ -9,6 +9,16 @@
   opacity: 1 !important;
 }
 
+/* WCAG AA fix #1b: repository metadata in the header needs the same contrast treatment. */
+.md-source__fact,
+.md-source__repository {
+  color: #ffffff !important;
+}
+
+.md-source__facts {
+  opacity: 1 !important;
+}
+
 /* WCAG AA fix #2: footer copyright text.
    md-footer-meta uses a fixed dark background (#171717) in both light AND dark modes.
    Material default (#7f7f7f on #171717) = 4.47:1 — 0.03 below 4.5:1.
@@ -16,4 +26,48 @@
 .md-copyright,
 .md-copyright a {
   color: #828282 !important;
+}
+
+/* WCAG AA fix #3: inline content links need a non-color affordance.
+   Underlines preserve theme colors while making links distinguishable in body copy and footer text. */
+.md-content .md-typeset a,
+.md-content .md-typeset a code,
+.md-copyright a {
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.15em;
+}
+
+.md-content .md-typeset a:hover,
+.md-content .md-typeset a:focus,
+.md-content .md-typeset a:hover code,
+.md-content .md-typeset a:focus code,
+.md-copyright a:hover,
+.md-copyright a:focus {
+  text-decoration-thickness: 0.12em;
+}
+
+/* Keep wide documentation tables and diagrams usable on narrow screens. */
+@media screen and (max-width: 44.9375em) {
+  .md-typeset table:not([class]) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .md-typeset table:not([class]) th:first-child,
+  .md-typeset table:not([class]) td:first-child {
+    min-width: 16rem;
+  }
+
+  .md-typeset table:not([class]) th:last-child,
+  .md-typeset table:not([class]) td:last-child {
+    white-space: nowrap;
+  }
+
+  .md-typeset .mermaid,
+  .md-typeset pre > code {
+    font-size: 0.75rem;
+  }
 }
