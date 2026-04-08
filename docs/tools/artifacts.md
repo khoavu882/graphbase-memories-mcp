@@ -62,6 +62,24 @@ Before writing, the engine runs a two-step dedup check:
 }
 ```
 
+### Resolving `manual_review`
+
+When `dedup_outcome` is `manual_review`, the write was blocked and the response includes a `candidate_id` pointing to the existing similar decision. The agent has three paths:
+
+1. **Supersede explicitly** — re-call `save_decision` with `supersedes: "<candidate_id>"`. The engine creates a new node and adds a `[:SUPERSEDES]` edge to the old one. Use this when the new decision replaces the old.
+2. **Save as distinct** — lower the `confidence` value and re-call without `supersedes`. The engine treats the lower confidence as a signal the decision is narrower in scope and proceeds as `new`.
+3. **Run hygiene** — call `run_hygiene` with the same `project_id`. The hygiene engine resolves near-duplicates and either merges or marks candidates for review. Use this when you want the system to decide.
+
+```json
+{
+  "status": "pending_retry",
+  "artifact_id": null,
+  "dedup_outcome": "manual_review",
+  "candidate_id": "uuid-of-existing-decision",
+  "message": "Similar decision found (Jaccard 0.58). Supply supersedes or run hygiene."
+}
+```
+
 !!! warning "Global scope requires approval"
     Saving a decision with `scope="global"` requires a `governance_token` obtained from
     `request_global_write_approval`. See [Governance](governance.md).
