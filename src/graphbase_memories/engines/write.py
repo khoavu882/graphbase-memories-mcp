@@ -13,7 +13,7 @@ import logging
 import uuid
 
 from neo4j import AsyncDriver
-from neo4j.exceptions import ServiceUnavailable
+from neo4j.exceptions import Neo4jError, ServiceUnavailable
 
 from graphbase_memories.config import settings
 from graphbase_memories.engines import dedup as dedup_engine
@@ -184,9 +184,7 @@ async def save_pattern(
 
 
 async def _do_save_pattern(*, pattern, project_id, focus, driver, database) -> SaveResult:
-    from graphbase_memories.graph.repositories.pattern_repo import compute_content_hash
-
-    content_hash = compute_content_hash(pattern.trigger, pattern.repeatable_steps)
+    content_hash = pattern_repo.compute_content_hash(pattern.trigger, pattern.repeatable_steps)
     dedup = await dedup_engine.check_pattern(
         trigger=pattern.trigger,
         content_hash=content_hash,
@@ -323,7 +321,7 @@ async def _with_retry(fn, **kwargs) -> SaveResult:
                 status=SaveStatus.pending_retry,
                 message="Neo4j unavailable after retry. Save pending.",
             )
-        except Exception:
+        except Neo4jError:
             logger.exception("Write operation failed (attempt %d)", attempt + 1)
             return SaveResult(
                 status=SaveStatus.failed,

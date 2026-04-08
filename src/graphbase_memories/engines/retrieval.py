@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 import logging
 
 from neo4j import AsyncDriver
+from neo4j.exceptions import Neo4jError
 
 from graphbase_memories.config import settings
 from graphbase_memories.engines import scope as scope_engine
@@ -79,7 +80,7 @@ async def execute(
                 retrieval_status=RetrievalStatus.timed_out,
                 scope_state=scope_state,
             )
-        except Exception:
+        except Neo4jError:
             logger.exception("Retrieval failed on attempt %d", attempt + 1)
             if attempt < settings.retrieval_max_retries:
                 continue
