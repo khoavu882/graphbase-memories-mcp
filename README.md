@@ -9,6 +9,7 @@ Agents call structured tools to read and write scoped memory into a **Neo4j** gr
 ## Requirements
 
 - Python 3.11+
+- [uv](https://docs.astral.sh/uv/) — Python package manager (replaces pip/venv)
 - Neo4j 5 Community (or Enterprise) — running locally or remotely
 
 ---
@@ -26,13 +27,14 @@ Default credentials: `neo4j` / `graphbase` on `bolt://localhost:7687`.
 ### 2. Install
 
 ```bash
-# Development (editable)
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+# Install uv if you don't have it yet
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Or install from source without dev extras
-pip install .
+# Install dependencies (creates .venv automatically)
+uv sync --group dev
+
+# Or without dev extras
+uv sync
 ```
 
 ### 3. Run the MCP server
@@ -78,8 +80,8 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
 {
   "mcpServers": {
     "graphbase-memories": {
-      "command": "/path/to/.venv/bin/graphbase-memories-mcp",
-      "args": ["serve"],
+      "command": "uvx",
+      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase-memories-mcp@main", "graphbase-memories-mcp", "serve"],
       "env": {
         "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",
         "GRAPHBASE_NEO4J_USER": "neo4j",
@@ -91,6 +93,8 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
 ```
 
 After saving, restart Claude Code. The 12 memory tools will appear in the tool list.
+
+> **Production tip**: Replace `@main` with a release tag (e.g., `@v1.0.0`) to pin to a stable version and avoid silent breakage when the default branch changes.
 
 ---
 
@@ -169,13 +173,13 @@ Graph edges:
 
 ```bash
 # Run tests (requires Neo4j running)
-pytest
+uv run pytest
 
 # Lint
-ruff check src/
+uv run ruff check src tests
 
 # Format
-ruff format src/
+uv run ruff format src tests
 ```
 
 Tests are integration tests and require a live Neo4j instance at `bolt://localhost:7687` with credentials `neo4j` / `graphbase`.

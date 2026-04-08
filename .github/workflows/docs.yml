@@ -19,18 +19,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.11"
+          enable-cache: true
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-mkdocs-${{ hashFiles('mkdocs.yml') }}
-
-      - name: Install MkDocs
-        run: pip install "mkdocs-material>=9.5" "mkdocs-minify-plugin>=0.8"
+      - name: Install docs dependencies
+        run: uv sync --only-group docs
 
       - name: Deploy to GitHub Pages
-        run: mkdocs gh-deploy --force
+        run: uv run mkdocs gh-deploy --force
