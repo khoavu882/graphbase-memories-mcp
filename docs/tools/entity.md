@@ -13,7 +13,7 @@ Upsert a named entity fact and optionally link it to related entities. Uses MERG
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `entity` | `EntityFactSchema` | Yes | The primary entity to upsert |
-| `related_entities` | `list[EntityFactSchema]` | No | Related entities to upsert and link |
+| `related_entities` | `list[EntityRelation]` | No | Typed relationships to existing entity nodes |
 | `project_id` | `string` | Yes | Project identifier |
 | `focus` | `string \| null` | No | Focus area |
 
@@ -35,9 +35,27 @@ Upsert a named entity fact and optionally link it to related entities. Uses MERG
 
 ### Related entity linking
 
-When `related_entities` are provided, each is upserted and linked to the primary entity. The relationship type is inferred from context or defaults to `[:CONFLICTS_WITH]` for conflicting entities and `[:PRODUCED]` for produced artifacts.
+`related_entities` takes a list of `EntityRelation` objects — typed edges from the primary entity to **existing** entity nodes (identified by their UUID). The `relationship_type` field is required and must be one of:
+
+| Type | Meaning |
+|---|---|
+| `BELONGS_TO` | This entity belongs to a scope node |
+| `CONFLICTS_WITH` | This entity conflicts with another entity |
+| `PRODUCED` | This entity was produced by another entity |
+| `MERGES_INTO` | This entity should be merged into a canonical node (hygiene) |
 
 ```python
+# First upsert the entities you want to link
+dedup_result = upsert_entity_with_deps(
+    entity={
+        "entity_name": "DedupEngine",
+        "fact": "SHA-256 exact hash + Jaccard similarity dedup for decisions.",
+        "scope": "project"
+    },
+    project_id="graphbase-memories"
+)
+
+# Then link them using the returned artifact_id
 upsert_entity_with_deps(
     entity={
         "entity_name": "WriteEngine",
@@ -46,14 +64,9 @@ upsert_entity_with_deps(
     },
     related_entities=[
         {
-            "entity_name": "DedupEngine",
-            "fact": "Called by WriteEngine before every Decision/Pattern write.",
-            "scope": "project"
-        },
-        {
-            "entity_name": "GovernanceToken",
-            "fact": "Required by WriteEngine for global-scope writes.",
-            "scope": "project"
+            "entity_id": dedup_result["artifact_id"],
+            "relationship_type": "PRODUCED",
+            "properties": {}
         }
     ],
     project_id="graphbase-memories"

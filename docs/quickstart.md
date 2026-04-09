@@ -29,17 +29,26 @@ Default credentials: `neo4j` / `graphbase` on `bolt://localhost:7687`.
 
 ## Step 2 — Install
 
-```bash
-# Create a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+=== "uv (recommended)"
 
-# Install (editable mode for development)
-pip install -e ".[dev]"
+    ```bash
+    # uv respects the lockfile for reproducible installs
+    uv sync
+    ```
 
-# Or install without dev extras
-pip install .
-```
+=== "pip"
+
+    ```bash
+    # Create a virtual environment
+    python3 -m venv .venv
+    source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
+    # Install (editable mode for development)
+    pip install -e ".[dev]"
+
+    # Or install without dev extras
+    pip install .
+    ```
 
 Verify the CLI is available:
 
@@ -54,35 +63,9 @@ graphbase-memories-mcp --help
 
 ## Step 3 — Connect to your agent
 
-Copy the example MCP configuration to your project root:
+Copy `.mcp.json.example` to `.mcp.json` in your project root and edit it with the absolute path to your virtual environment binary. Restart your agent host — the 12 `graphbase-memories` tools will appear in the tool list.
 
-```bash
-cp .mcp.json.example .mcp.json
-```
-
-Edit `.mcp.json` with the path to your virtual environment:
-
-```json
-{
-  "mcpServers": {
-    "graphbase-memories": {
-      "command": "/absolute/path/to/.venv/bin/graphbase-memories-mcp",
-      "args": ["serve"],
-      "env": {
-        "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",
-        "GRAPHBASE_NEO4J_USER": "neo4j",
-        "GRAPHBASE_NEO4J_PASSWORD": "graphbase"
-      }
-    }
-  }
-}
-```
-
-Restart Claude Code (or your agent host). The 12 memory tools will appear in the tool list.
-
-!!! note "Absolute path required"
-    The `command` field must be an absolute path. Using `~` or relative paths will fail when the
-    agent host spawns the server from a different working directory.
+See [Connect to Your Agent](connect.md) for full configuration details, including global install and setup for Cursor, Cline, and other MCP hosts.
 
 ---
 

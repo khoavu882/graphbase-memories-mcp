@@ -62,11 +62,11 @@ CREATE FULLTEXT INDEX entity_fulltext IF NOT EXISTS
 ## Property indexes
 
 ```cypher
--- Exact hash dedup for Decision (O(1) lookup)
+// Exact hash dedup for Decision (O(1) lookup)
 CREATE INDEX decision_content_hash IF NOT EXISTS
   FOR (d:Decision) ON (d.content_hash);
 
--- TTL cleanup for GovernanceToken
+// TTL cleanup for GovernanceToken
 CREATE INDEX governance_token_expires_at IF NOT EXISTS
   FOR (t:GovernanceToken) ON (t.expires_at);
 ```
@@ -155,7 +155,7 @@ CREATE INDEX governance_token_expires_at IF NOT EXISTS
 ## Singleton initialization
 
 ```cypher
--- Ensure GlobalScope singleton exists on startup
+// Ensure GlobalScope singleton exists on startup
 MERGE (:GlobalScope {id: "global"});
 ```
 

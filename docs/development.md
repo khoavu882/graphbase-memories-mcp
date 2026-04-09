@@ -17,17 +17,16 @@
 git clone https://github.com/khoavu882/graphbase-memories-mcp.git
 cd graphbase-memories-mcp
 
-# 2. Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
+# 2. Install dependencies (uv respects the lockfile)
+uv sync
 
-# 3. Install with dev extras
-pip install -e ".[dev]"
+# Or with pip in a manual virtual environment
+# python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
 
-# 4. Start Neo4j
+# 3. Start Neo4j
 docker compose -f docker-compose.neo4j.yml up -d
 
-# 5. Verify Neo4j is healthy
+# 4. Verify Neo4j is healthy
 docker compose -f docker-compose.neo4j.yml ps
 # Expected: State = Up (healthy)
 ```
@@ -64,16 +63,16 @@ Test configuration is in `pytest.ini`. Async tests use `pytest-asyncio`.
 
 ```bash
 # Check for linting issues
-ruff check src/
+ruff check src/ tests/
 
 # Auto-fix fixable issues
-ruff check --fix src/
+ruff check --fix src/ tests/
 
 # Format code
-ruff format src/
+ruff format src/ tests/
 
 # Check format without modifying
-ruff format --check src/
+ruff format --check src/ tests/
 ```
 
 Ruff is configured in `pyproject.toml`. Key rules enabled: `E`, `W`, `F`, `I` (isort), `N` (pep8-naming), `UP` (pyupgrade), `ASYNC`, `B` (bugbear), `SIM`, `RUF`.
