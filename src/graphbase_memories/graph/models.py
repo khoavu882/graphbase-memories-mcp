@@ -32,6 +32,11 @@ class ProjectNode:
     name: str
     created_at: datetime
     last_hygiene_at: datetime | None = None
+    workspace_id: str | None = None
+    status: str = "idle"
+    last_seen: datetime | None = None
+    display_name: str | None = None
+    tags: list[str] = field(default_factory=list)
 
     @classmethod
     def from_record(cls, r: dict) -> ProjectNode:
@@ -40,6 +45,53 @@ class ProjectNode:
             name=r["name"],
             created_at=_dt(r["created_at"]),
             last_hygiene_at=_dt(r.get("last_hygiene_at")),
+            workspace_id=r.get("workspace_id"),
+            status=r.get("status", "idle"),
+            last_seen=_dt(r.get("last_seen")),
+            display_name=r.get("display_name"),
+            tags=list(r.get("tags") or []),
+        )
+
+
+@dataclass
+class WorkspaceNode:
+    id: str
+    name: str
+    created_at: datetime
+    description: str | None = None
+
+    @classmethod
+    def from_record(cls, r: dict) -> WorkspaceNode:
+        return cls(
+            id=r["id"],
+            name=r["name"],
+            created_at=_dt(r["created_at"]),
+            description=r.get("description"),
+        )
+
+
+@dataclass
+class ImpactEventNode:
+    id: str
+    source_entity_id: str
+    source_project_id: str
+    change_description: str
+    impact_type: str
+    risk_level: str
+    affected_count: int
+    created_at: datetime
+
+    @classmethod
+    def from_record(cls, r: dict) -> ImpactEventNode:
+        return cls(
+            id=r["id"],
+            source_entity_id=r["source_entity_id"],
+            source_project_id=r["source_project_id"],
+            change_description=r["change_description"],
+            impact_type=r["impact_type"],
+            risk_level=r["risk_level"],
+            affected_count=int(r.get("affected_count", 0)),
+            created_at=_dt(r["created_at"]),
         )
 
 

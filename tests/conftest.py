@@ -28,10 +28,12 @@ async def driver():
     await d.verify_connectivity()
 
     # Ensure schema is applied
-    from graphbase_memories.graph.driver import SCHEMA_DDL, split_statements
+    from graphbase_memories.graph.driver import SCHEMA_DDL, SCHEMA_V2_DDL, split_statements
 
     async with d.session(database=TEST_DB) as session:
         for stmt in split_statements(SCHEMA_DDL):
+            await session.run(stmt)
+        for stmt in split_statements(SCHEMA_V2_DDL):
             await session.run(stmt)
 
     yield d

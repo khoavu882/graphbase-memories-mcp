@@ -18,5 +18,10 @@ class Settings(BaseSettings):
     write_max_retries: int = 1  # FR-52
     governance_token_ttl_s: int = 60  # GovernanceToken expiry
 
+    federation_active_window_minutes: int = 60  # GRAPHBASE_FEDERATION_ACTIVE_WINDOW_MINUTES
+    federation_max_results: int = 100  # GRAPHBASE_FEDERATION_MAX_RESULTS
+    impact_max_depth: int = 3  # GRAPHBASE_IMPACT_MAX_DEPTH
+    workspace_enforce_isolation: bool = True  # GRAPHBASE_WORKSPACE_ENFORCE_ISOLATION
+
 
 settings = Settings()

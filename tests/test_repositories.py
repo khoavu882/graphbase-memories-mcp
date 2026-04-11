@@ -240,3 +240,87 @@ async def test_governance_token_create_and_consume(driver):
     # Second consumption: already used
     reused = await token_repo.validate_and_consume(token.id, driver, TEST_DB)
     assert reused is False
+
+
+# ── Federation repos ─────────────────────────────────────────────
+
+
+async def test_register_service_creates_workspace(driver):
+    from graphbase_memories.graph.repositories import federation_repo
+
+    project, workspace, created = await federation_repo.register_service(
+        service_id="test-svc-a",
+        workspace_id="test-ws",
+        display_name="Test A",
+        description=None,
+        tags=[],
+        driver=driver,
+        database=TEST_DB,
+    )
+    assert workspace.id == "test-ws"
+    assert created is True
+    assert project.status == "active"
+    assert project.workspace_id == "test-ws"
+
+    # Cleanup
+    async with driver.session(database=TEST_DB) as s:
+        await s.run("MATCH (p:Project {id:'test-svc-a'}) DETACH DELETE p")
+        await s.run("MATCH (w:Workspace {id:'test-ws'}) DETACH DELETE w")
+
+
+async def test_register_service_idempotent(driver):
+    from graphbase_memories.graph.repositories import federation_repo
+
+    _, _, created_first = await federation_repo.register_service(
+        service_id="test-svc-b",
+        workspace_id="test-ws-idem",
+        display_name="Test B",
+        description=None,
+        tags=[],
+        driver=driver,
+        database=TEST_DB,
+    )
+    _, _, created_second = await federation_repo.register_service(
+        service_id="test-svc-b",
+        workspace_id="test-ws-idem",
+        display_name="Test B",
+        description=None,
+        tags=[],
+        driver=driver,
+        database=TEST_DB,
+    )
+    assert created_first is True
+    assert created_second is False
+
+    # Cleanup
+    async with driver.session(database=TEST_DB) as s:
+        await s.run("MATCH (p:Project {id:'test-svc-b'}) DETACH DELETE p")
+        await s.run("MATCH (w:Workspace {id:'test-ws-idem'}) DETACH DELETE w")
+
+
+async def test_workspace_id_normalized_lowercase(driver):
+    from graphbase_memories.graph.repositories import federation_repo
+
+    project, workspace, _ = await federation_repo.register_service(
+        service_id="test-svc-c",
+        workspace_id="UPPER-CASE",
+        display_name="Test C",
+        description=None,
+        tags=[],
+        driver=driver,
+        database=TEST_DB,
+    )
+    assert workspace.id == "upper-case"
+    assert project.workspace_id == "upper-case"
+
+    # Cleanup
+    async with driver.session(database=TEST_DB) as s:
+        await s.run("MATCH (p:Project {id:'test-svc-c'}) DETACH DELETE p")
+        await s.run("MATCH (w:Workspace {id:'upper-case'}) DETACH DELETE w")
+
+
+async def test_fetch_batch_neighbors_empty_input(driver):
+    from graphbase_memories.graph.repositories import impact_repo
+
+    result = await impact_repo.fetch_batch_neighbors([], driver=driver, database=TEST_DB)
+    assert result == []

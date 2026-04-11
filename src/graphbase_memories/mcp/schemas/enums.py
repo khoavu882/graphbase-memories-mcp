@@ -23,6 +23,7 @@ class SaveStatus(StrEnum):
     pending_retry = "pending_retry"
     failed = "failed"
     blocked_scope = "blocked_scope"
+    duplicate_skip = "duplicate_skip"
 
 
 class RetrievalStatus(StrEnum):
@@ -46,3 +47,11 @@ class AnalysisMode(StrEnum):
     sequential = "sequential"
     debate = "debate"
     socratic = "socratic"
+
+
+class CrossServiceLinkType(StrEnum):
+    DEPENDS_ON = "DEPENDS_ON"
+    SHARES_CONCEPT = "SHARES_CONCEPT"
+    CONTRADICTS = "CONTRADICTS"
+    SUPERSEDES = "SUPERSEDES"
+    EXTENDS = "EXTENDS"

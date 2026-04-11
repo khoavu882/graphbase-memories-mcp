@@ -32,10 +32,13 @@ def _load_cypher(name: str) -> str:
 
 # Load all query files at module import — M-3 fast-fail validation
 SCHEMA_DDL = _load_cypher("schema")
+SCHEMA_V2_DDL = _load_cypher("schema_v2")
 RETRIEVAL_QUERIES = _load_cypher("retrieval")
 WRITE_QUERIES = _load_cypher("write")
 DEDUP_QUERIES = _load_cypher("dedup")
 HYGIENE_QUERIES = _load_cypher("hygiene")
+FEDERATION_QUERIES = _load_cypher("federation")
+IMPACT_QUERIES = _load_cypher("impact")
 
 
 @asynccontextmanager
@@ -64,6 +67,8 @@ async def neo4j_lifespan(server):
     # Neo4j 5: each statement in the file runs separately via session.run()
     async with driver.session(database=settings.neo4j_database) as session:
         for statement in split_statements(SCHEMA_DDL):
+            await session.run(statement)
+        for statement in split_statements(SCHEMA_V2_DDL):
             await session.run(statement)
 
     try:

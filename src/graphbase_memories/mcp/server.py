@@ -19,9 +19,12 @@ def _register_tools() -> None:
     from graphbase_memories.mcp.tools import (  # noqa: F401
         analysis,
         artifacts,
+        cross_service,
         entity,
+        federation,
         governance,
         hygiene,
+        impact,
         retrieval,
         session,
     )
