@@ -95,7 +95,18 @@ src/graphbase_memories/
 │   ├── models.py         Node dataclasses
 │   ├── queries/          .cypher files (schema, retrieval, write, dedup, hygiene)
 │   └── repositories/     One repo class per node type
-└── devtools/             FastAPI HTTP inspection server
+└── devtools/             FastAPI HTTP inspection server + Alpine.js UI
+    ├── server.py         FastAPI app, lifespan, router mounting (pool=2)
+    ├── routes/           14 HTTP endpoint handlers
+    │   ├── events.py     SSE heartbeat stream
+    │   ├── memory.py     Memory node list/get/search/relationships
+    │   ├── projects.py   Project registry with staleness + node counts
+    │   ├── tools.py      MCP tool registry + engine-direct invocation
+    │   ├── health.py     Graph stats, workspace health, conflicts
+    │   └── hygiene.py    Hygiene status + run control
+    └── ui/               Alpine.js single-page dashboard
+        ├── index.html    5-tab SPA (Projects/Tools/Health/Memory/Hygiene)
+        └── static/       app.js + alpine.min.js
 ```
 
 ---
@@ -144,6 +155,24 @@ server fails fast before accepting any connections:
 ```python
 SCHEMA_DDL = _load_cypher("schema")   # raises FileNotFoundError if missing
 ```
+
+---
+
+## Devtools server
+
+The devtools server provides a human-readable HTTP interface for inspecting graph state without an agent. Start it with:
+
+```bash
+graphbase-memories-mcp devtools --port 8765
+# Open http://localhost:8765 — redirects to /ui (Alpine.js dashboard)
+```
+
+Architecture notes:
+
+- Connection pool capped at 2 (MCP server uses 8; Neo4j Community Edition allows 10 total).
+- All route handlers call engine functions directly with the devtools driver — no FastMCP Context needed.
+- Write tools (`propagate_impact`, `link_cross_service`, `register_service`, `deregister_service`) require `confirm: true` in the invoke body; without it, the response is `{"status": "preview", ...}`.
+- The SSE `/events` endpoint emits a `heartbeat` event every 5 seconds with Neo4j connectivity status.
 
 ---
 

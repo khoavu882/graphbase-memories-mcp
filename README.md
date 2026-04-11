@@ -92,7 +92,7 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
 }
 ```
 
-After saving, restart Claude Code. The 12 memory tools will appear in the tool list.
+After saving, restart Claude Code. The 20 MCP tools will appear in the tool list.
 
 > **Production tip**: Replace `@main` with a release tag (e.g., `@v1.0.0`) to pin to a stable version and avoid silent breakage when the default branch changes.
 
@@ -114,6 +114,14 @@ After saving, restart Claude Code. The 12 memory tools will appear in the tool l
 | `route_analysis` | Analysis | Route a task description to sequential / debate / socratic mode |
 | `run_hygiene` | Hygiene | Detect duplicates, stale decisions, obsolete patterns, entity drift |
 | `get_save_status` | Hygiene | List pending or failed saves for a project |
+| `register_service` | Federation | Register a service into a named workspace |
+| `deregister_service` | Federation | Remove a service from the registry |
+| `list_active_services` | Federation | List services active within a time window |
+| `search_cross_service` | Federation | Federated memory search across services |
+| `link_cross_service` | Federation | Create a typed cross-service link (write) |
+| `propagate_impact` | Federation | Propagate a breaking change across the graph (write) |
+| `graph_health` | Federation | Get workspace health and cross-service metrics |
+| `detect_conflicts` | Federation | Find contradicting cross-service links |
 
 ---
 
@@ -135,13 +143,29 @@ graphbase-memories-mcp hygiene --scope global
 
 ## Devtools Server
 
-The devtools server (`graphbase-memories-mcp devtools`) exposes a read-only HTTP API for inspecting graph memory without an agent:
+The devtools server (`graphbase-memories-mcp devtools`) exposes an HTTP API and a browser dashboard for inspecting graph memory without an agent. Open `http://localhost:8765` after starting — it redirects to the Alpine.js single-page dashboard (`/ui`) with 5 tabs: Projects, Tools, Health, Memory, and Hygiene.
 
 ```
-GET /health                     — liveness check
-GET /memory?project_id=<id>     — list all memory nodes for a project
-GET /memory/<node-id>           — fetch a single node
+GET  /events                          SSE heartbeat (real-time connectivity status)
+GET  /memory                          List nodes
+GET  /memory/{id}/relationships       Relationship inspector
+GET  /memory/{id}                     Node detail
+POST /memory/search                   CONTAINS full-text search
+GET  /projects                        Projects with node counts + staleness
+GET  /projects/{id}                   Single project detail
+GET  /tools                           MCP tool registry (live)
+GET  /tools/{name}                    Tool schema + metadata
+POST /tools/{name}/invoke             Engine-direct invoke with write-confirmation gate
+GET  /graph/stats                     Per-label node + relationship counts
+GET  /graph/stats/workspace/{id}      Workspace health
+GET  /graph/conflicts/{id}            CONTRADICTS conflict detection
+GET  /hygiene/status                  All-project hygiene summary
+POST /hygiene/run                     Run hygiene engine
+MOUNT /ui                             Alpine.js dashboard (StaticFiles)
+GET  /                                → redirect to /ui
 ```
+
+Write tools (`propagate_impact`, `link_cross_service`, `register_service`, `deregister_service`) require `"confirm": true` in the POST body when invoked via `/tools/{name}/invoke`; without it the response is `{"status": "preview", ...}`.
 
 ---
 

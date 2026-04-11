@@ -1,6 +1,6 @@
 # MCP Tools Overview
 
-`graphbase-memories-mcp` exposes **12 async tools** across 7 functional groups. All tools use MCP JSON-RPC 2.0 over stdio.
+`graphbase-memories-mcp` exposes **20 async tools** across 8 functional groups. All tools use MCP JSON-RPC 2.0 over stdio.
 
 ---
 
@@ -17,6 +17,7 @@
     | [Governance](governance.md) | `request_global_write_approval` | Gate global-scope writes |
     | [Analysis](analysis.md) | `route_analysis` | Route tasks to reasoning mode |
     | [Hygiene](hygiene.md) | `run_hygiene`, `get_save_status` | Memory maintenance and health |
+    | Federation | `register_service`, `deregister_service`, `list_active_services`, `search_cross_service`, `link_cross_service`, `propagate_impact`, `graph_health`, `detect_conflicts` | Multi-service workspace coordination |
 
 === "Recommended call sequence"
 
