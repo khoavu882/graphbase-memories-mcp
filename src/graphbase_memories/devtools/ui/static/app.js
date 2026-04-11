@@ -1,4 +1,4 @@
-// graphbase devtools — Alpine.js data stores
+// Graphbase Devtools — Alpine.js data stores
 // Served as static file from devtools/ui/static/app.js
 
 function appRoot() {
