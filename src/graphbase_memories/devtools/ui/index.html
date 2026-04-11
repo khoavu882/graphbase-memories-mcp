@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>graphbase devtools</title>
+  <script defer src="static/alpine.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; font-size: 14px; }
+    header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: #1e293b; border-bottom: 1px solid #334155; }
+    header h1 { font-size: 16px; font-weight: 600; color: #f8fafc; }
+    .badge { padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
+    .badge-ok { background: #166534; color: #86efac; }
+    .badge-degraded { background: #78350f; color: #fde68a; }
+    .badge-disconnected { background: #7f1d1d; color: #fca5a5; }
+    .badge-connecting { background: #1e3a5f; color: #93c5fd; }
+    nav { display: flex; gap: 2px; padding: 8px 20px; background: #1e293b; border-bottom: 1px solid #334155; }
+    nav button { padding: 6px 14px; border: none; background: transparent; color: #94a3b8; cursor: pointer; border-radius: 6px; font-size: 13px; }
+    nav button:hover { background: #334155; color: #e2e8f0; }
+    nav button.active { background: #3b82f6; color: #fff; }
+    main { padding: 20px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .card h2 { font-size: 14px; font-weight: 600; color: #f1f5f9; margin-bottom: 8px; }
+    .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+    .tag-write { background: #7f1d1d; color: #fca5a5; }
+    .tag-read { background: #166534; color: #86efac; }
+    .tag-module { background: #1e3a5f; color: #93c5fd; }
+    input, select, textarea { background: #0f172a; border: 1px solid #475569; color: #e2e8f0; border-radius: 6px; padding: 6px 10px; width: 100%; margin-top: 4px; font-size: 13px; }
+    button.btn { padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    button.btn-primary { background: #3b82f6; color: #fff; }
+    button.btn-primary:hover { background: #2563eb; }
+    button.btn-danger { background: #dc2626; color: #fff; }
+    button.btn-secondary { background: #475569; color: #e2e8f0; }
+    pre { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 12px; overflow: auto; font-size: 12px; color: #a3e635; max-height: 300px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .stat-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1e293b; }
+    .stat-row:last-child { border-bottom: none; }
+    .stale { color: #fde68a; }
+    .fresh { color: #86efac; }
+    .tool-list { display: flex; flex-direction: column; gap: 6px; }
+    .tool-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; cursor: pointer; }
+    .tool-item:hover { border-color: #3b82f6; }
+    .tool-item.selected { border-color: #3b82f6; background: #1e3a5f; }
+    .tool-name { font-weight: 600; font-size: 13px; color: #f1f5f9; flex: 1; }
+    .split { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
+    input[type="search"] { margin-bottom: 8px; }
+    .results-list { display: flex; flex-direction: column; gap: 6px; }
+    .result-item { padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; }
+    .result-item .label { font-size: 11px; color: #94a3b8; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #334155; font-size: 13px; }
+    th { color: #94a3b8; font-weight: 500; }
+  </style>
+</head>
+<body x-data="appRoot()">
+
+  <!-- Header with connection status -->
+  <header x-data="connectionStatus()" x-init="init()">
+    <h1>graphbase devtools</h1>
+    <span class="badge" :class="`badge-${status}`" x-text="statusLabel()"></span>
+    <span style="color:#64748b;font-size:12px" x-text="toolCount ? `${toolCount} tools` : ''"></span>
+    <span style="margin-left:auto;color:#475569;font-size:12px">bolt://localhost:7687</span>
+  </header>
+
+  <!-- Tab navigation -->
+  <nav>
+    <button @click="tab='projects'" :class="tab==='projects'&&'active'">Projects</button>
+    <button @click="tab='tools'"    :class="tab==='tools'&&'active'">Tools</button>
+    <button @click="tab='health'"   :class="tab==='health'&&'active'">Health</button>
+    <button @click="tab='memory'"   :class="tab==='memory'&&'active'">Memory</button>
+    <button @click="tab='hygiene'"  :class="tab==='hygiene'&&'active'">Hygiene</button>
+  </nav>
+
+  <main>
+
+    <!-- Projects tab -->
+    <div class="panel" :class="tab==='projects'&&'active'" x-data="projectsPanel()" x-init="init()">
+      <template x-if="loading"><p style="color:#64748b">Loading projects…</p></template>
+      <template x-if="!loading && projects.length===0">
+        <p style="color:#64748b">No projects registered. Run the MCP server to create projects.</p>
+      </template>
+      <div class="grid-2">
+        <template x-for="p in projects" :key="p.id">
+          <div class="card">
+            <h2 x-text="p.name || p.id"></h2>
+            <p style="color:#64748b;font-size:12px;margin-bottom:8px" x-text="p.id"></p>
+            <div class="stat-row">
+              <span>Status</span>
+              <span x-text="p.status || 'idle'" :class="p.status==='active'?'fresh':''"></span>
+            </div>
+            <div class="stat-row">
+              <span>Staleness</span>
+              <span :class="p.is_stale?'stale':'fresh'"
+                    x-text="p.staleness_days!=null ? p.staleness_days.toFixed(1)+' days' : '—'"></span>
+            </div>
+            <div class="stat-row" x-show="p.node_counts">
+              <span>Decisions</span><span x-text="p.node_counts?.Decision ?? 0"></span>
+            </div>
+            <div class="stat-row" x-show="p.node_counts">
+              <span>Sessions</span><span x-text="p.node_counts?.Session ?? 0"></span>
+            </div>
+            <div class="stat-row" x-show="p.node_counts">
+              <span>Entities</span><span x-text="p.node_counts?.EntityFact ?? 0"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Tools tab -->
+    <div class="panel" :class="tab==='tools'&&'active'" x-data="toolsPanel()" x-init="init()">
+      <div class="split">
+        <div>
+          <input type="search" placeholder="Filter tools…" x-model="filter">
+          <div class="tool-list">
+            <template x-for="t in filteredTools()" :key="t.name">
+              <div class="tool-item" :class="selected&&selected.name===t.name&&'selected'"
+                   @click="select(t)">
+                <span class="tool-name" x-text="t.name"></span>
+                <span class="tag" :class="t.requires_confirmation?'tag-write':'tag-read'"
+                      x-text="t.requires_confirmation?'write':'read'"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+        <div x-show="selected">
+          <div class="card">
+            <h2 x-text="selected?.name"></h2>
+            <p style="color:#94a3b8;font-size:12px;margin-bottom:12px" x-text="selected?.description"></p>
+            <div style="display:flex;gap:6px;margin-bottom:12px">
+              <span class="tag tag-module" x-text="selected?.module"></span>
+              <span class="tag" :class="selected?.requires_confirmation?'tag-write':'tag-read'"
+                    x-text="selected?.requires_confirmation?'requires confirmation':'read-only'"></span>
+              <span class="tag" :class="selected?.http_invocable?'tag-read':'tag-write'"
+                    x-text="selected?.http_invocable?'http-invocable':'stdio-only'"></span>
+            </div>
+            <template x-if="selected?.http_invocable">
+              <div>
+                <h2 style="margin-bottom:8px">Parameters</h2>
+                <template x-for="[key, schema] in Object.entries(selected?.input_schema?.properties||{})" :key="key">
+                  <div style="margin-bottom:8px">
+                    <label style="font-size:12px;color:#94a3b8" x-text="key + (selected?.input_schema?.required?.includes(key)?' *':'')"></label>
+                    <input :placeholder="schema.description||schema.type||''" x-model="params[key]">
+                  </div>
+                </template>
+                <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+                  <button class="btn btn-primary" @click="invoke()" :disabled="invoking"
+                          x-text="invoking?'Running…':'Run tool'"></button>
+                  <template x-if="awaitingConfirm">
+                    <button class="btn btn-danger" @click="confirm()">Confirm write</button>
+                  </template>
+                </div>
+                <template x-if="result">
+                  <div style="margin-top:12px">
+                    <p style="font-size:12px;color:#94a3b8;margin-bottom:4px"
+                       x-text="result.status==='preview'?'Preview (confirm to execute)':
+                               `Result (${result.duration_ms}ms)`"></p>
+                    <pre x-text="JSON.stringify(result.result||result,null,2)"></pre>
+                  </div>
+                </template>
+              </div>
+            </template>
+            <template x-if="!selected?.http_invocable">
+              <p style="color:#fde68a;font-size:12px">This tool requires Pydantic-structured input. Use the MCP stdio server.</p>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Health tab -->
+    <div class="panel" :class="tab==='health'&&'active'" x-data="healthPanel()" x-init="init()">
+      <template x-if="stats">
+        <div class="grid-2">
+          <div class="card">
+            <h2>Node Counts</h2>
+            <template x-for="[label,cnt] in Object.entries(stats.node_counts||{})" :key="label">
+              <div class="stat-row"><span x-text="label"></span><span x-text="cnt"></span></div>
+            </template>
+          </div>
+          <div class="card">
+            <h2>Relationship Counts</h2>
+            <template x-for="[type,cnt] in Object.entries(stats.relationship_counts||{})" :key="type">
+              <div class="stat-row"><span x-text="type"></span><span x-text="cnt"></span></div>
+            </template>
+            <p style="color:#475569;font-size:11px;margin-top:8px" x-text="'As of: '+stats.checked_at"></p>
+          </div>
+        </div>
+      </template>
+      <template x-if="!stats"><p style="color:#64748b">Loading health data…</p></template>
+    </div>
+
+    <!-- Memory tab -->
+    <div class="panel" :class="tab==='memory'&&'active'" x-data="memoryPanel()">
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <div style="flex:1">
+            <label style="font-size:12px;color:#94a3b8">Search</label>
+            <input type="search" placeholder="Type to search memory…" x-model="query"
+                   @keydown.enter="search()">
+          </div>
+          <div>
+            <label style="font-size:12px;color:#94a3b8">Label</label>
+            <select x-model="label">
+              <option value="">All</option>
+              <option>Session</option><option>Decision</option>
+              <option>Pattern</option><option>Context</option><option>EntityFact</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" @click="search()" x-text="searching?'Searching…':'Search'"></button>
+        </div>
+      </div>
+      <div class="results-list">
+        <template x-for="item in results" :key="item.id">
+          <div class="result-item">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+              <span class="tag tag-module" x-text="item._label"></span>
+              <span style="font-size:11px;color:#475569" x-text="item.created_at||''"></span>
+            </div>
+            <p style="font-weight:600;font-size:13px" x-text="item.title||item.entity_name||item.id"></p>
+            <p style="font-size:12px;color:#94a3b8;margin-top:2px"
+               x-text="(item.content||item.fact||item.summary||'').slice(0,120)"></p>
+          </div>
+        </template>
+        <template x-if="results.length===0&&searched">
+          <p style="color:#64748b">No results for your query.</p>
+        </template>
+      </div>
+    </div>
+
+    <!-- Hygiene tab -->
+    <div class="panel" :class="tab==='hygiene'&&'active'" x-data="hygienePanel()" x-init="init()">
+      <div class="grid-2">
+        <div class="card">
+          <h2>Project Status</h2>
+          <template x-if="status">
+            <div>
+              <template x-for="p in status.projects" :key="p.project_id">
+                <div class="stat-row">
+                  <span x-text="p.project_id"></span>
+                  <span :class="p.needs_hygiene?'stale':'fresh'"
+                        x-text="p.days_since!=null ? p.days_since.toFixed(1)+'d' : 'never'"></span>
+                </div>
+              </template>
+              <div class="stat-row" style="margin-top:8px">
+                <span>Pending saves</span>
+                <span :class="status.pending_saves_total>0?'stale':'fresh'"
+                      x-text="status.pending_saves_total"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div class="card">
+          <h2>Run Hygiene</h2>
+          <div style="margin-bottom:12px">
+            <label style="font-size:12px;color:#94a3b8">Project ID (leave blank for global)</label>
+            <input placeholder="e.g. my-project" x-model="runProjectId">
+          </div>
+          <div style="margin-bottom:12px">
+            <label style="font-size:12px;color:#94a3b8">Scope</label>
+            <select x-model="runScope">
+              <option value="global">global</option>
+              <option value="project">project</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" @click="runHygiene()" :disabled="running"
+                  x-text="running?'Running…':'Run Hygiene'"></button>
+          <template x-if="report">
+            <div style="margin-top:12px">
+              <p style="font-size:12px;color:#94a3b8;margin-bottom:4px">Report</p>
+              <pre x-text="JSON.stringify(report,null,2)"></pre>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="static/app.js"></script>
+</body>
+</html>
