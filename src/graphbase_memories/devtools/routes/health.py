@@ -13,8 +13,14 @@ from graphbase_memories.engines import impact as impact_engine
 router = APIRouter(tags=["health"])
 
 _NODE_LABELS = [
-    "Project", "Session", "Decision", "Pattern",
-    "Context", "EntityFact", "Workspace", "ImpactEvent",
+    "Project",
+    "Session",
+    "Decision",
+    "Pattern",
+    "Context",
+    "EntityFact",
+    "Workspace",
+    "ImpactEvent",
 ]
 _REL_TYPES = ["BELONGS_TO", "CROSS_SERVICE_LINK", "IMPACT_OF"]
 

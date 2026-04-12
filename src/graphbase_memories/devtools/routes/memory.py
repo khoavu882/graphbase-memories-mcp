@@ -22,7 +22,9 @@ def _get_driver() -> AsyncDriver:
 @router.get("/memory")
 async def list_memory(
     project_id: str = Query(None),
-    label: str = Query(None, description="Node label: Session, Decision, Pattern, Context, EntityFact"),
+    label: str = Query(
+        None, description="Node label: Session, Decision, Pattern, Context, EntityFact"
+    ),
     limit: int = Query(20, ge=1, le=100),
 ):
     """List recent memory nodes, optionally filtered by project and label."""
@@ -133,14 +135,10 @@ async def search_memory(body: MemorySearchRequest):
     """Full-text search across memory nodes using CONTAINS on content fields."""
     label_clause = f":{body.label}" if body.label in _ALLOWED_LABELS else ""
     project_clause = (
-        "AND EXISTS { MATCH (n)-[:BELONGS_TO]->(:Project {id: $pid}) }"
-        if body.project_id
-        else ""
+        "AND EXISTS { MATCH (n)-[:BELONGS_TO]->(:Project {id: $pid}) }" if body.project_id else ""
     )
     since_clause = (
-        "AND n.created_at > datetime() - duration({days: $since_days})"
-        if body.since_days
-        else ""
+        "AND n.created_at > datetime() - duration({days: $since_days})" if body.since_days else ""
     )
     async with _get_driver().session(database=settings.neo4j_database) as session:
         result = await session.run(

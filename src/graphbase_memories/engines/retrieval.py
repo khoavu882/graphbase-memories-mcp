@@ -159,9 +159,7 @@ async def _fetch_all(
 
         # Global items last (lowest priority)
         if scope in ("focus", "project", "global"):
-            global_items = await _query_global(
-                session, categories, settings.retrieval_global_limit
-            )
+            global_items = await _query_global(session, categories, settings.retrieval_global_limit)
             if len(global_items) == settings.retrieval_global_limit:
                 truncated_scopes.append("global")
             items += global_items

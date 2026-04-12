@@ -15,9 +15,9 @@ class Settings(BaseSettings):
 
     retrieval_timeout_s: float = 5.0  # FR-23
     retrieval_max_retries: int = 1  # FR-24
-    retrieval_focus_limit: int = 10   # GRAPHBASE_RETRIEVAL_FOCUS_LIMIT
+    retrieval_focus_limit: int = 10  # GRAPHBASE_RETRIEVAL_FOCUS_LIMIT
     retrieval_project_limit: int = 20  # GRAPHBASE_RETRIEVAL_PROJECT_LIMIT
-    retrieval_global_limit: int = 5   # GRAPHBASE_RETRIEVAL_GLOBAL_LIMIT
+    retrieval_global_limit: int = 5  # GRAPHBASE_RETRIEVAL_GLOBAL_LIMIT
     write_max_retries: int = 1  # FR-52
     governance_token_ttl_s: int = 60  # GovernanceToken expiry
 

@@ -109,9 +109,7 @@ async def test_hygiene_status_project_entry_structure(driver, fresh_project):
     from graphbase_memories.devtools.routes.hygiene import hygiene_status
 
     result = await hygiene_status()
-    test_proj = next(
-        (p for p in result["projects"] if p["project_id"] == TEST_PROJECT_ID), None
-    )
+    test_proj = next((p for p in result["projects"] if p["project_id"] == TEST_PROJECT_ID), None)
     assert test_proj is not None
     assert "last_hygiene_at" in test_proj
     assert "days_since" in test_proj
