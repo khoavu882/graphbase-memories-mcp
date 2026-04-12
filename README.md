@@ -81,7 +81,7 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
   "mcpServers": {
     "graphbase-memories": {
       "command": "uvx",
-      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase-memories-mcp@main", "graphbase-memories-mcp", "serve"],
+      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase-memories-mcp@v1.0.0", "graphbase-memories-mcp", "serve"],
       "env": {
         "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",
         "GRAPHBASE_NEO4J_USER": "neo4j",
@@ -94,7 +94,7 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
 
 After saving, restart Claude Code. The 21 MCP tools will appear in the tool list.
 
-> **Production tip**: Replace `@main` with a release tag (e.g., `@v1.0.0`) to pin to a stable version and avoid silent breakage when the default branch changes.
+> **Tip**: Use `@v1.0.0` (or the latest tag) to pin to a stable release. `@main` tracks the development branch and may include unreleased changes.
 
 ---
 
