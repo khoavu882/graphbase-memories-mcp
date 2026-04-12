@@ -211,3 +211,85 @@ async def test_retrieval_returns_saved_decisions(driver, fresh_project):
     assert len(bundle.items) >= 1
     titles = [item.get("title") for item in bundle.items]
     assert "Use gRPC for internal comms" in titles
+
+
+async def test_retrieval_keyword_returns_bm25_results(driver, fresh_project):
+    """keyword= triggers BM25 fusion; returned items carry _rrf_score."""
+    from graphbase_memories.engines.retrieval import execute
+    from graphbase_memories.engines.write import save_decision
+    from graphbase_memories.mcp.schemas.artifacts import DecisionSchema
+    from graphbase_memories.mcp.schemas.enums import MemoryScope, RetrievalStatus
+
+    unique_word = "xyloquuxbm25rrf"
+    decision = DecisionSchema(
+        title=f"Adopt {unique_word} caching strategy",
+        rationale="improves p99 latency with minimal overhead",
+        owner="arch-team",
+        date=date.today(),
+        scope=MemoryScope.project,
+        confidence=0.8,
+    )
+    await save_decision(decision, fresh_project, None, None, driver, TEST_DB)
+
+    bundle = await execute(
+        project_id=fresh_project,
+        scope="project",
+        focus=None,
+        categories=None,
+        topic=None,
+        keyword=unique_word,
+        driver=driver,
+        database=TEST_DB,
+    )
+    assert bundle.retrieval_status == RetrievalStatus.succeeded
+    titles = [item.get("title") for item in bundle.items]
+    assert any(unique_word in (t or "") for t in titles), "BM25 should surface the unique-word decision"
+    assert all("_rrf_score" in item for item in bundle.items), "All items must carry _rrf_score"
+
+
+async def test_retrieval_keyword_none_unchanged(driver, fresh_project):
+    """keyword=None leaves items without _rrf_score (legacy path unchanged)."""
+    from graphbase_memories.engines.retrieval import execute
+    from graphbase_memories.engines.write import save_decision
+    from graphbase_memories.mcp.schemas.artifacts import DecisionSchema
+    from graphbase_memories.mcp.schemas.enums import MemoryScope
+
+    decision = DecisionSchema(
+        title="Cache reads with Redis",
+        rationale="reduce DB load",
+        owner="team",
+        date=date.today(),
+        scope=MemoryScope.project,
+        confidence=0.85,
+    )
+    await save_decision(decision, fresh_project, None, None, driver, TEST_DB)
+
+    bundle = await execute(
+        project_id=fresh_project,
+        scope="project",
+        focus=None,
+        categories=None,
+        topic=None,
+        keyword=None,
+        driver=driver,
+        database=TEST_DB,
+    )
+    assert not any("_rrf_score" in item for item in bundle.items), "_rrf_score must be absent without keyword"
+
+
+def test_rrf_fuse_deduplicates():
+    """_rrf_fuse merges overlapping lists without duplicates; shared items score highest."""
+    from graphbase_memories.engines.retrieval import _rrf_fuse
+
+    graph = [{"id": "a", "title": "A"}, {"id": "b", "title": "B"}]
+    fts = [{"id": "b", "title": "B"}, {"id": "c", "title": "C"}]
+    result = _rrf_fuse(graph, fts)
+
+    ids = [item["id"] for item in result]
+    assert len(ids) == len(set(ids)), "No duplicate IDs in fused result"
+    assert set(ids) == {"a", "b", "c"}
+
+    b_score = next(item["_rrf_score"] for item in result if item["id"] == "b")
+    c_score = next(item["_rrf_score"] for item in result if item["id"] == "c")
+    assert b_score > c_score, "Item in both lists scores higher than FTS-only item"
+    assert all("_rrf_score" in item for item in result)

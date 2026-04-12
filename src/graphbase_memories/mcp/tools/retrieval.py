@@ -19,10 +19,13 @@ async def retrieve_context(
     focus: str | None = None,
     categories: list[str] | None = None,
     topic: str | None = None,
+    keyword: str | None = None,
 ) -> ContextBundle:
     """
     Retrieve memory context for a project, ordered by scope priority (focus > project > global).
     Returns ContextBundle with retrieval_status and hygiene_due indicator.
+    When keyword is provided, BM25 full-text search is fused with graph traversal via RRF.
+    Each result item will include an _rrf_score field when keyword search is active.
     """
     driver = ctx.lifespan_context["driver"]
     return await retrieval_engine.execute(
@@ -31,6 +34,7 @@ async def retrieve_context(
         focus=focus,
         categories=categories,
         topic=topic,
+        keyword=keyword,
         driver=driver,
         database=settings.neo4j_database,
     )

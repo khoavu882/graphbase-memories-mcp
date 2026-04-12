@@ -26,5 +26,9 @@ class Settings(BaseSettings):
     impact_max_depth: int = 3  # GRAPHBASE_IMPACT_MAX_DEPTH
     workspace_enforce_isolation: bool = True  # GRAPHBASE_WORKSPACE_ENFORCE_ISOLATION
 
+    fts_enabled: bool = True  # GRAPHBASE_FTS_ENABLED — toggle for envs without FTS indexes
+    fts_limit: int = 20  # GRAPHBASE_FTS_LIMIT — BM25 candidates per fulltext index
+    rrf_k: int = 60  # GRAPHBASE_RRF_K — RRF damping constant
+
 
 settings = Settings()
