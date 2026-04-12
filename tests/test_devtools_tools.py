@@ -63,9 +63,7 @@ async def test_list_tools_read_only_not_require_confirmation(driver):
 
     for name in _READ_ONLY_TOOLS:
         if name in by_name:
-            assert by_name[name]["requires_confirmation"] is False, (
-                f"{name} should be read-only"
-            )
+            assert by_name[name]["requires_confirmation"] is False, f"{name} should be read-only"
 
 
 async def test_list_tools_write_tools_require_confirmation(driver):
@@ -77,7 +75,12 @@ async def test_list_tools_write_tools_require_confirmation(driver):
     result = await list_tools()
     by_name = {t["name"]: t for t in result}
 
-    write_tools = ["propagate_impact", "link_cross_service", "register_service", "deregister_service"]
+    write_tools = [
+        "propagate_impact",
+        "link_cross_service",
+        "register_service",
+        "deregister_service",
+    ]
     for name in write_tools:
         if name in by_name:
             assert by_name[name]["requires_confirmation"] is True, (

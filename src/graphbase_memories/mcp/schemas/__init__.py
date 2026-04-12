@@ -9,18 +9,22 @@ from graphbase_memories.mcp.schemas.artifacts import (
 from graphbase_memories.mcp.schemas.enums import (
     AnalysisMode,
     DedupOutcome,
+    FreshnessLevel,
     MemoryScope,
     RetrievalStatus,
     SaveStatus,
     ScopeState,
 )
+from graphbase_memories.mcp.schemas.errors import ErrorCode, MCPError
 from graphbase_memories.mcp.schemas.results import (
     AnalysisResult,
     BatchSaveResult,
     ContextBundle,
+    FreshnessReport,
     HygieneReport,
     SaveResult,
     SaveStatusSummary,
+    StaleItem,
 )
 
 __all__ = [
@@ -33,7 +37,11 @@ __all__ = [
     "DedupOutcome",
     "EntityFactSchema",
     "EntityRelation",
+    "ErrorCode",
+    "FreshnessLevel",
+    "FreshnessReport",
     "HygieneReport",
+    "MCPError",
     "MemoryScope",
     "PatternSchema",
     "RetrievalStatus",
@@ -42,4 +50,5 @@ __all__ = [
     "SaveStatusSummary",
     "ScopeState",
     "SessionSchema",
+    "StaleItem",
 ]

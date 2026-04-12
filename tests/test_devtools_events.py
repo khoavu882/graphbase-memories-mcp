@@ -30,7 +30,7 @@ async def test_heartbeat_payload_structure(driver):
     chunk = await gen.__anext__()
 
     data_line = next(ln for ln in chunk.splitlines() if ln.startswith("data: "))
-    payload = json.loads(data_line[len("data: "):])
+    payload = json.loads(data_line[len("data: ") :])
 
     assert payload["neo4j_connected"] is True
     assert payload["status"] == "ok"

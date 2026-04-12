@@ -27,6 +27,7 @@ async def execute(
     focus: str | None,
     categories: list[str] | None,
     topic: str | None,
+    keyword: str | None = None,
     driver: AsyncDriver,
     database: str = "neo4j",
 ) -> ContextBundle:
@@ -45,7 +46,7 @@ async def execute(
 
     for attempt in range(settings.retrieval_max_retries + 1):
         try:
-            items = await asyncio.wait_for(
+            items, truncated_scopes = await asyncio.wait_for(
                 _fetch_all(
                     project_id=project_id,
                     scope=scope,
@@ -57,6 +58,14 @@ async def execute(
                 ),
                 timeout=settings.retrieval_timeout_s,
             )
+            if keyword and settings.fts_enabled:
+                fts_items = await _fetch_bm25(
+                    project_id=project_id,
+                    search_text=keyword,
+                    driver=driver,
+                    database=database,
+                )
+                items = _rrf_fuse(items, fts_items)
             hygiene_due = await _check_hygiene_due(project_id, driver, database)
             conflicts = _has_conflicts(items)
 
@@ -64,13 +73,16 @@ async def execute(
             if conflicts:
                 status = RetrievalStatus.conflicted
 
-            return ContextBundle(
+            bundle = ContextBundle(
                 items=items,
                 retrieval_status=status,
                 scope_state=scope_state,
                 conflicts_found=conflicts,
                 hygiene_due=hygiene_due,
+                truncated_scopes=truncated_scopes,
             )
+            bundle.next_step = _build_next_step(bundle, project_id)
+            return bundle
 
         except TimeoutError:
             if attempt < settings.retrieval_max_retries:
@@ -97,6 +109,20 @@ async def execute(
     )
 
 
+def _build_next_step(bundle: ContextBundle, project_id: str) -> str:
+    """Return a contextual next-step hint based on the bundle's retrieval state."""
+    if bundle.conflicts_found:
+        return "Conflicts detected: call detect_conflicts(workspace_id=...) to resolve CONTRADICTS edges."
+    if bundle.hygiene_due:
+        return f"Hygiene overdue: call run_hygiene(project_id='{project_id}') to clean stale nodes."
+    if bundle.retrieval_status.value == "empty":
+        return "No memories found. Try retrieve_context with scope='global' or a broader topic."
+    if bundle.truncated_scopes:
+        scopes = ", ".join(bundle.truncated_scopes)
+        return f"Results truncated in: [{scopes}]. Narrow with focus= or categories= to get full results."
+    return "Deepen with search_cross_service() or save new learnings with save_decision()."
+
+
 async def _fetch_all(
     *,
     project_id: str,
@@ -106,23 +132,37 @@ async def _fetch_all(
     topic: str | None,
     driver: AsyncDriver,
     database: str,
-) -> list[dict]:
-    """Priority merge: focus > project > global."""
+) -> tuple[list[dict], list[str]]:
+    """Priority merge: focus > project > global. Returns (items, truncated_scopes)."""
     items: list[dict] = []
     seen_ids: set[str] = set()
+    truncated_scopes: list[str] = []
 
     async with driver.session(database=database) as session:
         # Focus-level items first (highest priority)
         if focus and scope in ("focus", "project"):
-            items += await _query_focus(session, project_id, focus, categories)
+            focus_items = await _query_focus(
+                session, project_id, focus, categories, settings.retrieval_focus_limit
+            )
+            if len(focus_items) == settings.retrieval_focus_limit:
+                truncated_scopes.append("focus")
+            items += focus_items
 
         # Project-level items
         if scope in ("focus", "project"):
-            items += await _query_project(session, project_id, categories)
+            project_items = await _query_project(
+                session, project_id, categories, settings.retrieval_project_limit
+            )
+            if len(project_items) == settings.retrieval_project_limit:
+                truncated_scopes.append("project")
+            items += project_items
 
         # Global items last (lowest priority)
         if scope in ("focus", "project", "global"):
-            items += await _query_global(session, categories)
+            global_items = await _query_global(session, categories, settings.retrieval_global_limit)
+            if len(global_items) == settings.retrieval_global_limit:
+                truncated_scopes.append("global")
+            items += global_items
 
     # Deduplicate by id, preserve priority order
     unique: list[dict] = []
@@ -131,48 +171,53 @@ async def _fetch_all(
             seen_ids.add(item.get("id"))
             unique.append(item)
 
-    return unique
+    return unique, truncated_scopes
 
 
 async def _query_focus(
-    session, project_id: str, focus: str, categories: list[str] | None
+    session, project_id: str, focus: str, categories: list[str] | None, limit: int
 ) -> list[dict]:
     label_filter = _label_filter(categories)
     result = await session.run(
         f"""
         MATCH (n{label_filter})-[:HAS_FOCUS]->(f:FocusArea {{name: $focus, project_id: $pid}})
         RETURN n {{.*}} AS node, labels(n)[0] AS label
-        ORDER BY n.created_at DESC LIMIT 10
+        ORDER BY n.created_at DESC LIMIT $limit
         """,
         focus=focus,
         pid=project_id,
+        limit=limit,
     )
     return [_to_dict(r) async for r in result]
 
 
-async def _query_project(session, project_id: str, categories: list[str] | None) -> list[dict]:
+async def _query_project(
+    session, project_id: str, categories: list[str] | None, limit: int
+) -> list[dict]:
     label_filter = _label_filter(categories)
     result = await session.run(
         f"""
         MATCH (n{label_filter})-[:BELONGS_TO]->(p:Project {{id: $pid}})
         WHERE NOT (n:Decision AND EXISTS {{ MATCH (:Decision)-[:SUPERSEDES]->(n) }})
         RETURN n {{.*}} AS node, labels(n)[0] AS label
-        ORDER BY n.created_at DESC LIMIT 20
+        ORDER BY n.created_at DESC LIMIT $limit
         """,
         pid=project_id,
+        limit=limit,
     )
     return [_to_dict(r) async for r in result]
 
 
-async def _query_global(session, categories: list[str] | None) -> list[dict]:
+async def _query_global(session, categories: list[str] | None, limit: int) -> list[dict]:
     label_filter = _label_filter(categories)
     result = await session.run(
         f"""
         MATCH (n{label_filter})-[:BELONGS_TO]->(g:GlobalScope)
         WHERE NOT (n:Decision AND EXISTS {{ MATCH (:Decision)-[:SUPERSEDES]->(n) }})
         RETURN n {{.*}} AS node, labels(n)[0] AS label
-        ORDER BY n.created_at DESC LIMIT 5
+        ORDER BY n.created_at DESC LIMIT $limit
         """,
+        limit=limit,
     )
     return [_to_dict(r) async for r in result]
 
@@ -191,6 +236,20 @@ def _label_filter(categories: list[str] | None) -> str:
 def _to_dict(record) -> dict:
     node = dict(record["node"])
     node["_label"] = record["label"]
+
+    ts_raw = node.get("updated_at") or node.get("created_at")
+    if ts_raw is not None:
+        ts = ts_raw.to_native() if hasattr(ts_raw, "to_native") else ts_raw
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        age_days = (datetime.now(UTC) - ts).days
+        if age_days <= settings.freshness_recent_days:
+            node["_freshness"] = "current"
+        elif age_days <= settings.freshness_stale_days:
+            node["_freshness"] = "recent"
+        else:
+            node["_freshness"] = "stale"
+
     return node
 
 
@@ -214,3 +273,102 @@ async def _check_hygiene_due(project_id: str, driver: AsyncDriver, database: str
         threshold = datetime.now(UTC) - timedelta(days=30)
         last = record["ts"].to_native() if hasattr(record["ts"], "to_native") else record["ts"]
         return last < threshold
+
+
+def _rrf_fuse(
+    graph_items: list[dict],
+    fts_items: list[dict],
+    fts_weight: float = 0.4,
+    k: int | None = None,
+) -> list[dict]:
+    """Reciprocal Rank Fusion: fuse graph traversal + BM25 results.
+
+    Each item is scored as Σ weight_r / (k + rank_r) across both ranked lists.
+    Items appearing in both lists accumulate scores from both — naturally
+    boosting results that are semantically relevant AND structurally connected.
+    The `_rrf_score` field is added to every returned item.
+    """
+    rrf_k = k if k is not None else settings.rrf_k
+    graph_weight = 1.0 - fts_weight
+    scores: dict[str, float] = {}
+    meta: dict[str, dict] = {}
+
+    for rank, item in enumerate(graph_items, start=1):
+        uid = item.get("id")
+        if not uid:
+            continue
+        scores[uid] = scores.get(uid, 0.0) + graph_weight / (rrf_k + rank)
+        meta[uid] = item
+
+    for rank, item in enumerate(fts_items, start=1):
+        uid = item.get("id")
+        if not uid:
+            continue
+        scores[uid] = scores.get(uid, 0.0) + fts_weight / (rrf_k + rank)
+        if uid not in meta:
+            meta[uid] = item
+
+    sorted_ids = sorted(scores, key=lambda uid: scores[uid], reverse=True)
+    result = []
+    for uid in sorted_ids:
+        fused = dict(meta[uid])
+        fused["_rrf_score"] = round(scores[uid], 6)
+        result.append(fused)
+    return result
+
+
+async def _fetch_bm25(
+    *,
+    project_id: str,
+    search_text: str,
+    driver: AsyncDriver,
+    database: str,
+) -> list[dict]:
+    """Run BM25 FTS across all 4 fulltext indexes; merge results in Python.
+
+    Uses 4 separate session.run() calls (one per index) because CALL UNION ALL
+    is unreliable in Neo4j 5 Community. Results are deduplicated by node ID.
+    Each failed index query is logged and skipped — partial results are returned.
+    """
+    import time
+
+    index_names = [
+        "decision_fulltext",
+        "pattern_fulltext",
+        "context_fulltext",
+        "entity_fulltext",
+    ]
+    all_items: list[dict] = []
+    seen: set[str] = set()
+
+    t0 = time.monotonic()
+    async with driver.session(database=database) as session:
+        for index_name in index_names:
+            try:
+                result = await session.run(
+                    "CALL db.index.fulltext.queryNodes($index_name, $search_text) "
+                    "YIELD node, score "
+                    "WHERE node.project_id = $project_id OR node.scope = 'global' "
+                    "RETURN node {.*} AS item, labels(node)[0] AS label, score AS bm25_score "
+                    "ORDER BY bm25_score DESC LIMIT $fts_limit",
+                    index_name=index_name,
+                    search_text=search_text,
+                    project_id=project_id,
+                    fts_limit=settings.fts_limit,
+                )
+                async for record in result:
+                    item = dict(record["item"])
+                    item["_label"] = record["label"]
+                    item["bm25_score"] = record["bm25_score"]
+                    uid = item.get("id")
+                    if uid and uid not in seen:
+                        seen.add(uid)
+                        all_items.append(item)
+            except Exception:
+                logger.warning("BM25 query failed for index %s — skipping", index_name)
+
+    elapsed_ms = (time.monotonic() - t0) * 1000
+    if elapsed_ms > 500:
+        logger.warning("BM25 fetch took %.0f ms (>500ms threshold)", elapsed_ms)
+
+    return all_items

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from graphbase_memories.mcp.schemas.enums import (
     AnalysisMode,
     DedupOutcome,
+    FreshnessLevel,
     RetrievalStatus,
     SaveStatus,
     ScopeState,
@@ -20,6 +21,7 @@ class SaveResult(BaseModel):
     artifact_id: str | None = None
     dedup_outcome: DedupOutcome | None = None
     message: str | None = None
+    next_step: str | None = None
 
 
 class BatchSaveResult(BaseModel):
@@ -37,6 +39,8 @@ class ContextBundle(BaseModel):
     scope_state: ScopeState
     conflicts_found: bool = False
     hygiene_due: bool = False
+    truncated_scopes: list[str] = []  # scopes where result count hit the configured limit
+    next_step: str | None = None
 
 
 class SaveStatusSummary(BaseModel):
@@ -66,6 +70,7 @@ class HygieneReport(BaseModel):
     unresolved_saves: int
     candidate_ids: dict[str, list[str]]  # category → [node_ids]
     checked_at: datetime
+    next_step: str | None = None
 
 
 class ServiceInfo(BaseModel):
@@ -119,6 +124,7 @@ class ImpactReport(BaseModel):
     affected_services: list[AffectedServiceItem]
     impact_event_id: str
     created_at: datetime
+    next_step: str | None = None
 
 
 class WorkspaceServiceHealth(BaseModel):
@@ -137,6 +143,7 @@ class WorkspaceHealthReport(BaseModel):
     services: list[WorkspaceServiceHealth]
     total_conflicts: int
     checked_at: datetime
+    next_step: str | None = None
 
 
 class ConflictRecord(BaseModel):
@@ -148,3 +155,21 @@ class ConflictRecord(BaseModel):
     target_summary: str
     link_rationale: str | None = None
     link_confidence: float | None = None
+
+
+class StaleItem(BaseModel):
+    node_id: str
+    label: str
+    title: str | None
+    age_days: int
+    freshness: FreshnessLevel
+    project_id: str | None
+
+
+class FreshnessReport(BaseModel):
+    stale_count: int
+    recent_count: int
+    current_count: int
+    stale_items: list[StaleItem]
+    checked_at: datetime
+    next_step: str | None = None
