@@ -14,6 +14,7 @@ from graphbase_memories.mcp.schemas.enums import (
     SaveStatus,
     ScopeState,
 )
+from graphbase_memories.mcp.schemas.errors import ErrorCode, MCPError
 from graphbase_memories.mcp.schemas.results import (
     AnalysisResult,
     BatchSaveResult,
@@ -33,7 +34,9 @@ __all__ = [
     "DedupOutcome",
     "EntityFactSchema",
     "EntityRelation",
+    "ErrorCode",
     "HygieneReport",
+    "MCPError",
     "MemoryScope",
     "PatternSchema",
     "RetrievalStatus",
