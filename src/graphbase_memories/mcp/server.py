@@ -31,4 +31,10 @@ def _register_tools() -> None:
     )
 
 
+def _register_resources() -> None:
+    """Import resource modules to trigger @mcp.resource() registration."""
+    from graphbase_memories.mcp import resources  # noqa: F401
+
+
 _register_tools()
+_register_resources()
