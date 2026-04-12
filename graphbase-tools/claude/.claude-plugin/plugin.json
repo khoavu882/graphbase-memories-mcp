@@ -1,0 +1,7 @@
+{
+  "name": "graphbase-memories",
+  "description": "Ambient graph memory injection for Claude Code — surfaces relevant memories before file reads, edits, and searches.",
+  "version": "1.0.0",
+  "author": { "name": "Khoa Vu" },
+  "keywords": ["memory", "graph", "neo4j", "context", "mcp"]
+}

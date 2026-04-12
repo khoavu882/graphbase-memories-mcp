@@ -1,0 +1,9 @@
+{
+  "tools": [
+    { "name": "start_session", "server": "graphbase-memories" },
+    { "name": "end_session", "server": "graphbase-memories" },
+    { "name": "get_scope_state", "server": "graphbase-memories" },
+    { "name": "memory_surface", "server": "graphbase-memories" },
+    { "name": "get_pending_saves", "server": "graphbase-memories" }
+  ]
+}

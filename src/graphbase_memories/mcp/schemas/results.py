@@ -173,3 +173,25 @@ class FreshnessReport(BaseModel):
     stale_items: list[StaleItem]
     checked_at: datetime
     next_step: str | None = None
+
+
+class SurfaceMatch(BaseModel):
+    """Single memory node returned by memory_surface or surface CLI."""
+
+    id: str
+    label: str  # "Decision" | "Pattern" | "Context" | "EntityFact"
+    name: str  # label-appropriate: title / trigger / topic / entity_name
+    content: str  # label-appropriate: rationale / repeatable_steps_text / content / fact
+    scope: str
+    freshness: str  # "current" | "recent" | "stale"
+    bm25_score: float
+    project_id: str | None = None
+
+
+class SurfaceResult(BaseModel):
+    """Result of memory_surface tool or surface CLI command."""
+
+    matches: list[SurfaceMatch]
+    query_used: str
+    total_found: int
+    next_step: str | None = None
