@@ -137,7 +137,7 @@ Returns `AnalysisResult` with `mode`, `rationale`, and `suggested_steps`.
 
 **Purpose:** Detect memory quality problems across a project or global scope.
 
-**Trigger:** Manual via `run_hygiene` tool or `graphbase-memories-mcp hygiene` CLI.
+**Trigger:** Manual via `run_hygiene` tool or `graphbase hygiene` CLI.
 
 **Five checks run in sequence:**
 

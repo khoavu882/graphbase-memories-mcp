@@ -8,7 +8,7 @@ Agents (Claude, Codex, Gemini, and others) call 20 structured tools to read and 
 
 ## Why graph memory?
 
-Most agent memory is flat — a list of notes, a vector store of embeddings, or session summaries that drift away. `graphbase-memories-mcp` organizes memory as a **property graph**:
+Most agent memory is flat — a list of notes, a vector store of embeddings, or session summaries that drift away. `graphbase` organizes memory as a **property graph**:
 
 - **Scopes** (`global` / `project` / `focus`) keep cross-project knowledge separate from initiative-specific context.
 - **Artifact types** (sessions, decisions, patterns, context snippets, entity facts) give structure to what agents remember.

@@ -1,6 +1,6 @@
 ---
 name: graphbase-guide
-description: Quick reference for all 22 graphbase-memories-mcp MCP tools, resources, and prompts. Use when you need to know which tool to call, what parameters it accepts, or what the server exposes.
+description: Quick reference for all 22 graphbase MCP tools, resources, and prompts. Use when you need to know which tool to call, what parameters it accepts, or what the server exposes.
 version: 1.0.0
 tools:
   - memory_surface
@@ -27,7 +27,7 @@ tools:
   - start_session
 ---
 
-# graphbase-memories-mcp — Quick Reference
+# graphbase — Quick Reference
 
 ## Memory Lifecycle
 

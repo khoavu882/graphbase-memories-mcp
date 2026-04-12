@@ -158,7 +158,7 @@ async def _execute_keyword(
         matches=matches,
         query_used=",".join(keywords),
         total_found=len(rows),
-        next_step="Consider updating memories or running: graphbase-memories-mcp hygiene --scope project",
+        next_step="Consider updating memories or running: graphbase hygiene --scope project",
     )
 
 
@@ -241,6 +241,6 @@ def format_staleness_for_hook(result: SurfaceResult, keywords: list[str]) -> str
     lines = [
         f"[Graphbase] Memories may be stale for changed keywords: {', '.join(keywords)}",
         f"Potentially affected entities: {names}",
-        "Consider: graphbase-memories-mcp hygiene --scope project",
+        "Consider: graphbase hygiene --scope project",
     ]
     return "\n".join(lines)

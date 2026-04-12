@@ -1,6 +1,6 @@
 ---
 name: graphbase-session
-description: Manage Claude Code session lifecycle with graphbase-memories-mcp. Use at session start to load context, and at session end to persist decisions, patterns, and open items.
+description: Manage Claude Code session lifecycle with graphbase. Use at session start to load context, and at session end to persist decisions, patterns, and open items.
 version: 1.0.0
 tools:
   - start_session

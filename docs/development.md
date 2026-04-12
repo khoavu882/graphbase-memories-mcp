@@ -14,8 +14,8 @@
 
 ```bash
 # 1. Clone
-git clone https://github.com/khoavu882/graphbase-memories-mcp.git
-cd graphbase-memories-mcp
+git clone https://github.com/khoavu882/graphbase.git
+cd graphbase
 
 # 2. Install dependencies (uv respects the lockfile)
 uv sync
@@ -163,7 +163,7 @@ SCHEMA_DDL = _load_cypher("schema")   # raises FileNotFoundError if missing
 The devtools server provides a human-readable HTTP interface for inspecting graph state without an agent. Start it with:
 
 ```bash
-graphbase-memories-mcp devtools --port 8765
+graphbase devtools --port 8765
 # Open http://localhost:8765 — redirects to /ui (Alpine.js dashboard)
 ```
 

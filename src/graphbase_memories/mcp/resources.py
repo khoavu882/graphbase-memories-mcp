@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # ── graphbase://schema ────────────────────────────────────────────────────────
 
 _SCHEMA_YAML = """
-# graphbase-memories-mcp — Graph Schema Reference
+# graphbase — Graph Schema Reference
 # Use this to construct Cypher queries in route_analysis tool.
 #
 # NOTE: Services are stored as :Project nodes with workspace metadata.

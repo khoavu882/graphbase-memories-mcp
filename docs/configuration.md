@@ -27,7 +27,7 @@ All settings are read from **environment variables** with the `GRAPHBASE_` prefi
     ```bash
     export GRAPHBASE_NEO4J_URI=bolt://my-host:7687
     export GRAPHBASE_NEO4J_PASSWORD=my-secret
-    graphbase-memories-mcp serve
+    graphbase serve
     ```
 
 === ".env file"
@@ -51,7 +51,7 @@ All settings are read from **environment variables** with the `GRAPHBASE_` prefi
     {
       "mcpServers": {
         "graphbase-memories": {
-          "command": "/path/to/.venv/bin/graphbase-memories-mcp",
+          "command": "/path/to/.venv/bin/graphbase",
           "args": ["serve"],
           "env": {
             "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",

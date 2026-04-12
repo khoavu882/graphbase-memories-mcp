@@ -40,7 +40,7 @@ uv sync
 ### 3. Run the MCP server
 
 ```bash
-graphbase-memories-mcp serve
+graphbase serve
 ```
 
 The server speaks **MCP JSON-RPC 2.0 over stdio** — connect it via your agent's `.mcp.json` (see [Connecting to Claude Code](#connecting-to-claude-code)).
@@ -81,7 +81,7 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
   "mcpServers": {
     "graphbase-memories": {
       "command": "uvx",
-      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase-memories-mcp@v1.0.0", "graphbase-memories-mcp", "serve"],
+      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase@v1.0.0", "graphbase", "serve"],
       "env": {
         "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",
         "GRAPHBASE_NEO4J_USER": "neo4j",
@@ -129,21 +129,21 @@ After saving, restart Claude Code. The 21 MCP tools will appear in the tool list
 
 ```bash
 # Start the stdio MCP server (primary agent mode)
-graphbase-memories-mcp serve
+graphbase serve
 
 # Start the HTTP devtools inspection server (human browsing)
-graphbase-memories-mcp devtools --port 8765
+graphbase devtools --port 8765
 
 # Run the memory hygiene cycle and print the report as JSON
-graphbase-memories-mcp hygiene --project-id <uuid>
-graphbase-memories-mcp hygiene --scope global
+graphbase hygiene --project-id <uuid>
+graphbase hygiene --scope global
 ```
 
 ---
 
 ## Devtools Server
 
-The devtools server (`graphbase-memories-mcp devtools`) exposes an HTTP API and a browser dashboard for inspecting graph memory without an agent. Open `http://localhost:8765` after starting — it redirects to the Alpine.js single-page dashboard (`/ui`) with 5 tabs: Projects, Tools, Health, Memory, and Hygiene.
+The devtools server (`graphbase devtools`) exposes an HTTP API and a browser dashboard for inspecting graph memory without an agent. Open `http://localhost:8765` after starting — it redirects to the Alpine.js single-page dashboard (`/ui`) with 5 tabs: Projects, Tools, Health, Memory, and Hygiene.
 
 ```
 GET  /events                          SSE heartbeat (real-time connectivity status)

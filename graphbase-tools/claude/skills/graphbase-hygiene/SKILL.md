@@ -43,7 +43,7 @@ The hygiene cycle runs four phases:
 ## CLI Shortcut
 
 ```bash
-graphbase-memories-mcp hygiene --scope project --project-id <project>
+graphbase hygiene --scope project --project-id <project>
 ```
 
 Prints `HygieneReport` as JSON. Useful in CI or scheduled scripts.

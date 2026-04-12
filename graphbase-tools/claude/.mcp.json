@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "graphbase-memories": {
-      "command": "graphbase-memories-mcp",
+      "command": "graphbase",
       "args": ["serve"],
       "env": {
         "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",

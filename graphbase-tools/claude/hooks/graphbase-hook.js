@@ -39,14 +39,14 @@ function readInput() {
 // ── Binary resolution ────────────────────────────────────────────────────────
 
 /**
- * Resolve the graphbase-memories-mcp binary path.
+ * Resolve the graphbase binary path.
  * Uses `which` / `where` with a 1000ms cap (budget constraint).
  * No uvx fallback in PreToolUse — cold-start would exceed Claude Code's 10s limit.
  * Returns the binary name string, or null if not found.
  */
 function resolveGraphbaseBin() {
   const checker = process.platform === "win32" ? "where" : "which";
-  const cmd = process.platform === "win32" ? "graphbase-memories-mcp.cmd" : "graphbase-memories-mcp";
+  const cmd = process.platform === "win32" ? "graphbase.cmd" : "graphbase";
 
   const check = spawnSync(checker, [cmd], {
     stdio: ["pipe", "pipe", "pipe"],

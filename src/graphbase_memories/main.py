@@ -11,7 +11,7 @@ import asyncio
 
 import typer
 
-app = typer.Typer(help="graphbase-memories-mcp — graph-backed MCP memory server")
+app = typer.Typer(help="graphbase — graph-backed MCP memory server")
 
 
 @app.command("serve")
