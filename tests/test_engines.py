@@ -243,7 +243,9 @@ async def test_retrieval_keyword_returns_bm25_results(driver, fresh_project):
     )
     assert bundle.retrieval_status == RetrievalStatus.succeeded
     titles = [item.get("title") for item in bundle.items]
-    assert any(unique_word in (t or "") for t in titles), "BM25 should surface the unique-word decision"
+    assert any(unique_word in (t or "") for t in titles), (
+        "BM25 should surface the unique-word decision"
+    )
     assert all("_rrf_score" in item for item in bundle.items), "All items must carry _rrf_score"
 
 
@@ -274,7 +276,9 @@ async def test_retrieval_keyword_none_unchanged(driver, fresh_project):
         driver=driver,
         database=TEST_DB,
     )
-    assert not any("_rrf_score" in item for item in bundle.items), "_rrf_score must be absent without keyword"
+    assert not any("_rrf_score" in item for item in bundle.items), (
+        "_rrf_score must be absent without keyword"
+    )
 
 
 def test_rrf_fuse_deduplicates():

@@ -91,9 +91,7 @@ async def test_memory_search_with_label_filter(driver, fresh_project):
             assert all(r.get("_label") == "Session" for r in result)
     finally:
         async with driver.session(database=TEST_DB) as session:
-            await session.run(
-                "MATCH (s:Session {id: 'test-search-session-001'}) DETACH DELETE s"
-            )
+            await session.run("MATCH (s:Session {id: 'test-search-session-001'}) DETACH DELETE s")
 
 
 async def test_memory_list_returns_nodes(driver, fresh_project):

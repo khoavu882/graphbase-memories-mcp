@@ -62,9 +62,7 @@ async def check_decision(
     best_id = None
 
     for candidate in candidates:
-        candidate_tokens = _tokenize(
-            candidate["title"] + " " + candidate.get("rationale", "")
-        )
+        candidate_tokens = _tokenize(candidate["title"] + " " + candidate.get("rationale", ""))
         score = _jaccard(new_tokens, candidate_tokens)
         if score > best_score:
             best_score = score

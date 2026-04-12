@@ -29,7 +29,7 @@ _READ_ONLY_TOOLS = {
     "list_active_services",
     "search_cross_service",
     "get_save_status",
-    "run_hygiene",   # report-only, no graph mutation
+    "run_hygiene",  # report-only, no graph mutation
 }
 
 # Module classification for the registry panel
@@ -82,9 +82,7 @@ _TOOL_DISPATCH: dict[str, tuple[DispatchFn, bool]] = {
         False,
     ),
     "graph_health": (
-        lambda p, d: impact_engine.graph_health(
-            p["workspace_id"], d, settings.neo4j_database
-        ),
+        lambda p, d: impact_engine.graph_health(p["workspace_id"], d, settings.neo4j_database),
         False,
     ),
     "detect_conflicts": (
@@ -200,8 +198,11 @@ async def list_tools():
             "name": mt.name,
             "description": mt.description or "",
             "input_schema": (
-                mt.inputSchema if isinstance(mt.inputSchema, dict)
-                else mt.inputSchema.model_dump() if mt.inputSchema else {}
+                mt.inputSchema
+                if isinstance(mt.inputSchema, dict)
+                else mt.inputSchema.model_dump()
+                if mt.inputSchema
+                else {}
             ),
             "requires_confirmation": mt.name not in _READ_ONLY_TOOLS,
             "module": _MODULE_MAP.get(mt.name, "unknown"),
@@ -223,8 +224,11 @@ async def get_tool(name: str):
                 "name": mt.name,
                 "description": mt.description or "",
                 "input_schema": (
-                    mt.inputSchema if isinstance(mt.inputSchema, dict)
-                    else mt.inputSchema.model_dump() if mt.inputSchema else {}
+                    mt.inputSchema
+                    if isinstance(mt.inputSchema, dict)
+                    else mt.inputSchema.model_dump()
+                    if mt.inputSchema
+                    else {}
                 ),
                 "requires_confirmation": mt.name not in _READ_ONLY_TOOLS,
                 "module": _MODULE_MAP.get(mt.name, "unknown"),
