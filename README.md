@@ -92,7 +92,7 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
 }
 ```
 
-After saving, restart Claude Code. The 20 MCP tools will appear in the tool list.
+After saving, restart Claude Code. The 21 MCP tools will appear in the tool list.
 
 > **Production tip**: Replace `@main` with a release tag (e.g., `@v1.0.0`) to pin to a stable version and avoid silent breakage when the default branch changes.
 
