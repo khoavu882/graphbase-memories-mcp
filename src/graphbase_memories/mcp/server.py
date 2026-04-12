@@ -36,5 +36,11 @@ def _register_resources() -> None:
     from graphbase_memories.mcp import resources  # noqa: F401
 
 
+def _register_prompts() -> None:
+    """Import prompt modules to trigger @mcp.prompt() registration."""
+    from graphbase_memories.mcp import prompts  # noqa: F401
+
+
 _register_tools()
 _register_resources()
+_register_prompts()
