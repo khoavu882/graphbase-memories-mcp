@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 from neo4j import AsyncDriver
 
-from graphbase_memories.graph.repositories import hygiene_repo
+from graphbase_memories.graph.repositories import hygiene_repo, token_repo
 from graphbase_memories.mcp.schemas.results import HygieneReport
 
 
@@ -37,6 +37,9 @@ async def run(
         "entity_drift": [f"{r['id1']}+{r['id2']}" for r in drift],
         "unresolved_saves": [r["id"] for r in unresolved],
     }
+
+    # Clean up expired/used GovernanceTokens as part of each hygiene cycle
+    await token_repo.cleanup_expired(driver, database)
 
     # Update last_hygiene_at after successful report
     await hygiene_repo.update_hygiene_timestamp(project_id, driver, database)

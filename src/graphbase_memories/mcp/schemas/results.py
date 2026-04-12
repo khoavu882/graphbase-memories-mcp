@@ -37,6 +37,8 @@ class ContextBundle(BaseModel):
     scope_state: ScopeState
     conflicts_found: bool = False
     hygiene_due: bool = False
+    truncated_scopes: list[str] = []  # scopes where result count hit the configured limit
+    next_step: str | None = None
 
 
 class SaveStatusSummary(BaseModel):

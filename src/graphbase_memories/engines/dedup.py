@@ -57,12 +57,15 @@ async def check_decision(
     query = f"{title} {rationale}"
     candidates = await decision_repo.fulltext_candidates(query, scope, new_id, driver, database)
 
-    title_tokens = _tokenize(title)
+    new_tokens = _tokenize(title + " " + rationale)
     best_score = 0.0
     best_id = None
 
     for candidate in candidates:
-        score = _jaccard(title_tokens, _tokenize(candidate["title"]))
+        candidate_tokens = _tokenize(
+            candidate["title"] + " " + candidate.get("rationale", "")
+        )
+        score = _jaccard(new_tokens, candidate_tokens)
         if score > best_score:
             best_score = score
             best_id = candidate["id"]

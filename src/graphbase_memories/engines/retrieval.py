@@ -45,7 +45,7 @@ async def execute(
 
     for attempt in range(settings.retrieval_max_retries + 1):
         try:
-            items = await asyncio.wait_for(
+            items, truncated_scopes = await asyncio.wait_for(
                 _fetch_all(
                     project_id=project_id,
                     scope=scope,
@@ -70,6 +70,7 @@ async def execute(
                 scope_state=scope_state,
                 conflicts_found=conflicts,
                 hygiene_due=hygiene_due,
+                truncated_scopes=truncated_scopes,
             )
 
         except TimeoutError:
@@ -106,23 +107,39 @@ async def _fetch_all(
     topic: str | None,
     driver: AsyncDriver,
     database: str,
-) -> list[dict]:
-    """Priority merge: focus > project > global."""
+) -> tuple[list[dict], list[str]]:
+    """Priority merge: focus > project > global. Returns (items, truncated_scopes)."""
     items: list[dict] = []
     seen_ids: set[str] = set()
+    truncated_scopes: list[str] = []
 
     async with driver.session(database=database) as session:
         # Focus-level items first (highest priority)
         if focus and scope in ("focus", "project"):
-            items += await _query_focus(session, project_id, focus, categories)
+            focus_items = await _query_focus(
+                session, project_id, focus, categories, settings.retrieval_focus_limit
+            )
+            if len(focus_items) == settings.retrieval_focus_limit:
+                truncated_scopes.append("focus")
+            items += focus_items
 
         # Project-level items
         if scope in ("focus", "project"):
-            items += await _query_project(session, project_id, categories)
+            project_items = await _query_project(
+                session, project_id, categories, settings.retrieval_project_limit
+            )
+            if len(project_items) == settings.retrieval_project_limit:
+                truncated_scopes.append("project")
+            items += project_items
 
         # Global items last (lowest priority)
         if scope in ("focus", "project", "global"):
-            items += await _query_global(session, categories)
+            global_items = await _query_global(
+                session, categories, settings.retrieval_global_limit
+            )
+            if len(global_items) == settings.retrieval_global_limit:
+                truncated_scopes.append("global")
+            items += global_items
 
     # Deduplicate by id, preserve priority order
     unique: list[dict] = []
@@ -131,48 +148,53 @@ async def _fetch_all(
             seen_ids.add(item.get("id"))
             unique.append(item)
 
-    return unique
+    return unique, truncated_scopes
 
 
 async def _query_focus(
-    session, project_id: str, focus: str, categories: list[str] | None
+    session, project_id: str, focus: str, categories: list[str] | None, limit: int
 ) -> list[dict]:
     label_filter = _label_filter(categories)
     result = await session.run(
         f"""
         MATCH (n{label_filter})-[:HAS_FOCUS]->(f:FocusArea {{name: $focus, project_id: $pid}})
         RETURN n {{.*}} AS node, labels(n)[0] AS label
-        ORDER BY n.created_at DESC LIMIT 10
+        ORDER BY n.created_at DESC LIMIT $limit
         """,
         focus=focus,
         pid=project_id,
+        limit=limit,
     )
     return [_to_dict(r) async for r in result]
 
 
-async def _query_project(session, project_id: str, categories: list[str] | None) -> list[dict]:
+async def _query_project(
+    session, project_id: str, categories: list[str] | None, limit: int
+) -> list[dict]:
     label_filter = _label_filter(categories)
     result = await session.run(
         f"""
         MATCH (n{label_filter})-[:BELONGS_TO]->(p:Project {{id: $pid}})
         WHERE NOT (n:Decision AND EXISTS {{ MATCH (:Decision)-[:SUPERSEDES]->(n) }})
         RETURN n {{.*}} AS node, labels(n)[0] AS label
-        ORDER BY n.created_at DESC LIMIT 20
+        ORDER BY n.created_at DESC LIMIT $limit
         """,
         pid=project_id,
+        limit=limit,
     )
     return [_to_dict(r) async for r in result]
 
 
-async def _query_global(session, categories: list[str] | None) -> list[dict]:
+async def _query_global(session, categories: list[str] | None, limit: int) -> list[dict]:
     label_filter = _label_filter(categories)
     result = await session.run(
         f"""
         MATCH (n{label_filter})-[:BELONGS_TO]->(g:GlobalScope)
         WHERE NOT (n:Decision AND EXISTS {{ MATCH (:Decision)-[:SUPERSEDES]->(n) }})
         RETURN n {{.*}} AS node, labels(n)[0] AS label
-        ORDER BY n.created_at DESC LIMIT 5
+        ORDER BY n.created_at DESC LIMIT $limit
         """,
+        limit=limit,
     )
     return [_to_dict(r) async for r in result]
 
