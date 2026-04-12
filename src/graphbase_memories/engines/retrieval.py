@@ -27,6 +27,7 @@ async def execute(
     focus: str | None,
     categories: list[str] | None,
     topic: str | None,
+    keyword: str | None = None,
     driver: AsyncDriver,
     database: str = "neo4j",
 ) -> ContextBundle:
@@ -57,6 +58,14 @@ async def execute(
                 ),
                 timeout=settings.retrieval_timeout_s,
             )
+            if keyword and settings.fts_enabled:
+                fts_items = await _fetch_bm25(
+                    project_id=project_id,
+                    search_text=keyword,
+                    driver=driver,
+                    database=database,
+                )
+                items = _rrf_fuse(items, fts_items)
             hygiene_due = await _check_hygiene_due(project_id, driver, database)
             conflicts = _has_conflicts(items)
 
@@ -252,3 +261,102 @@ async def _check_hygiene_due(project_id: str, driver: AsyncDriver, database: str
         threshold = datetime.now(UTC) - timedelta(days=30)
         last = record["ts"].to_native() if hasattr(record["ts"], "to_native") else record["ts"]
         return last < threshold
+
+
+def _rrf_fuse(
+    graph_items: list[dict],
+    fts_items: list[dict],
+    fts_weight: float = 0.4,
+    k: int | None = None,
+) -> list[dict]:
+    """Reciprocal Rank Fusion: fuse graph traversal + BM25 results.
+
+    Each item is scored as Σ weight_r / (k + rank_r) across both ranked lists.
+    Items appearing in both lists accumulate scores from both — naturally
+    boosting results that are semantically relevant AND structurally connected.
+    The `_rrf_score` field is added to every returned item.
+    """
+    rrf_k = k if k is not None else settings.rrf_k
+    graph_weight = 1.0 - fts_weight
+    scores: dict[str, float] = {}
+    meta: dict[str, dict] = {}
+
+    for rank, item in enumerate(graph_items, start=1):
+        uid = item.get("id")
+        if not uid:
+            continue
+        scores[uid] = scores.get(uid, 0.0) + graph_weight / (rrf_k + rank)
+        meta[uid] = item
+
+    for rank, item in enumerate(fts_items, start=1):
+        uid = item.get("id")
+        if not uid:
+            continue
+        scores[uid] = scores.get(uid, 0.0) + fts_weight / (rrf_k + rank)
+        if uid not in meta:
+            meta[uid] = item
+
+    sorted_ids = sorted(scores, key=lambda uid: scores[uid], reverse=True)
+    result = []
+    for uid in sorted_ids:
+        fused = dict(meta[uid])
+        fused["_rrf_score"] = round(scores[uid], 6)
+        result.append(fused)
+    return result
+
+
+async def _fetch_bm25(
+    *,
+    project_id: str,
+    search_text: str,
+    driver: AsyncDriver,
+    database: str,
+) -> list[dict]:
+    """Run BM25 FTS across all 4 fulltext indexes; merge results in Python.
+
+    Uses 4 separate session.run() calls (one per index) because CALL UNION ALL
+    is unreliable in Neo4j 5 Community. Results are deduplicated by node ID.
+    Each failed index query is logged and skipped — partial results are returned.
+    """
+    import time
+
+    index_names = [
+        "decision_fulltext",
+        "pattern_fulltext",
+        "context_fulltext",
+        "entity_fulltext",
+    ]
+    all_items: list[dict] = []
+    seen: set[str] = set()
+
+    t0 = time.monotonic()
+    async with driver.session(database=database) as session:
+        for index_name in index_names:
+            try:
+                result = await session.run(
+                    "CALL db.index.fulltext.queryNodes($index_name, $search_text) "
+                    "YIELD node, score "
+                    "WHERE node.project_id = $project_id OR node.scope = 'global' "
+                    "RETURN node {.*} AS item, labels(node)[0] AS label, score AS bm25_score "
+                    "ORDER BY bm25_score DESC LIMIT $fts_limit",
+                    index_name=index_name,
+                    search_text=search_text,
+                    project_id=project_id,
+                    fts_limit=settings.fts_limit,
+                )
+                async for record in result:
+                    item = dict(record["item"])
+                    item["_label"] = record["label"]
+                    item["bm25_score"] = record["bm25_score"]
+                    uid = item.get("id")
+                    if uid and uid not in seen:
+                        seen.add(uid)
+                        all_items.append(item)
+            except Exception:
+                logger.warning("BM25 query failed for index %s — skipping", index_name)
+
+    elapsed_ms = (time.monotonic() - t0) * 1000
+    if elapsed_ms > 500:
+        logger.warning("BM25 fetch took %.0f ms (>500ms threshold)", elapsed_ms)
+
+    return all_items
