@@ -93,13 +93,13 @@ Run hygiene from the command line without an agent:
 
 ```bash
 # Scan a specific project
-graphbase-memories-mcp hygiene --project-id my-project
+graphbase hygiene --project-id my-project
 
 # Scan global scope
-graphbase-memories-mcp hygiene --scope global
+graphbase hygiene --scope global
 
 # Scan everything
-graphbase-memories-mcp hygiene
+graphbase hygiene
 ```
 
 Output is printed as JSON to stdout.

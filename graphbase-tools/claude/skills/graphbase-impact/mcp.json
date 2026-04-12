@@ -1,0 +1,7 @@
+{
+  "tools": [
+    { "name": "propagate_impact", "server": "graphbase-memories" },
+    { "name": "detect_conflicts", "server": "graphbase-memories" },
+    { "name": "graph_health", "server": "graphbase-memories" }
+  ]
+}

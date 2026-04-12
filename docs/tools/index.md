@@ -1,6 +1,6 @@
 # MCP Tools Overview
 
-`graphbase-memories-mcp` exposes **21 async tools** across 9 functional groups. All tools use MCP JSON-RPC 2.0 over stdio.
+`graphbase` exposes **21 async tools** across 9 functional groups. All tools use MCP JSON-RPC 2.0 over stdio.
 
 ---
 

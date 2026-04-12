@@ -1,0 +1,8 @@
+{
+  "tools": [
+    { "name": "upsert_entity_with_deps", "server": "graphbase-memories" },
+    { "name": "retrieve_context", "server": "graphbase-memories" },
+    { "name": "search_cross_service", "server": "graphbase-memories" },
+    { "name": "memory_surface", "server": "graphbase-memories" }
+  ]
+}

@@ -1,4 +1,4 @@
-"""Retrieval tools: retrieve_context, get_scope_state."""
+"""Retrieval tools: retrieve_context, get_scope_state, memory_surface."""
 
 from __future__ import annotations
 
@@ -7,7 +7,9 @@ from fastmcp import Context
 from graphbase_memories.config import settings
 from graphbase_memories.engines import retrieval as retrieval_engine
 from graphbase_memories.engines import scope as scope_engine
+from graphbase_memories.engines import surface as surface_engine
 from graphbase_memories.mcp.schemas import ContextBundle, MemoryScope
+from graphbase_memories.mcp.schemas.results import SurfaceResult
 from graphbase_memories.mcp.server import mcp
 
 
@@ -60,3 +62,30 @@ async def get_scope_state(
         "project_id": project_id,
         "focus": focus,
     }
+
+
+@mcp.tool()
+async def memory_surface(
+    ctx: Context,
+    query: str,
+    project_id: str | None = None,
+    limit: int = 5,
+) -> SurfaceResult:
+    """
+    Lightweight BM25 memory surface: find relevant memories without full context retrieval.
+    Use this before editing a file, starting a task, or when retrieve_context would be too broad.
+
+    Returns SurfaceResult with matched memory nodes (Decision, Pattern, Context, EntityFact),
+    their freshness indicator, and a next_step hint.
+
+    Prefer retrieve_context when you need full scope-aware context bundles.
+    Use memory_surface when you have a specific topic keyword and want a focused lookup.
+    """
+    driver = ctx.lifespan_context["driver"]
+    return await surface_engine.execute(
+        query=query,
+        project_id=project_id,
+        limit=limit,
+        driver=driver,
+        database=settings.neo4j_database,
+    )

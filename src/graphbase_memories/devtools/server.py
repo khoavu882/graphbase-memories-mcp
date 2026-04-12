@@ -1,6 +1,6 @@
 """
 Devtools HTTP inspection server — FastAPI app for human memory browsing.
-Start with: graphbase-memories-mcp devtools --port 8765
+Start with: graphbase devtools --port 8765
 """
 
 from __future__ import annotations

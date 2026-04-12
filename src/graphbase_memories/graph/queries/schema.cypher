@@ -1,5 +1,5 @@
 // ============================================================
-// graphbase-memories-mcp — Neo4j Schema DDL
+// graphbase — Neo4j Schema DDL
 // Idempotent: safe to re-run on every server startup.
 // ============================================================
 

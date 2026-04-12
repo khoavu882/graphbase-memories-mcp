@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.scripts]
-graphbase-memories-mcp = "graphbase_memories.main:app"
+graphbase = "graphbase_memories.main:app"
 
 [dependency-groups]
 dev = [
