@@ -39,6 +39,7 @@ DEDUP_QUERIES = _load_cypher("dedup")
 HYGIENE_QUERIES = _load_cypher("hygiene")
 FEDERATION_QUERIES = _load_cypher("federation")
 IMPACT_QUERIES = _load_cypher("impact")
+FRESHNESS_QUERIES = _load_cypher("freshness")
 
 
 @asynccontextmanager

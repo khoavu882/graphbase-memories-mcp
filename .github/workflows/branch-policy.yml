@@ -1,0 +1,44 @@
+name: Branch Policy
+
+# Enforces the merge flow: feat/* → develop → main
+# PRs from feature branches must target develop.
+# PRs to main must come from develop only.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-target:
+    name: Enforce branch policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: feat/* must target develop
+        if: >
+          github.event.pull_request.base.ref == 'main' &&
+          github.event.pull_request.head.ref != 'develop'
+        run: |
+          echo "❌ PRs to 'main' must come from 'develop'."
+          echo "   Source branch: ${{ github.event.pull_request.head.ref }}"
+          echo "   Merge flow: feat/* → develop → main"
+          exit 1
+
+      - name: develop must not accept direct pushes from non-feat branches
+        if: >
+          github.event.pull_request.base.ref == 'develop' &&
+          !startsWith(github.event.pull_request.head.ref, 'feat/') &&
+          !startsWith(github.event.pull_request.head.ref, 'fix/') &&
+          !startsWith(github.event.pull_request.head.ref, 'chore/') &&
+          !startsWith(github.event.pull_request.head.ref, 'refactor/') &&
+          !startsWith(github.event.pull_request.head.ref, 'docs/') &&
+          !startsWith(github.event.pull_request.head.ref, 'setup/')
+        run: |
+          echo "❌ PRs to 'develop' must come from a typed branch (feat/, fix/, chore/, refactor/, docs/, setup/)."
+          echo "   Source branch: ${{ github.event.pull_request.head.ref }}"
+          exit 1
+
+      - name: Policy check passed
+        run: |
+          echo "✅ Branch policy satisfied."
+          echo "   ${{ github.event.pull_request.head.ref }} → ${{ github.event.pull_request.base.ref }}"

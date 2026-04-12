@@ -40,6 +40,27 @@ from graphbase_memories.mcp.schemas.results import BatchSaveResult, SaveResult
 logger = logging.getLogger(__name__)
 
 
+def _add_save_hint(result: SaveResult) -> SaveResult:
+    """Attach a next_step hint to a SaveResult based on its status."""
+    if result.next_step is not None:
+        return result
+    if result.status == SaveStatus.blocked_scope:
+        hint = "Write blocked: call request_global_write_approval() first."
+    elif result.status == SaveStatus.duplicate_skip:
+        hint = "Duplicate detected. Retrieve existing: retrieve_context(project_id=...)."
+    elif result.status == SaveStatus.saved:
+        hint = "Saved. Run retrieve_context to confirm integration into scope."
+    elif result.status == SaveStatus.pending_retry:
+        hint = "Write pending retry. Call get_save_status() to check pending saves."
+    elif result.status == SaveStatus.failed:
+        hint = "Write failed. Check get_save_status() or retry with corrected input."
+    else:
+        hint = None
+    if hint is None:
+        return result
+    return result.model_copy(update={"next_step": hint})
+
+
 async def save_session(
     session_data: SessionSchema,
     project_id: str,
@@ -49,15 +70,19 @@ async def save_session(
 ) -> SaveResult:
     scope_state = await scope_engine.validate(project_id, focus, driver, database)
     if not scope_engine.is_write_allowed(scope_state):
-        return SaveResult(status=SaveStatus.blocked_scope, message=f"Scope state: {scope_state}")
+        return _add_save_hint(
+            SaveResult(status=SaveStatus.blocked_scope, message=f"Scope state: {scope_state}")
+        )
 
-    return await _with_retry(
-        _do_save_session,
-        session_data=session_data,
-        project_id=project_id,
-        focus=focus,
-        driver=driver,
-        database=database,
+    return _add_save_hint(
+        await _with_retry(
+            _do_save_session,
+            session_data=session_data,
+            project_id=project_id,
+            focus=focus,
+            driver=driver,
+            database=database,
+        )
     )
 
 
@@ -87,29 +112,37 @@ async def save_decision(
 ) -> SaveResult:
     scope_state = await scope_engine.validate(project_id, focus, driver, database)
     if not scope_engine.is_write_allowed(scope_state):
-        return SaveResult(status=SaveStatus.blocked_scope, message=f"Scope state: {scope_state}")
+        return _add_save_hint(
+            SaveResult(status=SaveStatus.blocked_scope, message=f"Scope state: {scope_state}")
+        )
 
     # Governance gate for global writes (FR-55, S-1)
     if decision.scope.value == "global":
         if not governance_token:
-            return SaveResult(
-                status=SaveStatus.failed,
-                message="Global writes require a governance token. Call request_global_write_approval first.",
+            return _add_save_hint(
+                SaveResult(
+                    status=SaveStatus.failed,
+                    message="Global writes require a governance token. Call request_global_write_approval first.",
+                )
             )
         valid = await token_repo.validate_and_consume(governance_token, driver, database)
         if not valid:
-            return SaveResult(
-                status=SaveStatus.failed,
-                message="Governance token is invalid, expired, or already used.",
+            return _add_save_hint(
+                SaveResult(
+                    status=SaveStatus.failed,
+                    message="Governance token is invalid, expired, or already used.",
+                )
             )
 
-    return await _with_retry(
-        _do_save_decision,
-        decision=decision,
-        project_id=project_id,
-        focus=focus,
-        driver=driver,
-        database=database,
+    return _add_save_hint(
+        await _with_retry(
+            _do_save_decision,
+            decision=decision,
+            project_id=project_id,
+            focus=focus,
+            driver=driver,
+            database=database,
+        )
     )
 
 
@@ -171,15 +204,19 @@ async def save_pattern(
 ) -> SaveResult:
     scope_state = await scope_engine.validate(project_id, focus, driver, database)
     if not scope_engine.is_write_allowed(scope_state):
-        return SaveResult(status=SaveStatus.blocked_scope, message=f"Scope state: {scope_state}")
+        return _add_save_hint(
+            SaveResult(status=SaveStatus.blocked_scope, message=f"Scope state: {scope_state}")
+        )
 
-    return await _with_retry(
-        _do_save_pattern,
-        pattern=pattern,
-        project_id=project_id,
-        focus=focus,
-        driver=driver,
-        database=database,
+    return _add_save_hint(
+        await _with_retry(
+            _do_save_pattern,
+            pattern=pattern,
+            project_id=project_id,
+            focus=focus,
+            driver=driver,
+            database=database,
+        )
     )
 
 
@@ -221,7 +258,9 @@ async def save_context(
 ) -> SaveResult:
     scope_state = await scope_engine.validate(project_id, focus, driver, database)
     if not scope_engine.is_write_allowed(scope_state):
-        return SaveResult(status=SaveStatus.blocked_scope, message=f"Scope state: {scope_state}")
+        return _add_save_hint(
+            SaveResult(status=SaveStatus.blocked_scope, message=f"Scope state: {scope_state}")
+        )
 
     node = await context_repo.create(
         content=context.content,
@@ -233,7 +272,7 @@ async def save_context(
         driver=driver,
         database=database,
     )
-    return SaveResult(status=SaveStatus.saved, artifact_id=node.id)
+    return _add_save_hint(SaveResult(status=SaveStatus.saved, artifact_id=node.id))
 
 
 async def upsert_entity(
@@ -263,7 +302,7 @@ async def upsert_entity(
             node.id, rel.entity_id, rel.relationship_type, driver, database
         )
 
-    return SaveResult(status=SaveStatus.saved, artifact_id=node.id)
+    return _add_save_hint(SaveResult(status=SaveStatus.saved, artifact_id=node.id))
 
 
 async def save_batch(

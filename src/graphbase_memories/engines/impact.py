@@ -110,6 +110,18 @@ async def propagate_impact(
         )
         for pid in project_risks
     ]
+
+    if overall_risk in ("CRITICAL", "HIGH"):
+        impact_next_step = (
+            "HIGH RISK: call detect_conflicts(workspace_id=...) before proceeding with writes."
+        )
+    elif overall_risk == "MEDIUM":
+        impact_next_step = (
+            "Review affected_services and call retrieve_context on each impacted project_id."
+        )
+    else:
+        impact_next_step = "Impact is contained. Proceed with upsert_entity_with_deps()."
+
     return ImpactReport(
         source_entity_id=entity_id,
         change_description=change_description,
@@ -118,6 +130,7 @@ async def propagate_impact(
         affected_services=affected_services,
         impact_event_id=event_node.id,
         created_at=event_node.created_at,
+        next_step=impact_next_step,
     )
 
 
@@ -167,12 +180,23 @@ async def graph_health(
             )
         )
 
+    total_conflicts = sum(s.conflict_count for s in services)
+    if total_conflicts > 0:
+        health_next_step = "Conflicts detected: call detect_conflicts(workspace_id=...) to resolve CONTRADICTS edges."
+    elif any(s.hygiene_status in ("needs_hygiene", "critical") for s in services):
+        health_next_step = (
+            "Hygiene needed: call run_hygiene() on services with needs_hygiene or critical status."
+        )
+    else:
+        health_next_step = "Workspace is healthy. No immediate action required."
+
     return WorkspaceHealthReport(
         workspace_id=workspace_id,
         service_count=len(services),
         services=services,
-        total_conflicts=sum(s.conflict_count for s in services),
+        total_conflicts=total_conflicts,
         checked_at=now,
+        next_step=health_next_step,
     )
 
 
