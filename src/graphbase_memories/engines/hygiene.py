@@ -44,6 +44,18 @@ async def run(
     # Update last_hygiene_at after successful report
     await hygiene_repo.update_hygiene_timestamp(project_id, driver, database)
 
+    if len(duplicates) > 0 or len(unresolved) > 0:
+        hygiene_next_step = (
+            f"Run run_hygiene(project_id='{project_id}', scope='{scope}') "
+            "to merge duplicates and resolve pending saves."
+        )
+    elif len(outdated) > 0 or len(obsolete) > 0:
+        hygiene_next_step = (
+            "Review outdated artifacts: retrieve_context then save_decision to supersede old ones."
+        )
+    else:
+        hygiene_next_step = "Graph is clean. No action required."
+
     return HygieneReport(
         project_id=project_id,
         scope=scope,
@@ -54,4 +66,5 @@ async def run(
         unresolved_saves=len(unresolved),
         candidate_ids=candidate_ids,
         checked_at=datetime.now(UTC),
+        next_step=hygiene_next_step,
     )
