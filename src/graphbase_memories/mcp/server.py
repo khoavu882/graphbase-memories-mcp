@@ -22,6 +22,7 @@ def _register_tools() -> None:
         cross_service,
         entity,
         federation,
+        freshness,
         governance,
         hygiene,
         impact,

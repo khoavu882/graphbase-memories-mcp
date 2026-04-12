@@ -238,6 +238,20 @@ def _label_filter(categories: list[str] | None) -> str:
 def _to_dict(record) -> dict:
     node = dict(record["node"])
     node["_label"] = record["label"]
+
+    ts_raw = node.get("updated_at") or node.get("created_at")
+    if ts_raw is not None:
+        ts = ts_raw.to_native() if hasattr(ts_raw, "to_native") else ts_raw
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        age_days = (datetime.now(UTC) - ts).days
+        if age_days <= settings.freshness_recent_days:
+            node["_freshness"] = "current"
+        elif age_days <= settings.freshness_stale_days:
+            node["_freshness"] = "recent"
+        else:
+            node["_freshness"] = "stale"
+
     return node
 
 

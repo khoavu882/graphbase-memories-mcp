@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from graphbase_memories.mcp.schemas.enums import (
     AnalysisMode,
     DedupOutcome,
+    FreshnessLevel,
     RetrievalStatus,
     SaveStatus,
     ScopeState,
@@ -154,3 +155,21 @@ class ConflictRecord(BaseModel):
     target_summary: str
     link_rationale: str | None = None
     link_confidence: float | None = None
+
+
+class StaleItem(BaseModel):
+    node_id: str
+    label: str
+    title: str | None
+    age_days: int
+    freshness: FreshnessLevel
+    project_id: str | None
+
+
+class FreshnessReport(BaseModel):
+    stale_count: int
+    recent_count: int
+    current_count: int
+    stale_items: list[StaleItem]
+    checked_at: datetime
+    next_step: str | None = None

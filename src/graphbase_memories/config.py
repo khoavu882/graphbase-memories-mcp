@@ -30,5 +30,8 @@ class Settings(BaseSettings):
     fts_limit: int = 20  # GRAPHBASE_FTS_LIMIT — BM25 candidates per fulltext index
     rrf_k: int = 60  # GRAPHBASE_RRF_K — RRF damping constant
 
+    freshness_recent_days: int = 7  # GRAPHBASE_FRESHNESS_RECENT_DAYS
+    freshness_stale_days: int = 30  # GRAPHBASE_FRESHNESS_STALE_DAYS
+
 
 settings = Settings()
