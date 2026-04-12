@@ -55,3 +55,9 @@ class CrossServiceLinkType(StrEnum):
     CONTRADICTS = "CONTRADICTS"
     SUPERSEDES = "SUPERSEDES"
     EXTENDS = "EXTENDS"
+
+
+class FreshnessLevel(StrEnum):
+    current = "current"
+    recent = "recent"
+    stale = "stale"

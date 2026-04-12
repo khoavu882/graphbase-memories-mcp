@@ -1,6 +1,6 @@
 # MCP Tools Overview
 
-`graphbase-memories-mcp` exposes **12 async tools** across 7 functional groups. All tools use MCP JSON-RPC 2.0 over stdio.
+`graphbase-memories-mcp` exposes **21 async tools** across 9 functional groups. All tools use MCP JSON-RPC 2.0 over stdio.
 
 ---
 
@@ -16,7 +16,8 @@
     | [Entity](entity.md) | `upsert_entity_with_deps` | Named entity graph nodes |
     | [Governance](governance.md) | `request_global_write_approval` | Gate global-scope writes |
     | [Analysis](analysis.md) | `route_analysis` | Route tasks to reasoning mode |
-    | [Hygiene](hygiene.md) | `run_hygiene`, `get_save_status` | Memory maintenance and health |
+    | [Hygiene](hygiene.md) | `run_hygiene`, `get_save_status`, `memory_freshness` | Memory maintenance, health, and freshness tracking |
+    | Federation | `register_service`, `deregister_service`, `list_active_services`, `search_cross_service`, `link_cross_service`, `propagate_impact`, `graph_health`, `detect_conflicts` | Multi-service workspace coordination |
 
 === "Recommended call sequence"
 
@@ -59,6 +60,7 @@ All tools return structured Pydantic models serialized to JSON:
 | `SaveResult` | `save_session`, `save_decision`, `save_pattern`, `save_context`, `upsert_entity_with_deps` |
 | `BatchSaveResult` | `store_session_with_learnings` |
 | `HygieneReport` | `run_hygiene` |
+| `FreshnessReport` | `memory_freshness` |
 | `SaveStatusSummary` | `get_save_status` |
 | `AnalysisResult` | `route_analysis` |
 
@@ -70,6 +72,7 @@ Tools never throw exceptions to the caller. All error states are encoded as fiel
 
 - `SaveResult.status` — `saved` / `failed` / `blocked_scope` / `pending_retry`
 - `ContextBundle.retrieval_status` — `succeeded` / `empty` / `timed_out` / `failed`
+- `MCPError` — returned by `route_analysis`, `upsert_entity_with_deps`, and governance tools when a structured error applies (use `error: true` as discriminant)
 - Governance errors — returned as `{ "blocked": true, "reason": "..." }`
 
 This means your agent always receives a structured response and can decide how to proceed.
