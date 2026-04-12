@@ -20,6 +20,7 @@ class SaveResult(BaseModel):
     artifact_id: str | None = None
     dedup_outcome: DedupOutcome | None = None
     message: str | None = None
+    next_step: str | None = None
 
 
 class BatchSaveResult(BaseModel):
@@ -68,6 +69,7 @@ class HygieneReport(BaseModel):
     unresolved_saves: int
     candidate_ids: dict[str, list[str]]  # category → [node_ids]
     checked_at: datetime
+    next_step: str | None = None
 
 
 class ServiceInfo(BaseModel):
@@ -121,6 +123,7 @@ class ImpactReport(BaseModel):
     affected_services: list[AffectedServiceItem]
     impact_event_id: str
     created_at: datetime
+    next_step: str | None = None
 
 
 class WorkspaceServiceHealth(BaseModel):
@@ -139,6 +142,7 @@ class WorkspaceHealthReport(BaseModel):
     services: list[WorkspaceServiceHealth]
     total_conflicts: int
     checked_at: datetime
+    next_step: str | None = None
 
 
 class ConflictRecord(BaseModel):

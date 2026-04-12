@@ -64,7 +64,7 @@ async def execute(
             if conflicts:
                 status = RetrievalStatus.conflicted
 
-            return ContextBundle(
+            bundle = ContextBundle(
                 items=items,
                 retrieval_status=status,
                 scope_state=scope_state,
@@ -72,6 +72,8 @@ async def execute(
                 hygiene_due=hygiene_due,
                 truncated_scopes=truncated_scopes,
             )
+            bundle.next_step = _build_next_step(bundle, project_id)
+            return bundle
 
         except TimeoutError:
             if attempt < settings.retrieval_max_retries:
@@ -96,6 +98,20 @@ async def execute(
         retrieval_status=RetrievalStatus.failed,
         scope_state=scope_state,
     )
+
+
+def _build_next_step(bundle: ContextBundle, project_id: str) -> str:
+    """Return a contextual next-step hint based on the bundle's retrieval state."""
+    if bundle.conflicts_found:
+        return "Conflicts detected: call detect_conflicts(workspace_id=...) to resolve CONTRADICTS edges."
+    if bundle.hygiene_due:
+        return f"Hygiene overdue: call run_hygiene(project_id='{project_id}') to clean stale nodes."
+    if bundle.retrieval_status.value == "empty":
+        return "No memories found. Try retrieve_context with scope='global' or a broader topic."
+    if bundle.truncated_scopes:
+        scopes = ", ".join(bundle.truncated_scopes)
+        return f"Results truncated in: [{scopes}]. Narrow with focus= or categories= to get full results."
+    return "Deepen with search_cross_service() or save new learnings with save_decision()."
 
 
 async def _fetch_all(
