@@ -1,6 +1,6 @@
 # System Overview
 
-`graphbase-memories-mcp` is a three-layer system: an MCP server layer that handles protocol
+`graphbase` is a three-layer system: an MCP server layer that handles protocol
 and tool dispatch, a business logic layer with specialized engines, and a graph layer backed by Neo4j.
 
 ---
@@ -50,7 +50,7 @@ thrown to the caller (see FR-48: business output before write status).
 
 The server uses **MCP stdio transport** — it reads JSON-RPC 2.0 requests from stdin and writes
 responses to stdout. No network port is opened for agent use. The optional HTTP devtools server
-(FastAPI + uvicorn) is a separate process started with `graphbase-memories-mcp devtools`.
+(FastAPI + uvicorn) is a separate process started with `graphbase devtools`.
 
 ---
 

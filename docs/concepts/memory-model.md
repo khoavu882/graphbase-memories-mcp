@@ -1,6 +1,6 @@
 # Memory Model
 
-`graphbase-memories-mcp` organizes memory as a **property graph** in Neo4j. Understanding the model helps agents write better queries and avoid common mistakes like scope confusion or unintended overwrites.
+`graphbase` organizes memory as a **property graph** in Neo4j. Understanding the model helps agents write better queries and avoid common mistakes like scope confusion or unintended overwrites.
 
 ---
 

@@ -1,6 +1,6 @@
 # Connect to Your Agent
 
-`graphbase-memories-mcp` uses the **MCP stdio transport** — the server reads JSON-RPC 2.0 from stdin and writes responses to stdout. Any MCP-compatible agent host can connect to it.
+`graphbase` uses the **MCP stdio transport** — the server reads JSON-RPC 2.0 from stdin and writes responses to stdout. Any MCP-compatible agent host can connect to it.
 
 ---
 
@@ -18,7 +18,7 @@ Edit the file with the absolute path to your installed binary:
 {
   "mcpServers": {
     "graphbase-memories": {
-      "command": "/absolute/path/to/.venv/bin/graphbase-memories-mcp",
+      "command": "/absolute/path/to/.venv/bin/graphbase",
       "args": ["serve"],
       "env": {
         "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",
@@ -34,9 +34,9 @@ Restart Claude Code. The 12 `graphbase-memories` tools will appear in the tool p
 
 !!! tip "Find your binary path"
     ```bash
-    which graphbase-memories-mcp
+    which graphbase
     # or, if using a project-local venv:
-    echo "$(pwd)/.venv/bin/graphbase-memories-mcp"
+    echo "$(pwd)/.venv/bin/graphbase"
     ```
 
 ---
@@ -59,7 +59,7 @@ pip install graphbase-memories
 {
   "mcpServers": {
     "graphbase-memories": {
-      "command": "graphbase-memories-mcp",
+      "command": "graphbase",
       "args": ["serve"],
       "env": {
         "GRAPHBASE_NEO4J_PASSWORD": "graphbase"
@@ -97,7 +97,7 @@ See [Scope Resolution](concepts/scope-resolution.md) for how to move from `unres
 For human inspection of memory (not agent use), start the HTTP server:
 
 ```bash
-graphbase-memories-mcp devtools --port 8765
+graphbase devtools --port 8765
 ```
 
 Endpoints:

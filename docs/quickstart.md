@@ -1,6 +1,6 @@
 # Quick Start
 
-Get `graphbase-memories-mcp` running in three steps.
+Get `graphbase` running in three steps.
 
 ---
 
@@ -53,9 +53,9 @@ Default credentials: `neo4j` / `graphbase` on `bolt://localhost:7687`.
 Verify the CLI is available:
 
 ```bash
-graphbase-memories-mcp --help
+graphbase --help
 # Expected output:
-#  Usage: graphbase-memories-mcp [OPTIONS] COMMAND [ARGS]...
+#  Usage: graphbase [OPTIONS] COMMAND [ARGS]...
 #  Commands: serve, devtools, hygiene
 ```
 
@@ -90,7 +90,7 @@ Expected response:
 ```
 save_session(
   session={
-    "objective": "Testing graphbase-memories-mcp",
+    "objective": "Testing graphbase",
     "actions_taken": ["Installed the server", "Ran quick start"],
     "decisions_made": [],
     "open_items": [],
@@ -115,12 +115,12 @@ You should see your session node in the response with `retrieval_status: "succee
 
 ```bash
 # Start the MCP stdio server (primary agent mode)
-graphbase-memories-mcp serve
+graphbase serve
 
 # Start the HTTP devtools inspection server (human browsing)
-graphbase-memories-mcp devtools --port 8765
+graphbase devtools --port 8765
 
 # Run the memory hygiene cycle and print report as JSON
-graphbase-memories-mcp hygiene --project-id <uuid>
-graphbase-memories-mcp hygiene --scope global
+graphbase hygiene --project-id <uuid>
+graphbase hygiene --scope global
 ```

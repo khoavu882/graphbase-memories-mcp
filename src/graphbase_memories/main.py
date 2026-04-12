@@ -11,7 +11,7 @@ import asyncio
 
 import typer
 
-app = typer.Typer(help="graphbase-memories-mcp — graph-backed MCP memory server")
+app = typer.Typer(help="graphbase — graph-backed MCP memory server")
 
 
 @app.command("serve")
@@ -71,6 +71,59 @@ def hygiene(
             await driver.close()
 
     asyncio.run(_run())
+
+
+@app.command("surface")
+def surface(
+    query: str = typer.Argument(
+        ..., help="Keyword, symbol name, or topic to surface memories for."
+    ),
+    keywords: str | None = typer.Option(
+        None, "--keywords", help="Comma-separated keywords for staleness mode (PostToolUse path)."
+    ),
+    project_id: str | None = typer.Option(None, "--project-id"),
+    limit: int = typer.Option(5, "--limit"),
+) -> None:
+    """Surface relevant memories. Writes to stderr for hook protocol compatibility."""
+    import sys
+
+    from graphbase_memories.config import settings
+    from graphbase_memories.engines import surface as surface_engine
+
+    async def _run() -> None:
+        from neo4j import AsyncGraphDatabase
+
+        driver = AsyncGraphDatabase.driver(
+            settings.neo4j_uri,
+            auth=(settings.neo4j_user, settings.neo4j_password.get_secret_value()),
+            max_connection_pool_size=1,  # single-use subprocess — no pool needed
+            connection_timeout=3.0,
+        )
+        try:
+            kw_list = [k.strip() for k in keywords.split(",")] if keywords else None
+            result = await surface_engine.execute(
+                query=query if not kw_list else None,
+                keywords=kw_list,
+                project_id=project_id,
+                limit=limit,
+                driver=driver,
+                database=settings.neo4j_database,
+            )
+            if kw_list:
+                output = surface_engine.format_staleness_for_hook(result, kw_list)
+            else:
+                output = surface_engine.format_for_hook(result)
+            if output:
+                sys.stderr.write(output + "\n")
+        except Exception:
+            pass  # graceful failure — hook must exit 0 always
+        finally:
+            await driver.close()
+
+    import contextlib
+
+    with contextlib.suppress(Exception):  # graceful failure — hook must exit 0 always
+        asyncio.run(_run())
 
 
 if __name__ == "__main__":
