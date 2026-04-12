@@ -65,6 +65,6 @@ graph TD
 ## Quick links
 
 - [Quick Start](quickstart.md) — up and running in 3 steps
-- [MCP Tools Overview](tools/index.md) — all 20 tools with call sequence
+- [MCP Tools Overview](tools/index.md) — all 21 tools with call sequence
 - [Memory Model](concepts/memory-model.md) — scopes, artifacts, graph edges
 - [Configuration](configuration.md) — all `GRAPHBASE_*` environment variables
