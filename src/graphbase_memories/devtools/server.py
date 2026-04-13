@@ -14,7 +14,15 @@ from fastapi.staticfiles import StaticFiles
 from neo4j import AsyncDriver, AsyncGraphDatabase
 
 from graphbase_memories.config import settings
-from graphbase_memories.devtools.routes import events, health, hygiene, memory, projects, tools
+from graphbase_memories.devtools.routes import (
+    events,
+    graph,
+    health,
+    hygiene,
+    memory,
+    projects,
+    tools,
+)
 from graphbase_memories.graph.driver import SCHEMA_DDL, split_statements
 
 # UI static files directory
@@ -40,6 +48,7 @@ async def lifespan(app: FastAPI):
         settings.neo4j_uri,
         auth=(settings.neo4j_user, settings.neo4j_password.get_secret_value()),
         max_connection_pool_size=_DEVTOOLS_POOL_SIZE,
+        connection_acquisition_timeout=30,
     )
     await _driver.verify_connectivity()
     async with _get_driver().session(database=settings.neo4j_database) as session:
@@ -60,6 +69,7 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 
 app.include_router(events.router)
+app.include_router(graph.router)
 app.include_router(memory.router)
 app.include_router(projects.router)
 app.include_router(tools.router)
