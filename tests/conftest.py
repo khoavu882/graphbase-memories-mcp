@@ -74,3 +74,50 @@ async def fresh_project(driver):
             """
         )
         await session.run("MATCH (t:GovernanceToken) DETACH DELETE t")
+
+
+@pytest_asyncio.fixture
+async def fresh_workspace(driver, fresh_project):
+    """Per-test fixture: create a Workspace node linked to the test project via MEMBER_OF."""
+    ws_id = "test-workspace-graph"
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            MERGE (w:Workspace {id: $wid})
+            ON CREATE SET w.name = $wid, w.created_at = datetime()
+            WITH w
+            MATCH (p:Project {id: $pid})
+            MERGE (p)-[:MEMBER_OF]->(w)
+            """,
+            wid=ws_id,
+            pid=TEST_PROJECT_ID,
+        )
+    yield ws_id
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            "MATCH (w:Workspace {id: $wid}) DETACH DELETE w",
+            wid=ws_id,
+        )
+
+
+@pytest_asyncio.fixture
+async def bulk_projects(driver):
+    """Per-test fixture: seed 250 Project nodes for cap testing, cleaned up by prefix."""
+    prefix = "test-graph-cap-"
+    count = 250
+    ids = [f"{prefix}{i}" for i in range(count)]
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            UNWIND $ids AS id
+            MERGE (p:Project {id: id})
+            ON CREATE SET p.name = id, p.created_at = datetime()
+            """,
+            ids=ids,
+        )
+    yield ids
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            "MATCH (p:Project) WHERE p.id STARTS WITH $prefix DETACH DELETE p",
+            prefix=prefix,
+        )

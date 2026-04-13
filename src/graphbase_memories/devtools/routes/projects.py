@@ -8,25 +8,15 @@ from fastapi import APIRouter, HTTPException
 from neo4j import AsyncDriver
 
 from graphbase_memories.config import settings
+from graphbase_memories.devtools.utils import staleness
 
 router = APIRouter(tags=["projects"])
-
-_STALE_SEEN_DAYS = 7
 
 
 def _get_driver() -> AsyncDriver:
     from graphbase_memories.devtools.server import _get_driver as _gd
 
     return _gd()
-
-
-def _staleness(last_seen, now: datetime) -> tuple[float | None, bool]:
-    """Return (staleness_days, is_stale) from a Neo4j datetime value."""
-    if last_seen is None:
-        return None, False
-    ls = last_seen.to_native() if hasattr(last_seen, "to_native") else last_seen
-    days = (now - ls).total_seconds() / 86400
-    return round(days, 2), days > _STALE_SEEN_DAYS
 
 
 @router.get("/projects")
@@ -54,7 +44,7 @@ async def list_projects():
         projects = []
         async for r in result:
             p = dict(r["project"])
-            staleness_days, is_stale = _staleness(p.get("last_seen"), now)
+            staleness_days, is_stale = staleness(p.get("last_seen"), now)
             projects.append(
                 {
                     **p,
