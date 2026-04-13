@@ -1,6 +1,6 @@
 # MCP Tools Overview
 
-`graphbase` exposes **21 async tools** across 9 functional groups. All tools use MCP JSON-RPC 2.0 over stdio.
+`graphbase` exposes **22 async tools** across 9 functional groups. All tools use MCP JSON-RPC 2.0 over stdio.
 
 ---
 
@@ -10,7 +10,7 @@
 
     | Group | Tools | Purpose |
     |---|---|---|
-    | [Retrieval](retrieval.md) | `retrieve_context`, `get_scope_state` | Load memory before reasoning |
+    | [Retrieval](retrieval.md) | `retrieve_context`, `get_scope_state`, `memory_surface` | Load memory before reasoning |
     | [Session](session.md) | `save_session`, `store_session_with_learnings` | Persist session summaries |
     | [Artifacts](artifacts.md) | `save_decision`, `save_pattern`, `save_context` | Save structured knowledge |
     | [Entity](entity.md) | `upsert_entity_with_deps` | Named entity graph nodes |

@@ -92,7 +92,7 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
 }
 ```
 
-After saving, restart Claude Code. The 21 MCP tools will appear in the tool list.
+After saving, restart Claude Code. The 22 MCP tools will appear in the tool list.
 
 > **Tip**: Use `@v1.0.0` (or the latest tag) to pin to a stable release. `@main` tracks the development branch and may include unreleased changes.
 
@@ -104,6 +104,7 @@ After saving, restart Claude Code. The 21 MCP tools will appear in the tool list
 |---|---|---|
 | `retrieve_context` | Retrieval | Load memory with priority merge: focus > project > global |
 | `get_scope_state` | Retrieval | Resolve project/focus scope state before reads or writes |
+| `memory_surface` | Retrieval | BM25 keyword surface: fast focused lookup without full context retrieval |
 | `save_session` | Session | Persist a session summary (objective, actions, decisions, next steps) |
 | `store_session_with_learnings` | Session | Batch save: session + related decisions + patterns in one call |
 | `save_decision` | Artifact | Save an architectural or technical decision with dedup + supersession |
@@ -114,6 +115,7 @@ After saving, restart Claude Code. The 21 MCP tools will appear in the tool list
 | `route_analysis` | Analysis | Route a task description to sequential / debate / socratic mode |
 | `run_hygiene` | Hygiene | Detect duplicates, stale decisions, obsolete patterns, entity drift |
 | `get_save_status` | Hygiene | List pending or failed saves for a project |
+| `memory_freshness` | Hygiene | List nodes not updated within the freshness threshold, oldest-first |
 | `register_service` | Federation | Register a service into a named workspace |
 | `deregister_service` | Federation | Remove a service from the registry |
 | `list_active_services` | Federation | List services active within a time window |
@@ -143,7 +145,7 @@ graphbase hygiene --scope global
 
 ## Devtools Server
 
-The devtools server (`graphbase devtools`) exposes an HTTP API and a browser dashboard for inspecting graph memory without an agent. Open `http://localhost:8765` after starting — it redirects to the Alpine.js single-page dashboard (`/ui`) with 5 tabs: Projects, Tools, Health, Memory, and Hygiene.
+The devtools server (`graphbase devtools`) exposes an HTTP API and a browser dashboard for inspecting graph memory without an agent. Open `http://localhost:8765` after starting — it redirects to the Alpine.js single-page dashboard (`/ui`) with 5 tabs: Projects, Tools, Health, Memory, and Hygiene, plus a standalone Graph canvas page (`/ui/graph.html`) showing the Workspace→Project topology.
 
 ```
 GET  /events                          SSE heartbeat (real-time connectivity status)
@@ -156,6 +158,7 @@ GET  /projects/{id}                   Single project detail
 GET  /tools                           MCP tool registry (live)
 GET  /tools/{name}                    Tool schema + metadata
 POST /tools/{name}/invoke             Engine-direct invoke with write-confirmation gate
+GET  /graph/overview                  Force-directed graph: Workspace→Project topology with staleness + federation edges
 GET  /graph/stats                     Per-label node + relationship counts
 GET  /graph/stats/workspace/{id}      Workspace health
 GET  /graph/conflicts/{id}            CONTRADICTS conflict detection
