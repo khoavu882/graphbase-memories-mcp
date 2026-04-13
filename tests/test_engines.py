@@ -174,7 +174,6 @@ async def test_retrieval_empty_new_project(driver, fresh_project):
         scope="project",
         focus=None,
         categories=None,
-        topic=None,
         driver=driver,
         database=TEST_DB,
     )
@@ -203,7 +202,6 @@ async def test_retrieval_returns_saved_decisions(driver, fresh_project):
         scope="project",
         focus=None,
         categories=None,
-        topic=None,
         driver=driver,
         database=TEST_DB,
     )
@@ -236,7 +234,6 @@ async def test_retrieval_keyword_returns_bm25_results(driver, fresh_project):
         scope="project",
         focus=None,
         categories=None,
-        topic=None,
         keyword=unique_word,
         driver=driver,
         database=TEST_DB,
@@ -271,7 +268,6 @@ async def test_retrieval_keyword_none_unchanged(driver, fresh_project):
         scope="project",
         focus=None,
         categories=None,
-        topic=None,
         keyword=None,
         driver=driver,
         database=TEST_DB,

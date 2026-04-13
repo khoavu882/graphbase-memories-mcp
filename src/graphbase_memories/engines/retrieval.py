@@ -27,7 +27,6 @@ async def execute(
     scope: str,
     focus: str | None,
     categories: list[str] | None,
-    topic: str | None,
     keyword: str | None = None,
     driver: AsyncDriver,
     database: str = "neo4j",
@@ -53,7 +52,6 @@ async def execute(
                     scope=scope,
                     focus=focus,
                     categories=categories,
-                    topic=topic,
                     driver=driver,
                     database=database,
                 ),
@@ -130,7 +128,6 @@ async def _fetch_all(
     scope: str,
     focus: str | None,
     categories: list[str] | None,
-    topic: str | None,
     driver: AsyncDriver,
     database: str,
 ) -> tuple[list[dict], list[str]]:

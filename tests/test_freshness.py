@@ -91,7 +91,6 @@ async def test_retrieval_annotates_freshness(driver, fresh_project):
         scope="project",
         focus=None,
         categories=None,
-        topic=None,
         driver=driver,
         database=TEST_DB,
     )

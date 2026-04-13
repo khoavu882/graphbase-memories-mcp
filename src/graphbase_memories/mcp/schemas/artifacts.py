@@ -25,7 +25,6 @@ class DecisionSchema(BaseModel):
     owner: str
     date: date
     scope: MemoryScope
-    supersedes: str | None = None  # id of older Decision node
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
 
 

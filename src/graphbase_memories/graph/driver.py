@@ -30,17 +30,20 @@ def _load_cypher(name: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
-# Load all query files at module import — M-3 fast-fail validation
+# Load all query files at module import — M-3 fast-fail validation.
+# Constants are exported only for files whose content is read at runtime.
+# Remaining files are validated (FileNotFoundError at startup if missing)
+# but their content is embedded inline in the calling module.
 SCHEMA_DDL = _load_cypher("schema")
 SCHEMA_V2_DDL = _load_cypher("schema_v2")
-RETRIEVAL_QUERIES = _load_cypher("retrieval")
-WRITE_QUERIES = _load_cypher("write")
-DEDUP_QUERIES = _load_cypher("dedup")
-HYGIENE_QUERIES = _load_cypher("hygiene")
 FEDERATION_QUERIES = _load_cypher("federation")
 IMPACT_QUERIES = _load_cypher("impact")
 FRESHNESS_QUERIES = _load_cypher("freshness")
-SURFACE_QUERIES = _load_cypher("surface")
+_load_cypher("retrieval")
+_load_cypher("write")
+_load_cypher("dedup")
+_load_cypher("hygiene")
+_load_cypher("surface")
 
 
 @asynccontextmanager

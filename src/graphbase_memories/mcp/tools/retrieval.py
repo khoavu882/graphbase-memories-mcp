@@ -21,7 +21,6 @@ async def retrieve_context(
     scope: MemoryScope,
     focus: str | None = None,
     categories: list[str] | None = None,
-    topic: str | None = None,
     keyword: str | None = None,
 ) -> ContextBundle:
     """
@@ -36,7 +35,6 @@ async def retrieve_context(
         scope=scope.value,
         focus=focus,
         categories=categories,
-        topic=topic,
         keyword=keyword,
         driver=driver,
         database=settings.neo4j_database,
