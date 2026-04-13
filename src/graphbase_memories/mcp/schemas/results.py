@@ -16,6 +16,15 @@ from graphbase_memories.mcp.schemas.enums import (
 )
 
 
+class ScopeStateResult(BaseModel):
+    """Typed return for get_scope_state tool — replaces raw dict for agent discoverability."""
+
+    scope_state: ScopeState
+    project_exists: bool
+    project_id: str | None = None
+    focus: str | None = None
+
+
 class SaveResult(BaseModel):
     status: SaveStatus
     artifact_id: str | None = None

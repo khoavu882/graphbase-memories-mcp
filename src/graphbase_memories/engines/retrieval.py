@@ -14,6 +14,7 @@ from neo4j.exceptions import Neo4jError
 
 from graphbase_memories.config import settings
 from graphbase_memories.engines import scope as scope_engine
+from graphbase_memories.engines.freshness import compute_freshness_str
 from graphbase_memories.mcp.schemas.enums import RetrievalStatus
 from graphbase_memories.mcp.schemas.results import ContextBundle
 
@@ -239,16 +240,7 @@ def _to_dict(record) -> dict:
 
     ts_raw = node.get("updated_at") or node.get("created_at")
     if ts_raw is not None:
-        ts = ts_raw.to_native() if hasattr(ts_raw, "to_native") else ts_raw
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=UTC)
-        age_days = (datetime.now(UTC) - ts).days
-        if age_days <= settings.freshness_recent_days:
-            node["_freshness"] = "current"
-        elif age_days <= settings.freshness_stale_days:
-            node["_freshness"] = "recent"
-        else:
-            node["_freshness"] = "stale"
+        node["_freshness"] = compute_freshness_str(ts_raw)
 
     return node
 
@@ -324,51 +316,20 @@ async def _fetch_bm25(
     driver: AsyncDriver,
     database: str,
 ) -> list[dict]:
-    """Run BM25 FTS across all 4 fulltext indexes; merge results in Python.
-
-    Uses 4 separate session.run() calls (one per index) because CALL UNION ALL
-    is unreliable in Neo4j 5 Community. Results are deduplicated by node ID.
-    Each failed index query is logged and skipped — partial results are returned.
-    """
+    """Delegate to shared BM25 repo. Times the full fetch and warns if >500 ms."""
     import time
 
-    index_names = [
-        "decision_fulltext",
-        "pattern_fulltext",
-        "context_fulltext",
-        "entity_fulltext",
-    ]
-    all_items: list[dict] = []
-    seen: set[str] = set()
+    from graphbase_memories.graph.repositories.search_repo import bm25_fetch
 
     t0 = time.monotonic()
-    async with driver.session(database=database) as session:
-        for index_name in index_names:
-            try:
-                result = await session.run(
-                    "CALL db.index.fulltext.queryNodes($index_name, $search_text) "
-                    "YIELD node, score "
-                    "WHERE node.project_id = $project_id OR node.scope = 'global' "
-                    "RETURN node {.*} AS item, labels(node)[0] AS label, score AS bm25_score "
-                    "ORDER BY bm25_score DESC LIMIT $fts_limit",
-                    index_name=index_name,
-                    search_text=search_text,
-                    project_id=project_id,
-                    fts_limit=settings.fts_limit,
-                )
-                async for record in result:
-                    item = dict(record["item"])
-                    item["_label"] = record["label"]
-                    item["bm25_score"] = record["bm25_score"]
-                    uid = item.get("id")
-                    if uid and uid not in seen:
-                        seen.add(uid)
-                        all_items.append(item)
-            except Exception:
-                logger.warning("BM25 query failed for index %s — skipping", index_name)
-
+    items = await bm25_fetch(
+        search_text=search_text,
+        project_id=project_id,
+        limit=settings.fts_limit,
+        driver=driver,
+        database=database,
+    )
     elapsed_ms = (time.monotonic() - t0) * 1000
     if elapsed_ms > 500:
         logger.warning("BM25 fetch took %.0f ms (>500ms threshold)", elapsed_ms)
-
-    return all_items
+    return items

@@ -24,6 +24,7 @@ from graphbase_memories.mcp.schemas.results import (
     HygieneReport,
     SaveResult,
     SaveStatusSummary,
+    ScopeStateResult,
     StaleItem,
 )
 
@@ -49,6 +50,7 @@ __all__ = [
     "SaveStatus",
     "SaveStatusSummary",
     "ScopeState",
+    "ScopeStateResult",
     "SessionSchema",
     "StaleItem",
 ]

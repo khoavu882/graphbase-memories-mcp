@@ -8,7 +8,8 @@ from graphbase_memories.config import settings
 from graphbase_memories.engines import retrieval as retrieval_engine
 from graphbase_memories.engines import scope as scope_engine
 from graphbase_memories.engines import surface as surface_engine
-from graphbase_memories.mcp.schemas import ContextBundle, MemoryScope
+from graphbase_memories.mcp.schemas import ContextBundle, MemoryScope, ScopeStateResult
+from graphbase_memories.mcp.schemas.enums import ScopeState
 from graphbase_memories.mcp.schemas.results import SurfaceResult
 from graphbase_memories.mcp.server import mcp
 
@@ -47,21 +48,19 @@ async def get_scope_state(
     ctx: Context,
     project_id: str | None = None,
     focus: str | None = None,
-) -> dict:
+) -> ScopeStateResult:
     """
     Check scope resolution state for a project without triggering any MCP read or write.
     Returns scope_state (resolved/uncertain/unresolved) and project_exists flag.
     """
     driver = ctx.lifespan_context["driver"]
     state = await scope_engine.validate(project_id, focus, driver, settings.neo4j_database)
-
-    project_exists = state.value == "resolved"
-    return {
-        "scope_state": state.value,
-        "project_exists": project_exists,
-        "project_id": project_id,
-        "focus": focus,
-    }
+    return ScopeStateResult(
+        scope_state=state,
+        project_exists=state == ScopeState.resolved,
+        project_id=project_id,
+        focus=focus,
+    )
 
 
 @mcp.tool()

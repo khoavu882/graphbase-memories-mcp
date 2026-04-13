@@ -5,6 +5,7 @@ Uses the 'neo4j' database against the running local Neo4j 5 Community container.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import sys
 
@@ -13,10 +14,10 @@ import pytest_asyncio
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
 
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "graphbase"
-TEST_DB = "neo4j"
+NEO4J_URI = os.getenv("GRAPHBASE_NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USER = os.getenv("GRAPHBASE_NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("GRAPHBASE_NEO4J_PASSWORD", "graphbase")
+TEST_DB = os.getenv("GRAPHBASE_NEO4J_DATABASE", "neo4j")
 
 TEST_PROJECT_ID = "test-project-integration"
 
@@ -97,6 +98,25 @@ async def fresh_workspace(driver, fresh_project):
         await session.run(
             "MATCH (w:Workspace {id: $wid}) DETACH DELETE w",
             wid=ws_id,
+        )
+
+
+@pytest_asyncio.fixture
+async def clean_federation(driver):
+    """
+    Teardown-only fixture for federation tests.
+    Ensures test service and workspace nodes are always removed, even on assertion failure.
+    Tests using this fixture must add it as a parameter — cleanup runs after the test body.
+    """
+    yield
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            "MATCH (p:Project) WHERE p.id IN $ids DETACH DELETE p",
+            ids=["test-svc-a", "test-svc-b", "test-svc-c"],
+        )
+        await session.run(
+            "MATCH (w:Workspace) WHERE w.id IN $ids DETACH DELETE w",
+            ids=["test-ws", "test-ws-idem", "upper-case"],
         )
 
 

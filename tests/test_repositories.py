@@ -245,7 +245,7 @@ async def test_governance_token_create_and_consume(driver):
 # ── Federation repos ─────────────────────────────────────────────
 
 
-async def test_register_service_creates_workspace(driver):
+async def test_register_service_creates_workspace(driver, clean_federation):
     from graphbase_memories.graph.repositories import federation_repo
 
     project, workspace, created = await federation_repo.register_service(
@@ -262,13 +262,8 @@ async def test_register_service_creates_workspace(driver):
     assert project.status == "active"
     assert project.workspace_id == "test-ws"
 
-    # Cleanup
-    async with driver.session(database=TEST_DB) as s:
-        await s.run("MATCH (p:Project {id:'test-svc-a'}) DETACH DELETE p")
-        await s.run("MATCH (w:Workspace {id:'test-ws'}) DETACH DELETE w")
 
-
-async def test_register_service_idempotent(driver):
+async def test_register_service_idempotent(driver, clean_federation):
     from graphbase_memories.graph.repositories import federation_repo
 
     _, _, created_first = await federation_repo.register_service(
@@ -292,13 +287,8 @@ async def test_register_service_idempotent(driver):
     assert created_first is True
     assert created_second is False
 
-    # Cleanup
-    async with driver.session(database=TEST_DB) as s:
-        await s.run("MATCH (p:Project {id:'test-svc-b'}) DETACH DELETE p")
-        await s.run("MATCH (w:Workspace {id:'test-ws-idem'}) DETACH DELETE w")
 
-
-async def test_workspace_id_normalized_lowercase(driver):
+async def test_workspace_id_normalized_lowercase(driver, clean_federation):
     from graphbase_memories.graph.repositories import federation_repo
 
     project, workspace, _ = await federation_repo.register_service(
@@ -312,11 +302,6 @@ async def test_workspace_id_normalized_lowercase(driver):
     )
     assert workspace.id == "upper-case"
     assert project.workspace_id == "upper-case"
-
-    # Cleanup
-    async with driver.session(database=TEST_DB) as s:
-        await s.run("MATCH (p:Project {id:'test-svc-c'}) DETACH DELETE p")
-        await s.run("MATCH (w:Workspace {id:'upper-case'}) DETACH DELETE w")
 
 
 async def test_fetch_batch_neighbors_empty_input(driver):

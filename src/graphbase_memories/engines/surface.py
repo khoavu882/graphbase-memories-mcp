@@ -2,7 +2,7 @@
 SurfaceEngine — BM25 memory surface for hook injection and explicit MCP tool use.
 
 Design:
-- BM25 path: four-index loop (mirrors _fetch_bm25 in retrieval.py exactly)
+- BM25 path: delegates to search_repo.bm25_fetch (shared with RetrievalEngine)
 - Keyword path: label-scan for PostToolUse staleness detection
 - Output cap: 800 characters (deterministic; no tokenizer dependency)
 """
@@ -14,18 +14,18 @@ import logging
 
 from neo4j import AsyncDriver
 
-from graphbase_memories.config import settings
+from graphbase_memories.engines.freshness import compute_freshness_str
 from graphbase_memories.mcp.schemas.results import SurfaceMatch, SurfaceResult
 
 logger = logging.getLogger(__name__)
 
-# Four FTS indexes — one per node label (CALL UNION ALL is unreliable in Neo4j 5 Community)
-_INDEX_CONFIGS: list[tuple[str, str, str, str]] = [
-    ("decision_fulltext", "Decision", "title", "rationale"),
-    ("pattern_fulltext", "Pattern", "trigger", "repeatable_steps_text"),
-    ("context_fulltext", "Context", "topic", "content"),
-    ("entity_fulltext", "EntityFact", "entity_name", "fact"),
-]
+# Label → (name_field, content_field) for mapping BM25 node dicts to SurfaceMatch
+_LABEL_FIELDS: dict[str, tuple[str, str]] = {
+    "Decision": ("title", "rationale"),
+    "Pattern": ("trigger", "repeatable_steps_text"),
+    "Context": ("topic", "content"),
+    "EntityFact": ("entity_name", "fact"),
+}
 
 _SURFACE_BY_KEYWORD = """
 MATCH (n)
@@ -71,43 +71,16 @@ async def _execute_bm25(
     driver: AsyncDriver,
     database: str,
 ) -> SurfaceResult:
-    """Four-index BM25 loop — same pattern as _fetch_bm25() in retrieval.py."""
-    all_items: list[dict] = []
-    seen: set[str] = set()
+    """Delegate to shared BM25 repo and map results to SurfaceMatch."""
+    from graphbase_memories.graph.repositories.search_repo import bm25_fetch
 
-    async with driver.session(database=database) as session:
-        for index_name, label, name_field, content_field in _INDEX_CONFIGS:
-            try:
-                result = await session.run(
-                    "CALL db.index.fulltext.queryNodes($index_name, $search_text) "
-                    "YIELD node, score "
-                    "WHERE node.project_id = $project_id OR node.scope = 'global' "
-                    "RETURN node {.*} AS item, $label AS label, score AS bm25_score "
-                    "ORDER BY bm25_score DESC LIMIT $limit",
-                    index_name=index_name,
-                    search_text=query,
-                    project_id=project_id or "",
-                    label=label,
-                    limit=limit,
-                )
-                async for record in result:
-                    item = dict(record["item"])
-                    uid = item.get("id", "")
-                    if uid and uid not in seen:
-                        seen.add(uid)
-                        all_items.append(
-                            {
-                                **item,
-                                "_label": label,
-                                "_name_field": name_field,
-                                "_content_field": content_field,
-                                "bm25_score": float(record["bm25_score"]),
-                            }
-                        )
-            except Exception:
-                logger.warning("Surface BM25 query failed for index %s — skipping", index_name)
-                continue  # partial results acceptable
-
+    all_items = await bm25_fetch(
+        search_text=query,
+        project_id=project_id,
+        limit=limit,
+        driver=driver,
+        database=database,
+    )
     all_items.sort(key=lambda x: x.get("bm25_score", 0.0), reverse=True)
     matches = [_to_surface_match(item) for item in all_items[:limit]]
 
@@ -164,37 +137,21 @@ async def _execute_keyword(
 
 def _to_surface_match(item: dict) -> SurfaceMatch:
     """Map label-specific property names to unified SurfaceMatch fields."""
-    name_field = item.get("_name_field", "entity_name")
-    content_field = item.get("_content_field", "fact")
+    label = item.get("_label", "Unknown")
+    name_field, content_field = _LABEL_FIELDS.get(label, ("entity_name", "fact"))
 
     ts_raw = item.get("updated_at") or item.get("created_at")
-    freshness = _compute_freshness(ts_raw)
 
     return SurfaceMatch(
         id=item.get("id", ""),
-        label=item.get("_label", "Unknown"),
+        label=label,
         name=str(item.get(name_field, "")),
         content=str(item.get(content_field, "")),
         scope=str(item.get("scope", "")),
-        freshness=freshness,
+        freshness=compute_freshness_str(ts_raw),
         bm25_score=item.get("bm25_score", 0.0),
         project_id=item.get("project_id"),
     )
-
-
-def _compute_freshness(ts_raw) -> str:
-    """Replicates freshness logic from retrieval.py _to_dict()."""
-    if ts_raw is None:
-        return "unknown"
-    ts = ts_raw.to_native() if hasattr(ts_raw, "to_native") else ts_raw
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=UTC)
-    age_days = (datetime.now(UTC) - ts).days
-    if age_days <= settings.freshness_recent_days:
-        return "current"
-    if age_days <= settings.freshness_stale_days:
-        return "recent"
-    return "stale"
 
 
 def _build_next_step(matches: list[SurfaceMatch], total: int, limit: int) -> str | None:
