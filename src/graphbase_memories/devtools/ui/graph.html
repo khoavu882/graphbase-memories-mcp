@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Graphbase — Graph Overview</title>
+  <meta name="description" content="Interactive graph topology canvas for graphbase-memories devtools — visualise Workspace, Project, and federation edges.">
+  <script src="https://unpkg.com/vis-network@9/standalone/umd/vis-network.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0;
+           font-size: 14px; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    header { display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+             background: #1e293b; border-bottom: 1px solid #334155; flex-shrink: 0; }
+    header h1 { font-size: 15px; font-weight: 600; color: #f8fafc; }
+    .back-link { color: #94a3b8; font-size: 13px; text-decoration: none; }
+    .back-link:hover { color: #e2e8f0; }
+    .header-sep { color: #475569; }
+
+    /* ── Body layout ────────────────────────────────────────────────────── */
+    .body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ────────────────────────────────────────────────────────── */
+    aside { width: 230px; flex-shrink: 0; background: #1e293b; border-right: 1px solid #334155;
+            display: flex; flex-direction: column; overflow-y: auto; padding: 16px 14px; gap: 16px; }
+    aside h2 { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase;
+               letter-spacing: 0.05em; margin-bottom: 6px; }
+    .filter-group { display: flex; flex-direction: column; gap: 5px; }
+    .filter-item { display: flex; align-items: center; gap: 8px; cursor: pointer;
+                   padding: 4px 6px; border-radius: 4px; user-select: none; }
+    .filter-item:hover { background: #334155; }
+    .filter-item input[type="checkbox"] { accent-color: #3b82f6; width: 14px; height: 14px;
+                                          cursor: pointer; flex-shrink: 0; }
+    .filter-item label { font-size: 13px; color: #cbd5e1; cursor: pointer; flex: 1; }
+    .color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Summary strip ──────────────────────────────────────────────────── */
+    .summary { background: #0f172a; border-radius: 6px; padding: 10px 12px; }
+    .summary-row { display: flex; justify-content: space-between; padding: 2px 0;
+                   font-size: 12px; color: #94a3b8; border-bottom: 1px solid #1e293b; }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-row span:last-child { color: #e2e8f0; font-weight: 500; }
+    .summary-total { font-size: 11px; color: #475569; margin-top: 8px; text-align: center; }
+
+    button.btn-refresh { width: 100%; padding: 7px; background: #334155; border: none;
+                         color: #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    button.btn-refresh:hover { background: #3b82f6; }
+    button.btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Canvas area ────────────────────────────────────────────────────── */
+    .canvas-wrap { flex: 1; position: relative; overflow: hidden; }
+    #graph { width: 100%; height: 100%; }
+    .loading-overlay { position: absolute; inset: 0; display: flex; align-items: center;
+                       justify-content: center; background: #0f172a; z-index: 10; }
+    .loading-overlay p { color: #94a3b8; font-size: 14px; }
+    .error-overlay { position: absolute; inset: 0; display: flex; align-items: center;
+                     justify-content: center; background: #0f172a; z-index: 10; flex-direction: column; gap: 8px; }
+    .error-overlay p { color: #fca5a5; font-size: 14px; }
+    .error-overlay small { color: #64748b; font-size: 12px; }
+
+    /* ── Inspect panel ──────────────────────────────────────────────────── */
+    #inspect { position: absolute; bottom: 0; left: 0; right: 0; background: #1e293b;
+               border-top: 1px solid #334155; padding: 12px 20px; display: none;
+               flex-wrap: wrap; gap: 16px; align-items: flex-start; z-index: 5; }
+    #inspect.visible { display: flex; }
+    .inspect-field { display: flex; flex-direction: column; gap: 2px; }
+    .inspect-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+    .inspect-value { font-size: 13px; color: #e2e8f0; font-weight: 500; max-width: 200px;
+                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .inspect-badge { display: inline-block; padding: 1px 8px; border-radius: 9999px;
+                     font-size: 11px; font-weight: 600; }
+    .badge-project   { background: #1e3a5f; color: #93c5fd; }
+    .badge-workspace { background: #4c1d95; color: #c4b5fd; }
+    .badge-stale     { background: #78350f; color: #fde68a; }
+    .badge-fresh     { background: #166534; color: #86efac; }
+    .counts-table { display: flex; gap: 10px; flex-wrap: wrap; }
+    .count-item { text-align: center; }
+    .count-num { font-size: 16px; font-weight: 700; color: #f1f5f9; }
+    .count-lbl { font-size: 10px; color: #64748b; }
+    .inspect-close { margin-left: auto; background: none; border: none; color: #64748b;
+                     cursor: pointer; font-size: 18px; line-height: 1; padding: 0 4px; }
+    .inspect-close:hover { color: #e2e8f0; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/ui/index.html" class="back-link">← Devtools</a>
+    <span class="header-sep">/</span>
+    <h1>Graph Overview</h1>
+  </header>
+
+  <div class="body">
+    <!-- Sidebar -->
+    <aside>
+      <div>
+        <h2>Node Types</h2>
+        <div class="filter-group" id="node-filters">
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="node" data-label="Workspace">
+            <span class="color-dot" style="background:#7c3aed"></span>
+            <label>Workspace</label>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="node" data-label="Project">
+            <span class="color-dot" style="background:#2563eb"></span>
+            <label>Project</label>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <h2>Edge Types</h2>
+        <div class="filter-group" id="edge-filters">
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="edge" data-edge="MEMBER_OF">
+            <span class="color-dot" style="background:#475569"></span>
+            <label>MEMBER_OF</label>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="edge" data-edge="CROSS_SERVICE_LINK">
+            <span class="color-dot" style="background:#10b981"></span>
+            <label>CROSS_SERVICE_LINK</label>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="edge" data-edge="AFFECTS">
+            <span class="color-dot" style="background:#ef4444"></span>
+            <label>AFFECTS</label>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <h2>Summary</h2>
+        <div class="summary" id="summary-panel">
+          <div class="summary-row"><span>Projects</span><span id="cnt-Project">—</span></div>
+          <div class="summary-row"><span>Workspaces</span><span id="cnt-Workspace">—</span></div>
+          <div class="summary-row"><span>Sessions</span><span id="cnt-Session">—</span></div>
+          <div class="summary-row"><span>Decisions</span><span id="cnt-Decision">—</span></div>
+          <div class="summary-row"><span>Entities</span><span id="cnt-EntityFact">—</span></div>
+        </div>
+        <p class="summary-total" id="total-label"></p>
+      </div>
+
+      <button class="btn-refresh" id="btn-refresh">↻ Refresh</button>
+    </aside>
+
+    <!-- Canvas -->
+    <main class="canvas-wrap">
+      <div class="loading-overlay" id="loading"><p>Loading graph…</p></div>
+      <div class="error-overlay" id="error-panel" style="display:none">
+        <p id="error-msg">Failed to load graph data.</p>
+        <small>Is the devtools server running at port 8765?</small>
+      </div>
+      <div id="graph"></div>
+
+      <!-- Inspect panel -->
+      <div id="inspect">
+        <div class="inspect-field">
+          <span class="inspect-label">ID</span>
+          <span class="inspect-value" id="insp-id">—</span>
+        </div>
+        <div class="inspect-field">
+          <span class="inspect-label">Label</span>
+          <span id="insp-label-badge" class="inspect-badge">—</span>
+        </div>
+        <div class="inspect-field">
+          <span class="inspect-label">Display</span>
+          <span class="inspect-value" id="insp-display">—</span>
+        </div>
+        <div class="inspect-field">
+          <span class="inspect-label">Staleness</span>
+          <span id="insp-stale-badge" class="inspect-badge">—</span>
+        </div>
+        <div class="inspect-field" id="insp-counts-wrap" style="display:none">
+          <span class="inspect-label">Node Counts</span>
+          <div class="counts-table" id="insp-counts"></div>
+        </div>
+        <button class="inspect-close" id="inspect-close">✕</button>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // ── Color config ────────────────────────────────────────────────────────
+    const NODE_COLORS = {
+      Workspace: { background: '#7c3aed', border: '#6d28d9', highlight: { background: '#8b5cf6', border: '#7c3aed' } },
+      Project:   { background: '#2563eb', border: '#1d4ed8', highlight: { background: '#3b82f6', border: '#2563eb' } },
+      Stale:     { background: '#b45309', border: '#92400e', highlight: { background: '#d97706', border: '#b45309' } },
+    };
+    const EDGE_COLORS = {
+      MEMBER_OF:          { color: '#475569', highlight: '#64748b' },
+      CROSS_SERVICE_LINK: { color: '#10b981', highlight: '#34d399' },
+      AFFECTS:            { color: '#ef4444', highlight: '#f87171' },
+    };
+
+    // ── State ───────────────────────────────────────────────────────────────
+    let rawData = null;   // { nodes: [], edges: [], summary: {} } from API
+    let network = null;
+    const nodeDataset = new vis.DataSet();
+    const edgeDataset = new vis.DataSet();
+
+    // ── Active filters ──────────────────────────────────────────────────────
+    function activeNodeLabels() {
+      return [...document.querySelectorAll('[data-filter="node"]')]
+        .filter(cb => cb.checked).map(cb => cb.dataset.label);
+    }
+    function activeEdgeTypes() {
+      return [...document.querySelectorAll('[data-filter="edge"]')]
+        .filter(cb => cb.checked).map(cb => cb.dataset.edge);
+    }
+
+    // ── Build vis node/edge objects ─────────────────────────────────────────
+    function toVisNode(n) {
+      const colorKey = n.is_stale ? 'Stale' : n.label;
+      return {
+        id: n.id,
+        label: n.display,
+        title: `${n.label}: ${n.id}`,
+        color: NODE_COLORS[colorKey] || NODE_COLORS.Project,
+        size: n.label === 'Workspace' ? 24 : 16,
+        font: { size: 12, color: '#e2e8f0' },
+        shape: n.label === 'Workspace' ? 'star' : 'dot',
+        borderWidth: 2,
+        _raw: n,   // store original for inspect panel
+      };
+    }
+
+    function toVisEdge(e, idx) {
+      const col = EDGE_COLORS[e.type] || { color: '#334155', highlight: '#475569' };
+      return {
+        id: `e-${idx}`,
+        from: e.source,
+        to: e.target,
+        label: e.type === 'MEMBER_OF' ? '' : e.type,
+        color: col,
+        arrows: { to: { enabled: true, scaleFactor: 0.6 } },
+        smooth: { type: 'continuous' },
+        font: { size: 9, color: '#64748b', align: 'middle' },
+        _type: e.type,
+      };
+    }
+
+    // ── Apply filters to DataSets (no network reinit) ───────────────────────
+    function applyFilters() {
+      if (!rawData) return;
+      const labels = activeNodeLabels();
+      const types  = activeEdgeTypes();
+
+      const visibleNodes = rawData.nodes.filter(n => labels.includes(n.label));
+      const visibleIds   = new Set(visibleNodes.map(n => n.id));
+      const visibleEdges = rawData.edges.filter(e =>
+        types.includes(e.type) &&
+        visibleIds.has(e.source) &&
+        visibleIds.has(e.target)
+      );
+
+      nodeDataset.clear();
+      edgeDataset.clear();
+      nodeDataset.add(visibleNodes.map(toVisNode));
+      edgeDataset.add(visibleEdges.map(toVisEdge));
+    }
+
+    // ── Update summary strip ────────────────────────────────────────────────
+    function updateSummary(summary) {
+      ['Project', 'Workspace', 'Session', 'Decision', 'EntityFact'].forEach(lbl => {
+        const el = document.getElementById(`cnt-${lbl}`);
+        if (el) el.textContent = (summary.counts[lbl] ?? 0).toLocaleString();
+      });
+      const total = summary.total_nodes_in_graph ?? 0;
+      const capped = summary.capped_at ?? 200;
+      const totalEl = document.getElementById('total-label');
+      if (totalEl) {
+        totalEl.textContent = total > capped
+          ? `Showing ≤${capped} of ${total.toLocaleString()} total nodes`
+          : `${total.toLocaleString()} total nodes`;
+      }
+    }
+
+    // ── Inspect panel ───────────────────────────────────────────────────────
+    function showInspect(nodeId) {
+      const item = rawData && rawData.nodes.find(n => n.id === nodeId);
+      if (!item) return;
+      document.getElementById('insp-id').textContent = item.id;
+      document.getElementById('insp-display').textContent = item.display;
+
+      const lbl = document.getElementById('insp-label-badge');
+      lbl.textContent = item.label;
+      lbl.className = `inspect-badge badge-${item.label.toLowerCase()}`;
+
+      const staleBadge = document.getElementById('insp-stale-badge');
+      if (item.staleness_days != null) {
+        staleBadge.textContent = item.is_stale
+          ? `Stale — ${item.staleness_days.toFixed(1)} days`
+          : `Fresh — ${item.staleness_days.toFixed(1)} days`;
+        staleBadge.className = `inspect-badge ${item.is_stale ? 'badge-stale' : 'badge-fresh'}`;
+      } else {
+        staleBadge.textContent = '—';
+        staleBadge.className = 'inspect-badge';
+      }
+
+      const countsWrap = document.getElementById('insp-counts-wrap');
+      const countsEl   = document.getElementById('insp-counts');
+      if (item.badge_counts) {
+        countsWrap.style.display = '';
+        countsEl.innerHTML = Object.entries(item.badge_counts)
+          .map(([k, v]) => `<div class="count-item"><div class="count-num">${v}</div><div class="count-lbl">${k}</div></div>`)
+          .join('');
+      } else {
+        countsWrap.style.display = 'none';
+      }
+
+      document.getElementById('inspect').classList.add('visible');
+    }
+
+    document.getElementById('inspect-close').addEventListener('click', () => {
+      document.getElementById('inspect').classList.remove('visible');
+      if (network) network.unselectAll();
+    });
+
+    // ── Bootstrap vis-network ───────────────────────────────────────────────
+    function initNetwork() {
+      const container = document.getElementById('graph');
+      const options = {
+        physics: {
+          solver: 'forceAtlas2Based',
+          forceAtlas2Based: { avoidOverlap: 0.5, gravitationalConstant: -50 },
+          stabilization: { iterations: 150, updateInterval: 25 },
+        },
+        interaction: { hover: true, tooltipDelay: 200, zoomView: true, dragView: true },
+        layout: { improvedLayout: false },
+      };
+      network = new vis.Network(container, { nodes: nodeDataset, edges: edgeDataset }, options);
+      network.on('click', params => {
+        if (params.nodes.length > 0) {
+          showInspect(params.nodes[0]);
+        } else {
+          document.getElementById('inspect').classList.remove('visible');
+        }
+      });
+      network.on('stabilizationIterationsDone', () => {
+        network.setOptions({ physics: { enabled: false } });
+      });
+    }
+
+    // ── Fetch & render ──────────────────────────────────────────────────────
+    async function load() {
+      document.getElementById('loading').style.display = 'flex';
+      document.getElementById('error-panel').style.display = 'none';
+      document.getElementById('btn-refresh').disabled = true;
+
+      try {
+        const res = await fetch('/graph/overview');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        rawData = await res.json();
+
+        updateSummary(rawData.summary);
+        applyFilters();
+
+        if (!network) {
+          initNetwork();
+        }
+        document.getElementById('loading').style.display = 'none';
+      } catch (err) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error-msg').textContent = `Failed to load: ${err.message}`;
+        document.getElementById('error-panel').style.display = 'flex';
+      } finally {
+        document.getElementById('btn-refresh').disabled = false;
+      }
+    }
+
+    // ── Wire up controls ────────────────────────────────────────────────────
+    document.querySelectorAll('[data-filter]').forEach(cb => {
+      cb.addEventListener('change', applyFilters);
+    });
+    document.getElementById('btn-refresh').addEventListener('click', load);
+
+    // ── Boot ────────────────────────────────────────────────────────────────
+    load();
+  </script>
+</body>
+</html>

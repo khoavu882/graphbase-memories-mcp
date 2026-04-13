@@ -18,6 +18,11 @@ HEARTBEAT_INTERVAL = 5  # seconds
 
 async def _heartbeat_generator(driver: AsyncDriver) -> AsyncIterator[str]:
     """Yield SSE-formatted heartbeat events every HEARTBEAT_INTERVAL seconds."""
+    from graphbase_memories.mcp.server import mcp
+
+    tools = await mcp.list_tools()
+    tool_count = len(tools)
+
     while True:
         try:
             await driver.verify_connectivity()
@@ -30,7 +35,7 @@ async def _heartbeat_generator(driver: AsyncDriver) -> AsyncIterator[str]:
         payload: dict = {
             "status": "ok" if connected else "degraded",
             "neo4j_connected": connected,
-            "tool_count": 20,  # updated to dynamic count in W-B
+            "tool_count": tool_count,
             "ts": datetime.now(UTC).isoformat(),
         }
         if error:

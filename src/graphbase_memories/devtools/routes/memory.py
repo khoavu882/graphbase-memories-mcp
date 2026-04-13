@@ -37,7 +37,7 @@ async def list_memory(
             f"""
             MATCH (n{label_clause})
             WHERE 1=1 {project_clause}
-            RETURN n {{.*}} AS node, labels(n)[0] AS label
+            RETURN n {{.*, created_at: toString(n.created_at)}} AS node, labels(n)[0] AS label
             ORDER BY n.created_at DESC LIMIT $limit
             """,
             pid=project_id,
@@ -153,7 +153,7 @@ async def search_memory(body: MemorySearchRequest):
             )
             {project_clause}
             {since_clause}
-            RETURN n {{.*}} AS node, labels(n)[0] AS label
+            RETURN n {{.*, created_at: toString(n.created_at)}} AS node, labels(n)[0] AS label
             ORDER BY n.created_at DESC
             LIMIT $limit
             """,

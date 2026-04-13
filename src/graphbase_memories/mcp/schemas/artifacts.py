@@ -54,5 +54,15 @@ class EntityRelation(BaseModel):
     """M-2: typed relationship for upsert_entity_with_deps."""
 
     entity_id: str
-    relationship_type: Literal["BELONGS_TO", "CONFLICTS_WITH", "PRODUCED", "MERGES_INTO"]
+    relationship_type: Literal[
+        "BELONGS_TO",
+        "CONFLICTS_WITH",
+        "PRODUCED",
+        "MERGES_INTO",
+        "PRODUCES",
+        "CONSUMES",
+        "READS",
+        "WRITES",
+        "INVOLVES",
+    ]
     properties: dict[str, Any] = Field(default_factory=dict)
