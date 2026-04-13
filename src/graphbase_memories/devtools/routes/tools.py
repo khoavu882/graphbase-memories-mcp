@@ -29,7 +29,9 @@ _READ_ONLY_TOOLS = {
     "list_active_services",
     "search_cross_service",
     "get_save_status",
-    "run_hygiene",  # report-only, no graph mutation
+    "run_hygiene",
+    "memory_freshness",
+    "memory_surface",
 }
 
 # Module classification for the registry panel
@@ -54,6 +56,8 @@ _MODULE_MAP: dict[str, str] = {
     "get_scope_state": "retrieval",
     "save_session": "session",
     "store_session_with_learnings": "session",
+    "memory_surface": "retrieval",
+    "memory_freshness": "freshness",
 }
 
 

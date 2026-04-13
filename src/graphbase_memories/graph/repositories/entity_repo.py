@@ -15,7 +15,18 @@ from neo4j import AsyncDriver
 
 from graphbase_memories.graph.models import EntityFactNode
 
-ALLOWED_RELATIONSHIPS = {"BELONGS_TO", "CONFLICTS_WITH", "PRODUCED", "MERGES_INTO"}
+ALLOWED_RELATIONSHIPS = {
+    "BELONGS_TO",
+    "CONFLICTS_WITH",
+    "PRODUCED",
+    "MERGES_INTO",
+    # topology relationships
+    "PRODUCES",   # Service → KafkaTopic (producer)
+    "CONSUMES",   # Service → KafkaTopic (consumer)
+    "READS",      # Service → DBTable
+    "WRITES",     # Service → DBTable
+    "INVOLVES",   # Feature → Service
+}
 
 
 async def upsert(
