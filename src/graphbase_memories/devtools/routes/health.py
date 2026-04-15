@@ -66,9 +66,7 @@ async def graph_stats(driver: DriverDep):
 async def workspace_health(workspace_id: str, driver: DriverDep):
     """Return health metrics for all services in a workspace."""
     try:
-        report = await impact_engine.graph_health(
-            workspace_id, driver, settings.neo4j_database
-        )
+        report = await impact_engine.graph_health(workspace_id, driver, settings.neo4j_database)
         return report.model_dump()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

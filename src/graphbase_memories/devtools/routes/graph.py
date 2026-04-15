@@ -294,8 +294,7 @@ async def graph_overview(
 
         # ── Q5: Per-label summary counts — single UNION ALL (1 RTT, was 13) ─────
         counts_query = "\nUNION ALL\n".join(
-            f'MATCH (n:{lbl}) RETURN "{lbl}" AS lbl, count(n) AS cnt'
-            for lbl in _SUMMARY_LABELS
+            f'MATCH (n:{lbl}) RETURN "{lbl}" AS lbl, count(n) AS cnt' for lbl in _SUMMARY_LABELS
         )
         counts_result = await session.run(counts_query)
         label_counts: dict[str, int] = {}
