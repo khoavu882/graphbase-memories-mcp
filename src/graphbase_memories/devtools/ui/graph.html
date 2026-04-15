@@ -210,8 +210,18 @@
             <span class="lbl">Feature</span>
           </label>
           <label class="filter-item">
+            <input type="checkbox" checked data-filter="category" data-category="DataSource">
+            <span class="color-dot" aria-hidden="true" style="background:#8b5cf6"></span>
+            <span class="lbl">DataSource</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="category" data-category="MessageQueue">
+            <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
+            <span class="lbl">MessageQueue</span>
+          </label>
+          <label class="filter-item">
             <input type="checkbox" data-filter="category" data-category="EntityFact">
-            <span class="color-dot" aria-hidden="true" style="background:#94a3b8" aria-hidden="true"></span>
+            <span class="color-dot" aria-hidden="true" style="background:#94a3b8"></span>
             <span class="lbl">Other</span>
           </label>
         </div>
@@ -289,6 +299,51 @@
             <input type="checkbox" checked data-filter="topo-edge" data-edge="MERGES_INTO">
             <span class="color-dot" aria-hidden="true" style="background:#a78bfa"></span>
             <span class="lbl">MERGES_INTO</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="CALLS_DOWNSTREAM">
+            <span class="color-dot" aria-hidden="true" style="background:#3b82f6"></span>
+            <span class="lbl">CALLS_DOWNSTREAM</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="CALLS_UPSTREAM">
+            <span class="color-dot" aria-hidden="true" style="background:#6366f1"></span>
+            <span class="lbl">CALLS_UPSTREAM</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="READS_FROM">
+            <span class="color-dot" aria-hidden="true" style="background:#94a3b8"></span>
+            <span class="lbl">READS_FROM</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="WRITES_TO">
+            <span class="color-dot" aria-hidden="true" style="background:#f59e0b"></span>
+            <span class="lbl">WRITES_TO</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="PUBLISHES_TO">
+            <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
+            <span class="lbl">PUBLISHES_TO</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="SUBSCRIBES_TO">
+            <span class="color-dot" aria-hidden="true" style="background:#06b6d4"></span>
+            <span class="lbl">SUBSCRIBES_TO</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="MEMBER_OF_CONTEXT">
+            <span class="color-dot" aria-hidden="true" style="background:#f59e0b"></span>
+            <span class="lbl">MEMBER_OF_CONTEXT</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="PART_OF">
+            <span class="color-dot" aria-hidden="true" style="background:#475569"></span>
+            <span class="lbl">PART_OF</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="HAS_FEATURE">
+            <span class="color-dot" aria-hidden="true" style="background:#ec4899"></span>
+            <span class="lbl">HAS_FEATURE</span>
           </label>
         </div>
       </div>
@@ -372,7 +427,7 @@
       Stale:          { background: '#b45309', border: '#92400e', highlight: { background: '#d97706', border: '#b45309' } },
     };
 
-    // EntityFact categories: { color, shape, size }
+    // EntityFact categories AND first-class topology node labels: { color, shape, size }
     const CATEGORY_STYLES = {
       Service:        { bg: '#0ea5e9', border: '#0284c7', highlight: '#38bdf8', shape: 'dot',      size: 14 },
       BoundedContext: { bg: '#f59e0b', border: '#d97706', highlight: '#fbbf24', shape: 'hexagon',  size: 18 },
@@ -381,7 +436,13 @@
       External:       { bg: '#f97316', border: '#ea580c', highlight: '#fb923c', shape: 'box',      size: 13 },
       Feature:        { bg: '#ec4899', border: '#db2777', highlight: '#f472b6', shape: 'star',     size: 14 },
       EntityFact:     { bg: '#94a3b8', border: '#64748b', highlight: '#cbd5e1', shape: 'dot',      size: 11 },
+      // First-class topology node labels (T5.3) — visual aliases of their EntityFact counterparts
+      DataSource:     { bg: '#8b5cf6', border: '#7c3aed', highlight: '#a78bfa', shape: 'database', size: 14 },
+      MessageQueue:   { bg: '#10b981', border: '#059669', highlight: '#34d399', shape: 'triangle', size: 12 },
     };
+
+    // First-class topology node labels that should be styled like EntityFact categories
+    const TOPO_NODE_LABELS = new Set(['DataSource', 'MessageQueue', 'Feature', 'BoundedContext']);
 
     const EDGE_COLORS = {
       MEMBER_OF:          { color: '#475569', highlight: '#64748b' },
@@ -395,6 +456,16 @@
       WRITES:             { color: '#f59e0b', highlight: '#fbbf24' },
       CONFLICTS_WITH:     { color: '#ef4444', highlight: '#f87171' },
       MERGES_INTO:        { color: '#a78bfa', highlight: '#c4b5fd' },
+      // First-class topology relationship types (T5.3)
+      CALLS_DOWNSTREAM:   { color: '#3b82f6', highlight: '#60a5fa' },
+      CALLS_UPSTREAM:     { color: '#6366f1', highlight: '#818cf8' },
+      READS_FROM:         { color: '#94a3b8', highlight: '#cbd5e1' },
+      WRITES_TO:          { color: '#f59e0b', highlight: '#fbbf24' },
+      PUBLISHES_TO:       { color: '#10b981', highlight: '#34d399' },
+      SUBSCRIBES_TO:      { color: '#06b6d4', highlight: '#22d3ee' },
+      MEMBER_OF_CONTEXT:  { color: '#f59e0b', highlight: '#fbbf24' },
+      PART_OF:            { color: '#475569', highlight: '#64748b' },
+      HAS_FEATURE:        { color: '#ec4899', highlight: '#f472b6' },
     };
 
     // ── State ───────────────────────────────────────────────────────────────
@@ -426,6 +497,7 @@
 
     // ── Build vis node object ───────────────────────────────────────────────
     function toVisNode(n) {
+      // EntityFact nodes (legacy entity graph) — styled by category
       if (n.label === 'EntityFact') {
         const cat = n.category || 'EntityFact';
         const s   = CATEGORY_STYLES[cat] || CATEGORY_STYLES.EntityFact;
@@ -433,6 +505,21 @@
           id: n.id,
           label: n.display,
           title: `[${cat}] ${n.id}${n.fact ? '\n' + n.fact.slice(0, 80) : ''}`,
+          color: { background: s.bg, border: s.border, highlight: { background: s.highlight, border: s.border } },
+          shape: s.shape,
+          size: s.size,
+          font: { size: 10, color: '#e2e8f0' },
+          borderWidth: 1.5,
+          _raw: n,
+        };
+      }
+      // First-class topology nodes (T5.3) — label IS the category key
+      if (TOPO_NODE_LABELS.has(n.label)) {
+        const s = CATEGORY_STYLES[n.label] || CATEGORY_STYLES.EntityFact;
+        return {
+          id: n.id,
+          label: n.display,
+          title: `[${n.label}] ${n.id}`,
           color: { background: s.bg, border: s.border, highlight: { background: s.highlight, border: s.border } },
           shape: s.shape,
           size: s.size,
@@ -478,10 +565,12 @@
 
       if (topoMode) {
         const cats = activeCategories();
-        // In topology mode include all EntityFact nodes whose category is checked
-        // plus Workspace/Project nodes (always shown as structural anchors)
+        // In topology mode include EntityFact nodes whose category is checked,
+        // first-class topology nodes (T5.3) whose label matches a checked category,
+        // and Workspace/Project nodes (always shown as structural anchors).
         visibleNodes = rawData.nodes.filter(n => {
           if (n.label === 'EntityFact') return cats.includes(n.category || 'EntityFact');
+          if (TOPO_NODE_LABELS.has(n.label)) return cats.includes(n.label);
           return true; // Workspace + Project always visible in topology too
         });
       } else {
