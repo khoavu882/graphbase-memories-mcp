@@ -15,6 +15,7 @@ pre-SET property values in some Neo4j driver versions.
 
 from __future__ import annotations
 
+import json
 import re
 
 from neo4j import AsyncDriver
@@ -36,9 +37,16 @@ TOPOLOGY_LINK_TYPES: frozenset[str] = frozenset(
         "CALLS_UPSTREAM",
         "READS_FROM",
         "WRITES_TO",
+        "READS_WRITES",
         "PUBLISHES_TO",
         "SUBSCRIBES_TO",
     ]
+)
+
+# Whitelisted node labels for _dry_run_check f-string interpolation.
+# Mirrors the TOPOLOGY_LINK_TYPES pattern — injection safe.
+_ALLOWED_NODE_LABELS: frozenset[str] = frozenset(
+    ["Service", "DataSource", "MessageQueue", "Feature", "BoundedContext"]
 )
 
 # Maps direction string → named query block in topology_queries.cypher.
@@ -244,27 +252,85 @@ async def upsert_bounded_context(
 # ── Relationship operations ──────────────────────────────────────────────────
 
 
+async def _dry_run_check(
+    driver: AsyncDriver,
+    database: str,
+    label_a: str,
+    id_a: str,
+    label_b: str,
+    id_b: str,
+) -> dict:
+    """MATCH both endpoint nodes. Raise ValueError if either is missing.
+
+    Used by link_* functions when dry_run=True — validates without writing.
+    label_a and label_b must be members of _ALLOWED_NODE_LABELS (injection guard).
+    """
+    for label in (label_a, label_b):
+        if label not in _ALLOWED_NODE_LABELS:
+            raise ValueError(f"Node label {label!r} not in _ALLOWED_NODE_LABELS whitelist")
+    cypher = (
+        f"OPTIONAL MATCH (a:{label_a} {{id: $id_a}})\n"
+        f"OPTIONAL MATCH (b:{label_b} {{id: $id_b}})\n"
+        f"RETURN a IS NOT NULL AS a_exists, b IS NOT NULL AS b_exists"
+    )
+    async with driver.session(database=database) as session:
+        result = await session.run(cypher, id_a=id_a, id_b=id_b)
+        record = await result.single()
+    if not record or not record["a_exists"]:
+        raise ValueError(f"dry_run: {label_a} node '{id_a}' not found")
+    if not record["b_exists"]:
+        raise ValueError(f"dry_run: {label_b} node '{id_b}' not found")
+    return {"dry_run": True, "status": "dry_run_ok", "from_id": id_a, "to_id": id_b}
+
+
 async def link_service_dependency(
     driver: AsyncDriver,
     database: str,
     from_id: str,
     to_id: str,
     rel_type: str,
+    protocol: str | None = None,
+    timeout_ms: int | None = None,
+    criticality: str | None = None,
+    metadata: dict | None = None,
+    dry_run: bool = False,
 ) -> dict:
-    """MERGE a CALLS_DOWNSTREAM or CALLS_UPSTREAM edge between two services."""
+    """MERGE a CALLS_DOWNSTREAM or CALLS_UPSTREAM edge between two services.
+
+    Optional edge properties (protocol, timeout_ms, criticality) are written only
+    when provided; omitting them on a re-link preserves existing values (CASE WHEN pattern).
+    """
     if rel_type not in TOPOLOGY_LINK_TYPES:
         raise ValueError(f"rel_type {rel_type!r} not in TOPOLOGY_LINK_TYPES whitelist")
+    if dry_run:
+        return await _dry_run_check(driver, database, "Service", from_id, "Service", to_id)
     cypher = (
         f"MATCH (a:Service {{id: $from_id}})\n"
         f"MATCH (b:Service {{id: $to_id}})\n"
         f"MERGE (a)-[r:{rel_type}]->(b)\n"
-        f"SET r.updated_at = datetime()\n"
+        f"SET r.updated_at  = datetime(),\n"
+        f"    r.protocol    = CASE WHEN $protocol IS NOT NULL THEN $protocol ELSE r.protocol END,\n"
+        f"    r.timeout_ms  = CASE WHEN $timeout_ms IS NOT NULL THEN $timeout_ms ELSE r.timeout_ms END,\n"
+        f"    r.criticality = CASE WHEN $criticality IS NOT NULL THEN $criticality ELSE r.criticality END,\n"
+        f"    r.metadata    = CASE WHEN $metadata IS NOT NULL THEN $metadata ELSE r.metadata END\n"
         f"RETURN a.id AS from_id, b.id AS to_id, '{rel_type}' AS rel_type"
     )
     async with driver.session(database=database) as session:
-        result = await session.run(cypher, from_id=from_id, to_id=to_id)
+        result = await session.run(
+            cypher,
+            from_id=from_id,
+            to_id=to_id,
+            protocol=protocol,
+            timeout_ms=timeout_ms,
+            criticality=criticality,
+            metadata=json.dumps(metadata) if metadata is not None else None,
+        )
         record = await result.single()
-    return dict(record) if record else {}
+    if record is None:
+        raise ValueError(
+            f"link_service_dependency: MATCH found no nodes — verify from={from_id!r}, to={to_id!r} exist"
+        )
+    return dict(record)
 
 
 async def link_service_datasource(
@@ -273,21 +339,44 @@ async def link_service_datasource(
     service_id: str,
     source_id: str,
     rel_type: str,
+    access_pattern: str | None = None,
+    metadata: dict | None = None,
+    dry_run: bool = False,
 ) -> dict:
-    """MERGE a READS_FROM or WRITES_TO edge from Service to DataSource."""
+    """MERGE a READS_FROM, WRITES_TO, or READS_WRITES edge from Service to DataSource.
+
+    access_pattern is written only when provided; omitting it preserves the existing value.
+    """
     if rel_type not in TOPOLOGY_LINK_TYPES:
         raise ValueError(f"rel_type {rel_type!r} not in TOPOLOGY_LINK_TYPES whitelist")
+    if dry_run:
+        return await _dry_run_check(
+            driver, database, "Service", service_id, "DataSource", source_id
+        )
     cypher = (
         f"MATCH (s:Service {{id: $service_id}})\n"
         f"MATCH (ds:DataSource {{id: $source_id}})\n"
         f"MERGE (s)-[r:{rel_type}]->(ds)\n"
-        f"SET r.updated_at = datetime()\n"
+        f"SET r.updated_at     = datetime(),\n"
+        f"    r.access_pattern = CASE WHEN $access_pattern IS NOT NULL "
+        f"THEN $access_pattern ELSE r.access_pattern END,\n"
+        f"    r.metadata       = CASE WHEN $metadata IS NOT NULL THEN $metadata ELSE r.metadata END\n"
         f"RETURN s.id AS service_id, ds.id AS source_id, '{rel_type}' AS rel_type"
     )
     async with driver.session(database=database) as session:
-        result = await session.run(cypher, service_id=service_id, source_id=source_id)
+        result = await session.run(
+            cypher,
+            service_id=service_id,
+            source_id=source_id,
+            access_pattern=access_pattern,
+            metadata=json.dumps(metadata) if metadata is not None else None,
+        )
         record = await result.single()
-    return dict(record) if record else {}
+    if record is None:
+        raise ValueError(
+            f"link_service_datasource: MATCH found no nodes — verify service={service_id!r}, source={source_id!r} exist"
+        )
+    return dict(record)
 
 
 async def link_service_mq(
@@ -296,21 +385,43 @@ async def link_service_mq(
     service_id: str,
     queue_id: str,
     rel_type: str,
+    event_type: str | None = None,
+    metadata: dict | None = None,
+    dry_run: bool = False,
 ) -> dict:
-    """MERGE a PUBLISHES_TO or SUBSCRIBES_TO edge from Service to MessageQueue."""
+    """MERGE a PUBLISHES_TO or SUBSCRIBES_TO edge from Service to MessageQueue.
+
+    event_type is written only when provided; omitting it preserves the existing value.
+    """
     if rel_type not in TOPOLOGY_LINK_TYPES:
         raise ValueError(f"rel_type {rel_type!r} not in TOPOLOGY_LINK_TYPES whitelist")
+    if dry_run:
+        return await _dry_run_check(
+            driver, database, "Service", service_id, "MessageQueue", queue_id
+        )
     cypher = (
         f"MATCH (s:Service {{id: $service_id}})\n"
         f"MATCH (mq:MessageQueue {{id: $queue_id}})\n"
         f"MERGE (s)-[r:{rel_type}]->(mq)\n"
-        f"SET r.updated_at = datetime()\n"
+        f"SET r.updated_at = datetime(),\n"
+        f"    r.event_type = CASE WHEN $event_type IS NOT NULL THEN $event_type ELSE r.event_type END,\n"
+        f"    r.metadata   = CASE WHEN $metadata IS NOT NULL THEN $metadata ELSE r.metadata END\n"
         f"RETURN s.id AS service_id, mq.id AS queue_id, '{rel_type}' AS rel_type"
     )
     async with driver.session(database=database) as session:
-        result = await session.run(cypher, service_id=service_id, queue_id=queue_id)
+        result = await session.run(
+            cypher,
+            service_id=service_id,
+            queue_id=queue_id,
+            event_type=event_type,
+            metadata=json.dumps(metadata) if metadata is not None else None,
+        )
         record = await result.single()
-    return dict(record) if record else {}
+    if record is None:
+        raise ValueError(
+            f"link_service_mq: MATCH found no nodes — verify service={service_id!r}, queue={queue_id!r} exist"
+        )
+    return dict(record)
 
 
 async def link_feature_service(
@@ -320,8 +431,11 @@ async def link_feature_service(
     service_id: str,
     step_order: int,
     role: str,
+    dry_run: bool = False,
 ) -> dict:
     """MERGE INVOLVES relationship from Feature to Service, setting step_order and role."""
+    if dry_run:
+        return await _dry_run_check(driver, database, "Feature", feature_id, "Service", service_id)
     async with driver.session(database=database) as session:
         result = await session.run(
             _query("LINK_FEATURE_SERVICE"),
@@ -331,7 +445,11 @@ async def link_feature_service(
             role=role,
         )
         record = await result.single()
-    return dict(record) if record else {}
+    if record is None:
+        raise ValueError(
+            f"link_feature_service: MATCH found no nodes — verify feature={feature_id!r}, service={service_id!r} exist"
+        )
+    return dict(record)
 
 
 async def link_service_context(
@@ -340,8 +458,13 @@ async def link_service_context(
     service_id: str,
     context_id: str,
     ownership: str,
+    dry_run: bool = False,
 ) -> dict:
     """MERGE MEMBER_OF_CONTEXT relationship from Service to BoundedContext."""
+    if dry_run:
+        return await _dry_run_check(
+            driver, database, "Service", service_id, "BoundedContext", context_id
+        )
     async with driver.session(database=database) as session:
         result = await session.run(
             _query("LINK_SERVICE_CONTEXT"),
@@ -350,7 +473,11 @@ async def link_service_context(
             ownership=ownership,
         )
         record = await result.single()
-    return dict(record) if record else {}
+    if record is None:
+        raise ValueError(
+            f"link_service_context: MATCH found no nodes — verify service={service_id!r}, context={context_id!r} exist"
+        )
+    return dict(record)
 
 
 # ── Traversal queries ────────────────────────────────────────────────────────

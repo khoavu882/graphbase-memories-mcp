@@ -149,18 +149,41 @@ class LinkServiceDependencyInput(BaseModel):
         ...,
         description="CALLS_DOWNSTREAM (caller→callee) or CALLS_UPSTREAM (callee→caller)",
     )
+    protocol: str | None = Field(None, description="Transport protocol (REST, gRPC, kafka, etc.)")
+    timeout_ms: int | None = Field(None, description="Call timeout in milliseconds", ge=1)
+    criticality: Literal["high", "medium", "low"] | None = Field(
+        None, description="Business criticality of this dependency"
+    )
+    metadata: dict[str, str] | None = Field(None, description="Arbitrary string key/value metadata")
+    dry_run: bool = Field(
+        False, description="If true, validates endpoint nodes exist without writing"
+    )
 
 
 class LinkServiceDataSourceInput(BaseModel):
     service_id: str
     source_id: str
-    rel_type: TopologyLinkType = Field(..., description="READS_FROM or WRITES_TO")
+    rel_type: TopologyLinkType = Field(..., description="READS_FROM, WRITES_TO, or READS_WRITES")
+    access_pattern: str | None = Field(
+        None, description="Access pattern (e.g. cache-aside, read-heavy, write-heavy)"
+    )
+    metadata: dict[str, str] | None = Field(None, description="Arbitrary string key/value metadata")
+    dry_run: bool = Field(
+        False, description="If true, validates endpoint nodes exist without writing"
+    )
 
 
 class LinkServiceMQInput(BaseModel):
     service_id: str
     queue_id: str
     rel_type: TopologyLinkType = Field(..., description="PUBLISHES_TO or SUBSCRIBES_TO")
+    event_type: str | None = Field(
+        None, description="Event/message type name published or consumed"
+    )
+    metadata: dict[str, str] | None = Field(None, description="Arbitrary string key/value metadata")
+    dry_run: bool = Field(
+        False, description="If true, validates endpoint nodes exist without writing"
+    )
 
 
 class LinkFeatureServiceInput(BaseModel):
@@ -168,19 +191,26 @@ class LinkFeatureServiceInput(BaseModel):
     service_id: str
     step_order: int = Field(..., description="Position in the feature workflow (1-based)")
     role: str = Field(..., description="Role of this service in the feature (e.g. orchestrator)")
+    dry_run: bool = Field(
+        False, description="If true, validates endpoint nodes exist without writing"
+    )
 
 
 class LinkServiceContextInput(BaseModel):
     service_id: str
     context_id: str
     ownership: ServiceOwnership = Field(ServiceOwnership.owner)
+    dry_run: bool = Field(
+        False, description="If true, validates endpoint nodes exist without writing"
+    )
 
 
 class TopologyLinkResult(BaseModel):
     from_id: str
     to_id: str
     rel_type: str
-    status: str = "linked"
+    status: str = "linked"  # "linked" | "dry_run_ok" | "dry_run_node_missing"
+    dry_run: bool = False
 
 
 # ── Traversal inputs / results ────────────────────────────────────────────────

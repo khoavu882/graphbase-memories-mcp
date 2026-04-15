@@ -17,39 +17,11 @@ const { test, describe } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("path");
 
-// ── Import the module's pure helper functions directly ────────────────────────
-// We re-implement them here so tests don't depend on the hook's internal wiring,
-// and to avoid spawning real subprocesses in unit tests.
+// ── Import pure helper functions from the hook ────────────────────────────────
+// These are exported via module.exports at the bottom of graphbase-hook.js.
+// Importing the real functions ensures tests catch actual regressions in the hook.
 
-function extractQuery(toolName, toolInput) {
-  if (!toolInput) return null;
-
-  switch (toolName) {
-    case "Read":
-    case "Edit":
-    case "Write": {
-      const filePath = toolInput.file_path || "";
-      if (!filePath) return null;
-      const base = path.basename(filePath, path.extname(filePath));
-      return base.length >= 3 ? base : null;
-    }
-    case "Grep": {
-      const pattern = toolInput.pattern || "";
-      return pattern.length >= 3 ? pattern : null;
-    }
-    case "Glob": {
-      const glob = toolInput.pattern || "";
-      const match = glob.match(/[*/\\]([a-zA-Z][a-zA-Z0-9_]{2,})/);
-      if (match) return match[1];
-      const clean = glob.replace(/[*?[\]{}/. ]/g, "").trim();
-      return clean.length >= 3 ? clean : null;
-    }
-    default:
-      return null;
-  }
-}
-
-const GIT_MUTATION_RE = /\bgit\s+(commit|merge|rebase|cherry-pick|pull)(\s|$)/;
+const { extractQuery, GIT_MUTATION_RE } = require("./graphbase-hook");
 
 // ── extractQuery tests ────────────────────────────────────────────────────────
 
@@ -245,13 +217,13 @@ describe("security constraints", () => {
   test("shell: false is enforced (no interpolation)", () => {
     // Documented constraint — spawnSync is called with shell: false
     // This test validates the contract exists in the module's source.
-    const hookSource = require("fs").readFileSync(__filename.replace(".test.js", ".js"), "utf-8");
+    const hookSource = require("fs").readFileSync(path.join(__dirname, "graphbase-hook.js"), "utf-8");
     const shellTrueCount = (hookSource.match(/shell:\s*true/g) || []).length;
     assert.equal(shellTrueCount, 0, "shell: true must never appear in hook source");
   });
 
   test("shell: false appears in every spawnSync call", () => {
-    const hookSource = require("fs").readFileSync(__filename.replace(".test.js", ".js"), "utf-8");
+    const hookSource = require("fs").readFileSync(path.join(__dirname, "graphbase-hook.js"), "utf-8");
     const spawnCount = (hookSource.match(/spawnSync\(/g) || []).length;
     const shellFalseCount = (hookSource.match(/shell:\s*false/g) || []).length;
     // shellFalseCount may exceed spawnCount due to JSDoc comments — that is acceptable.

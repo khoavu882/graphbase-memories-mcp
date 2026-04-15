@@ -12,6 +12,11 @@
  *     an advisory to stdout as a single JSON line.
  *   - All errors are swallowed. Hook MUST always exit 0.
  *
+ * Output channel note:
+ *   `graphbase surface` writes its human-readable context to STDERR (not stdout),
+ *   keeping stdout available for the hook's own JSON protocol line. The hook reads
+ *   result.stderr to forward this context as additionalContext.
+ *
  * Security constraints (non-negotiable):
  *   - shell: false on every spawnSync call.
  *   - User-controlled query always placed after '--' in args array.
@@ -38,13 +43,19 @@ function readInput() {
 
 // ── Binary resolution ────────────────────────────────────────────────────────
 
+// Module-level cache — the process is short-lived so a null sentinel is safe.
+// Avoids spawning `which` twice when both PreToolUse and PostToolUse fire.
+let _cachedBin = undefined;
+
 /**
- * Resolve the graphbase binary path.
+ * Resolve the graphbase binary path (cached after first call).
  * Uses `which` / `where` with a 1000ms cap (budget constraint).
  * No uvx fallback in PreToolUse — cold-start would exceed Claude Code's 10s limit.
  * Returns the binary name string, or null if not found.
  */
 function resolveGraphbaseBin() {
+  if (_cachedBin !== undefined) return _cachedBin;
+
   const checker = process.platform === "win32" ? "where" : "which";
   const cmd = process.platform === "win32" ? "graphbase.cmd" : "graphbase";
 
@@ -55,10 +66,8 @@ function resolveGraphbaseBin() {
     shell: false,
   });
 
-  if (check.status === 0) {
-    return cmd;
-  }
-  return null;
+  _cachedBin = check.status === 0 ? cmd : null;
+  return _cachedBin;
 }
 
 // ── Query extraction ─────────────────────────────────────────────────────────
@@ -147,6 +156,9 @@ function handlePreToolUse(input) {
 /**
  * Regex for git mutations that should trigger a staleness check.
  * Matches: git commit, git merge, git rebase, git cherry-pick, git pull
+ *
+ * `git push` is intentionally excluded — it does not mutate local history,
+ * so there are no new local commits to inspect for stale entity context.
  */
 const GIT_MUTATION_RE = /\bgit\s+(commit|merge|rebase|cherry-pick|pull)(\s|$)/;
 
@@ -225,13 +237,21 @@ function main() {
   // Unrecognized event → exit 0, no output (required behavior)
 }
 
-try {
-  main();
-} catch (err) {
-  // Always exit 0 — hook must never crash Claude Code
-  if (process.env.GRAPHBASE_DEBUG) {
-    process.stderr.write(
-      "Graphbase hook error: " + String(err).slice(0, 200) + "\n"
-    );
+// Only execute when run directly (not when require()'d for testing)
+if (require.main === module) {
+  try {
+    main();
+  } catch (err) {
+    // Always exit 0 — hook must never crash Claude Code
+    if (process.env.GRAPHBASE_DEBUG) {
+      process.stderr.write(
+        "Graphbase hook error: " + String(err).slice(0, 200) + "\n"
+      );
+    }
   }
+}
+
+// ── Exports (pure functions only — for unit testing without subprocess mocking) ──
+if (typeof module !== "undefined") {
+  module.exports = { extractQuery, GIT_MUTATION_RE };
 }

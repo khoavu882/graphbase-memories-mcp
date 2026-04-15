@@ -162,7 +162,7 @@ async def link_service_datasource(
     """
     Link a service to a data source it reads from or writes to.
 
-    rel_type: READS_FROM or WRITES_TO.
+    rel_type: READS_FROM, WRITES_TO, or READS_WRITES.
     Both nodes must already be registered.
     """
     driver = ctx.lifespan_context["driver"]

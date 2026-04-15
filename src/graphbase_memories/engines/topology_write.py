@@ -264,18 +264,36 @@ async def link_service_dependency(
     database: str = "neo4j",
 ) -> TopologyLinkResult:
     await _require_workspace(workspace_id, driver, database)
-    record = await _with_retry(
-        topology_repo.link_service_dependency,
-        driver=driver,
-        database=database,
-        from_id=inp.from_service_id,
-        to_id=inp.to_service_id,
-        rel_type=inp.rel_type.value,
-    )
+    try:
+        record = await _with_retry(
+            topology_repo.link_service_dependency,
+            driver=driver,
+            database=database,
+            from_id=inp.from_service_id,
+            to_id=inp.to_service_id,
+            rel_type=inp.rel_type.value,
+            protocol=inp.protocol,
+            timeout_ms=inp.timeout_ms,
+            criticality=inp.criticality,
+            metadata=inp.metadata,
+            dry_run=inp.dry_run,
+        )
+    except ValueError:
+        if inp.dry_run:
+            return TopologyLinkResult(
+                from_id=inp.from_service_id,
+                to_id=inp.to_service_id,
+                rel_type=inp.rel_type.value,
+                status="dry_run_node_missing",
+                dry_run=True,
+            )
+        raise
     return TopologyLinkResult(
         from_id=record.get("from_id", inp.from_service_id),
         to_id=record.get("to_id", inp.to_service_id),
         rel_type=record.get("rel_type", inp.rel_type.value),
+        status=record.get("status", "linked"),
+        dry_run=inp.dry_run,
     )
 
 
@@ -286,18 +304,34 @@ async def link_service_datasource(
     database: str = "neo4j",
 ) -> TopologyLinkResult:
     await _require_workspace(workspace_id, driver, database)
-    record = await _with_retry(
-        topology_repo.link_service_datasource,
-        driver=driver,
-        database=database,
-        service_id=inp.service_id,
-        source_id=inp.source_id,
-        rel_type=inp.rel_type.value,
-    )
+    try:
+        record = await _with_retry(
+            topology_repo.link_service_datasource,
+            driver=driver,
+            database=database,
+            service_id=inp.service_id,
+            source_id=inp.source_id,
+            rel_type=inp.rel_type.value,
+            access_pattern=inp.access_pattern,
+            metadata=inp.metadata,
+            dry_run=inp.dry_run,
+        )
+    except ValueError:
+        if inp.dry_run:
+            return TopologyLinkResult(
+                from_id=inp.service_id,
+                to_id=inp.source_id,
+                rel_type=inp.rel_type.value,
+                status="dry_run_node_missing",
+                dry_run=True,
+            )
+        raise
     return TopologyLinkResult(
         from_id=record.get("service_id", inp.service_id),
         to_id=record.get("source_id", inp.source_id),
         rel_type=record.get("rel_type", inp.rel_type.value),
+        status=record.get("status", "linked"),
+        dry_run=inp.dry_run,
     )
 
 
@@ -308,18 +342,34 @@ async def link_service_mq(
     database: str = "neo4j",
 ) -> TopologyLinkResult:
     await _require_workspace(workspace_id, driver, database)
-    record = await _with_retry(
-        topology_repo.link_service_mq,
-        driver=driver,
-        database=database,
-        service_id=inp.service_id,
-        queue_id=inp.queue_id,
-        rel_type=inp.rel_type.value,
-    )
+    try:
+        record = await _with_retry(
+            topology_repo.link_service_mq,
+            driver=driver,
+            database=database,
+            service_id=inp.service_id,
+            queue_id=inp.queue_id,
+            rel_type=inp.rel_type.value,
+            event_type=inp.event_type,
+            metadata=inp.metadata,
+            dry_run=inp.dry_run,
+        )
+    except ValueError:
+        if inp.dry_run:
+            return TopologyLinkResult(
+                from_id=inp.service_id,
+                to_id=inp.queue_id,
+                rel_type=inp.rel_type.value,
+                status="dry_run_node_missing",
+                dry_run=True,
+            )
+        raise
     return TopologyLinkResult(
         from_id=record.get("service_id", inp.service_id),
         to_id=record.get("queue_id", inp.queue_id),
         rel_type=record.get("rel_type", inp.rel_type.value),
+        status=record.get("status", "linked"),
+        dry_run=inp.dry_run,
     )
 
 
@@ -330,19 +380,33 @@ async def link_feature_service(
     database: str = "neo4j",
 ) -> TopologyLinkResult:
     await _require_workspace(workspace_id, driver, database)
-    record = await _with_retry(
-        topology_repo.link_feature_service,
-        driver=driver,
-        database=database,
-        feature_id=inp.feature_id,
-        service_id=inp.service_id,
-        step_order=inp.step_order,
-        role=inp.role,
-    )
+    try:
+        record = await _with_retry(
+            topology_repo.link_feature_service,
+            driver=driver,
+            database=database,
+            feature_id=inp.feature_id,
+            service_id=inp.service_id,
+            step_order=inp.step_order,
+            role=inp.role,
+            dry_run=inp.dry_run,
+        )
+    except ValueError:
+        if inp.dry_run:
+            return TopologyLinkResult(
+                from_id=inp.feature_id,
+                to_id=inp.service_id,
+                rel_type="INVOLVES",
+                status="dry_run_node_missing",
+                dry_run=True,
+            )
+        raise
     return TopologyLinkResult(
         from_id=record.get("feature_id", inp.feature_id),
         to_id=record.get("service_id", inp.service_id),
         rel_type="INVOLVES",
+        status=record.get("status", "linked"),
+        dry_run=inp.dry_run,
     )
 
 
@@ -353,18 +417,32 @@ async def link_service_context(
     database: str = "neo4j",
 ) -> TopologyLinkResult:
     await _require_workspace(workspace_id, driver, database)
-    record = await _with_retry(
-        topology_repo.link_service_context,
-        driver=driver,
-        database=database,
-        service_id=inp.service_id,
-        context_id=inp.context_id,
-        ownership=inp.ownership.value,
-    )
+    try:
+        record = await _with_retry(
+            topology_repo.link_service_context,
+            driver=driver,
+            database=database,
+            service_id=inp.service_id,
+            context_id=inp.context_id,
+            ownership=inp.ownership.value,
+            dry_run=inp.dry_run,
+        )
+    except ValueError:
+        if inp.dry_run:
+            return TopologyLinkResult(
+                from_id=inp.service_id,
+                to_id=inp.context_id,
+                rel_type="MEMBER_OF_CONTEXT",
+                status="dry_run_node_missing",
+                dry_run=True,
+            )
+        raise
     return TopologyLinkResult(
         from_id=record.get("service_id", inp.service_id),
         to_id=record.get("context_id", inp.context_id),
         rel_type="MEMBER_OF_CONTEXT",
+        status=record.get("status", "linked"),
+        dry_run=inp.dry_run,
     )
 
 
