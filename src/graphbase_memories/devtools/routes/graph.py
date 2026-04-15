@@ -25,8 +25,20 @@ _SUMMARY_LABELS = [
     "ImpactEvent",
 ]
 
-# Relationship types fetched as graph edges (no CALL {} UNION — use WHERE IN instead).
+# Relationship types fetched as signal/cross-service edges (no CALL {} UNION — use WHERE IN instead).
 _EDGE_TYPES = ["CROSS_SERVICE_LINK", "AFFECTS"]
+
+# Entity topology relationship types shown in expanded view.
+_TOPOLOGY_EDGE_TYPES = [
+    "BELONGS_TO",   # svc → bc (bounded context membership)
+    "PRODUCES",     # svc → topic (Kafka producer)
+    "CONSUMES",     # svc → topic (Kafka consumer)
+    "READS",        # svc → svc or svc → store (HTTP agent / DB read)
+    "WRITES",       # svc → svc or svc → store (DB write / audit)
+    "INVOLVES",     # feature → svc (feature participant)
+    "CONFLICTS_WITH",
+    "MERGES_INTO",
+]
 
 
 def _get_driver() -> AsyncDriver:
@@ -39,42 +51,77 @@ def _get_driver() -> AsyncDriver:
 async def graph_overview(
     max_nodes: Annotated[int, Query(ge=1, le=1000)] = 200,
     include_stale: Annotated[bool, Query()] = True,
+    workspace_id: Annotated[str | None, Query()] = None,
+    topology: Annotated[bool, Query()] = False,
 ) -> dict:
     """Return nodes + edges + summary for the graph canvas.
 
-    Nodes are Workspace and Project only (collapsed view).
-    Child nodes (Session, Decision, etc.) appear as badge counts on Project nodes.
-    Edges: MEMBER_OF (structural hierarchy) + CROSS_SERVICE_LINK / AFFECTS (signal).
+    Collapsed view (topology=false, default):
+      Nodes are Workspace and Project only.
+      Child nodes (Session, Decision, etc.) appear as badge counts on Project nodes.
+      Edges: MEMBER_OF (structural hierarchy) + CROSS_SERVICE_LINK / AFFECTS (signal).
+
+    Topology view (topology=true):
+      Nodes include EntityFact nodes (services, topics, features, data stores).
+      Edges include BELONGS_TO, PRODUCES, CONSUMES, READS, WRITES, INVOLVES, etc.
+      Use this to see the force-directed service dependency graph.
     """
     now = datetime.now(UTC)
 
     async with _get_driver().session(database=settings.neo4j_database) as session:
         # ── Q1: Workspace nodes ────────────────────────────────────────────────
-        ws_result = await session.run(
-            "MATCH (w:Workspace) RETURN w.id AS id, w.name AS name LIMIT $max_nodes",
-            max_nodes=max_nodes,
-        )
+        if workspace_id:
+            ws_result = await session.run(
+                "MATCH (w:Workspace) WHERE w.id = $workspace_id RETURN w.id AS id, w.name AS name",
+                workspace_id=workspace_id,
+            )
+        else:
+            ws_result = await session.run(
+                "MATCH (w:Workspace) RETURN w.id AS id, w.name AS name LIMIT $max_nodes",
+                max_nodes=max_nodes,
+            )
         workspace_rows = [dict(r) async for r in ws_result]
 
         # ── Q2: Project nodes with child badge counts ──────────────────────────
-        proj_result = await session.run(
-            """
-            MATCH (p:Project)
-            WITH p ORDER BY p.last_seen DESC LIMIT $max_nodes
-            OPTIONAL MATCH (s:Session)-[:BELONGS_TO]->(p)
-            OPTIONAL MATCH (d:Decision)-[:BELONGS_TO]->(p)
-            OPTIONAL MATCH (pat:Pattern)-[:BELONGS_TO]->(p)
-            OPTIONAL MATCH (c:Context)-[:BELONGS_TO]->(p)
-            OPTIONAL MATCH (e:EntityFact)-[:BELONGS_TO]->(p)
-            RETURN p {.*} AS project,
-                   count(DISTINCT s)   AS sessions,
-                   count(DISTINCT d)   AS decisions,
-                   count(DISTINCT pat) AS patterns,
-                   count(DISTINCT c)   AS contexts,
-                   count(DISTINCT e)   AS entities
-            """,
-            max_nodes=max_nodes,
-        )
+        if workspace_id:
+            proj_result = await session.run(
+                """
+                MATCH (p:Project)-[:MEMBER_OF]->(w:Workspace {id: $workspace_id})
+                WITH p ORDER BY p.last_seen DESC LIMIT $max_nodes
+                OPTIONAL MATCH (s:Session)-[:BELONGS_TO]->(p)
+                OPTIONAL MATCH (d:Decision)-[:BELONGS_TO]->(p)
+                OPTIONAL MATCH (pat:Pattern)-[:BELONGS_TO]->(p)
+                OPTIONAL MATCH (c:Context)-[:BELONGS_TO]->(p)
+                OPTIONAL MATCH (e:EntityFact)-[:BELONGS_TO]->(p)
+                RETURN p {.*} AS project,
+                       count(DISTINCT s)   AS sessions,
+                       count(DISTINCT d)   AS decisions,
+                       count(DISTINCT pat) AS patterns,
+                       count(DISTINCT c)   AS contexts,
+                       count(DISTINCT e)   AS entities
+                """,
+                workspace_id=workspace_id,
+                max_nodes=max_nodes,
+            )
+        else:
+            proj_result = await session.run(
+                """
+                MATCH (p:Project)
+                WITH p ORDER BY p.last_seen DESC LIMIT $max_nodes
+                OPTIONAL MATCH (s:Session)-[:BELONGS_TO]->(p)
+                OPTIONAL MATCH (d:Decision)-[:BELONGS_TO]->(p)
+                OPTIONAL MATCH (pat:Pattern)-[:BELONGS_TO]->(p)
+                OPTIONAL MATCH (c:Context)-[:BELONGS_TO]->(p)
+                OPTIONAL MATCH (e:EntityFact)-[:BELONGS_TO]->(p)
+                RETURN p {.*} AS project,
+                       count(DISTINCT s)   AS sessions,
+                       count(DISTINCT d)   AS decisions,
+                       count(DISTINCT pat) AS patterns,
+                       count(DISTINCT c)   AS contexts,
+                       count(DISTINCT e)   AS entities
+                """,
+                max_nodes=max_nodes,
+            )
         project_rows = []
         async for r in proj_result:
             project_rows.append(
@@ -109,6 +156,61 @@ async def graph_overview(
             edge_types=_EDGE_TYPES,
         )
         signal_edges = [dict(r) async for r in signal_result]
+
+        # ── Q4b: Topology view — EntityFact nodes and dependency edges ───────────
+        entity_nodes: list[dict] = []
+        topology_edges: list[dict] = []
+        if topology:
+            # Scope entity nodes to workspace if provided.
+            # Follows BELONGS_TO → Project → MEMBER_OF → Workspace chain.
+            # Falls back to p.workspace_id property for register_service-created projects.
+            # Topology entity cap is intentionally higher than max_nodes (the project-node cap).
+            # Edge visibility requires BOTH endpoints to be in visible_ids — loading only
+            # max_nodes (200) entities would silently filter out most topology edges.
+            _TOPOLOGY_NODE_CAP = 5000
+            if workspace_id:
+                ent_result = await session.run(
+                    """
+                    MATCH (e:EntityFact)-[:BELONGS_TO]->(p:Project)
+                    WHERE (
+                      p.workspace_id = $workspace_id
+                      OR p.id = $workspace_id
+                      OR EXISTS { MATCH (p)-[:MEMBER_OF]->(w:Workspace {id: $workspace_id}) }
+                    )
+                    RETURN e.id AS id, e.entity_name AS name, e.fact AS fact,
+                           e.scope AS scope
+                    LIMIT $topo_cap
+                    """,
+                    workspace_id=workspace_id,
+                    topo_cap=_TOPOLOGY_NODE_CAP,
+                )
+            else:
+                ent_result = await session.run(
+                    """
+                    MATCH (e:EntityFact)
+                    RETURN e.id AS id, e.entity_name AS name, e.fact AS fact,
+                           e.scope AS scope
+                    LIMIT $topo_cap
+                    """,
+                    topo_cap=_TOPOLOGY_NODE_CAP,
+                )
+            entity_nodes = [dict(r) async for r in ent_result]
+
+            # Topology edges — scope to the loaded entity IDs so the query planner can
+            # use node index lookups rather than scanning all EntityFact pairs.
+            loaded_entity_ids = [e["id"] for e in entity_nodes if e.get("id")]
+            topo_result = await session.run(
+                """
+                MATCH (src:EntityFact)-[r]->(tgt:EntityFact)
+                WHERE type(r) IN $topo_types
+                  AND src.id IN $entity_ids AND tgt.id IN $entity_ids
+                RETURN src.id AS source, tgt.id AS target, type(r) AS type
+                LIMIT 5000
+                """,
+                topo_types=_TOPOLOGY_EDGE_TYPES,
+                entity_ids=loaded_entity_ids,
+            )
+            topology_edges = [dict(r) async for r in topo_result]
 
         # ── Q5: Per-label summary counts (Python loop — no UNION) ──────────────
         label_counts: dict[str, int] = {}
@@ -183,15 +285,58 @@ async def graph_overview(
             n for n in workspace_nodes if n["id"] in workspaces_with_visible
         ]
 
-    all_nodes = workspace_nodes + project_nodes
+    # Deduplicate by id — a node may carry multiple Neo4j labels (e.g. :Workspace:Project).
+    # Workspace takes precedence since workspace_nodes is listed first.
+    seen_ids: set[str] = set()
+    all_nodes = []
+    for n in workspace_nodes + project_nodes:
+        if n["id"] not in seen_ids:
+            seen_ids.add(n["id"])
+            all_nodes.append(n)
+
+    # In topology mode, add EntityFact nodes (deduplicated against Project/Workspace ids).
+    if topology:
+        for ent in entity_nodes:
+            if ent["id"] and ent["id"] not in seen_ids:
+                seen_ids.add(ent["id"])
+                # Derive display category from entity_name prefix convention:
+                # bc-* → BoundedContext, svc-* → Service, topic-* → Topic,
+                # store-* → DataStore, ext-* → External, feature-* → Feature
+                name = ent.get("name", "")
+                prefix = name.split("-")[0] if "-" in name else ""
+                category_map = {
+                    "bc": "BoundedContext",
+                    "svc": "Service",
+                    "topic": "Topic",
+                    "store": "DataStore",
+                    "ext": "External",
+                    "feature": "Feature",
+                }
+                category = category_map.get(prefix, "EntityFact")
+                all_nodes.append(
+                    {
+                        "id": ent["id"],
+                        "label": "EntityFact",
+                        "category": category,
+                        "display": name,
+                        "fact": (ent.get("fact") or "")[:120],
+                        "scope": ent.get("scope", ""),
+                        "is_stale": False,
+                        "staleness_days": None,
+                        "badge_counts": None,
+                    }
+                )
 
     # ── Build edge list ────────────────────────────────────────────────────────
     # Only include edges whose both endpoints are in the visible node set.
     visible_ids = {n["id"] for n in all_nodes}
+    base_edges = member_edges + signal_edges
+    if topology:
+        base_edges = base_edges + topology_edges
     all_edges = [
         e
-        for e in (member_edges + signal_edges)
-        if e["source"] in visible_ids and e["target"] in visible_ids
+        for e in base_edges
+        if e.get("source") in visible_ids and e.get("target") in visible_ids
     ]
 
     return {
@@ -203,5 +348,6 @@ async def graph_overview(
             "total_nodes_in_graph": total_nodes_in_graph,
             "capped_at": max_nodes,
             "generated_at": now.isoformat(),
+            "topology_mode": topology,
         },
     }
