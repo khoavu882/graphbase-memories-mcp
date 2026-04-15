@@ -61,3 +61,62 @@ class FreshnessLevel(StrEnum):
     current = "current"
     recent = "recent"
     stale = "stale"
+
+
+# ── Topology enums ──────────────────────────────────────────────────────────
+
+
+class ServiceType(StrEnum):
+    api = "api"
+    worker = "worker"
+    gateway = "gateway"
+    frontend = "frontend"
+    batch = "batch"
+    ml = "ml"
+    other = "other"
+
+
+class ServiceHealthStatus(StrEnum):
+    healthy = "healthy"
+    degraded = "degraded"
+    down = "down"
+    unknown = "unknown"
+
+
+class DataSourceType(StrEnum):
+    postgresql = "postgresql"
+    mysql = "mysql"
+    mongodb = "mongodb"
+    redis = "redis"
+    elasticsearch = "elasticsearch"
+    s3 = "s3"
+    other = "other"
+
+
+class MessageQueueType(StrEnum):
+    kafka = "kafka"
+    rabbitmq = "rabbitmq"
+    sqs = "sqs"
+    pubsub = "pubsub"
+    other = "other"
+
+
+class TopologyLinkType(StrEnum):
+    CALLS_DOWNSTREAM = "CALLS_DOWNSTREAM"
+    CALLS_UPSTREAM = "CALLS_UPSTREAM"
+    READS_FROM = "READS_FROM"
+    WRITES_TO = "WRITES_TO"
+    PUBLISHES_TO = "PUBLISHES_TO"
+    SUBSCRIBES_TO = "SUBSCRIBES_TO"
+
+
+class DependencyDirection(StrEnum):
+    downstream = "downstream"
+    upstream = "upstream"
+    both = "both"
+
+
+class ServiceOwnership(StrEnum):
+    owner = "owner"
+    contributor = "contributor"
+    consumer = "consumer"

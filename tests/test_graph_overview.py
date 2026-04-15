@@ -123,8 +123,16 @@ async def test_cross_service_link_appears_in_edges(driver, fresh_project):
 async def test_summary_counts_include_all_labels(driver, fresh_project):
     """Summary counts dict contains all expected label keys."""
     result = await _call(driver)
-    expected_labels = {"Project", "Workspace", "Session", "Decision",
-                       "Pattern", "Context", "EntityFact", "ImpactEvent"}
+    expected_labels = {
+        "Project",
+        "Workspace",
+        "Session",
+        "Decision",
+        "Pattern",
+        "Context",
+        "EntityFact",
+        "ImpactEvent",
+    }
     assert expected_labels.issubset(result["summary"]["counts"].keys())
 
 

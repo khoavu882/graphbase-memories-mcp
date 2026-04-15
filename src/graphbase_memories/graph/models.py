@@ -248,6 +248,165 @@ class EntityFactNode:
 
 
 @dataclass
+class ServiceNode:
+    """Topology node: registered service (dual-label :Project:Service)."""
+
+    id: str
+    name: str
+    workspace_id: str
+    display_name: str | None
+    service_type: str | None
+    bounded_context: str | None
+    owner_team: str | None
+    health_status: str | None
+    env: str | None
+    version: str | None
+    sla: str | None
+    docs_url: str | None
+    tags: list[str]
+    status: str
+    created_at: datetime
+    updated_at: datetime | None = None
+    last_seen: datetime | None = None
+
+    @classmethod
+    def from_record(cls, r: dict) -> ServiceNode:
+        return cls(
+            id=r["id"],
+            name=r["name"],
+            workspace_id=r["workspace_id"],
+            display_name=r.get("display_name"),
+            service_type=r.get("service_type"),
+            bounded_context=r.get("bounded_context"),
+            owner_team=r.get("owner_team"),
+            health_status=r.get("health_status"),
+            env=r.get("env"),
+            version=r.get("version"),
+            sla=r.get("sla"),
+            docs_url=r.get("docs_url"),
+            tags=list(r.get("tags") or []),
+            status=r.get("status", "active"),
+            created_at=_dt(r["created_at"]),
+            updated_at=_dt(r.get("updated_at")),
+            last_seen=_dt(r.get("last_seen")),
+        )
+
+
+@dataclass
+class DataSourceNode:
+    """Topology node: external data store (DB, cache, blob storage)."""
+
+    id: str
+    source_type: str
+    host: str | None
+    workspace_id: str
+    owner_team: str | None
+    health_status: str | None
+    version: str | None
+    tags: list[str]
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    @classmethod
+    def from_record(cls, r: dict) -> DataSourceNode:
+        return cls(
+            id=r["id"],
+            source_type=r["source_type"],
+            host=r.get("host"),
+            workspace_id=r["workspace_id"],
+            owner_team=r.get("owner_team"),
+            health_status=r.get("health_status"),
+            version=r.get("version"),
+            tags=list(r.get("tags") or []),
+            created_at=_dt(r["created_at"]),
+            updated_at=_dt(r.get("updated_at")),
+        )
+
+
+@dataclass
+class MessageQueueNode:
+    """Topology node: async messaging channel (Kafka topic, RabbitMQ exchange)."""
+
+    id: str
+    queue_type: str
+    topic_or_exchange: str | None
+    workspace_id: str
+    owner_team: str | None
+    schema_version: str | None
+    tags: list[str]
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    @classmethod
+    def from_record(cls, r: dict) -> MessageQueueNode:
+        return cls(
+            id=r["id"],
+            queue_type=r["queue_type"],
+            topic_or_exchange=r.get("topic_or_exchange"),
+            workspace_id=r["workspace_id"],
+            owner_team=r.get("owner_team"),
+            schema_version=r.get("schema_version"),
+            tags=list(r.get("tags") or []),
+            created_at=_dt(r["created_at"]),
+            updated_at=_dt(r.get("updated_at")),
+        )
+
+
+@dataclass
+class FeatureNode:
+    """Topology node: user-facing product capability spanning multiple services."""
+
+    id: str
+    name: str
+    workspace_id: str
+    workflow_order: int | None
+    owner_team: str | None
+    tags: list[str]
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    @classmethod
+    def from_record(cls, r: dict) -> FeatureNode:
+        return cls(
+            id=r["id"],
+            name=r["name"],
+            workspace_id=r["workspace_id"],
+            workflow_order=int(r["workflow_order"])
+            if r.get("workflow_order") is not None
+            else None,
+            owner_team=r.get("owner_team"),
+            tags=list(r.get("tags") or []),
+            created_at=_dt(r["created_at"]),
+            updated_at=_dt(r.get("updated_at")),
+        )
+
+
+@dataclass
+class BoundedContextNode:
+    """Topology node: DDD bounded context grouping related services."""
+
+    id: str
+    name: str
+    domain: str | None
+    workspace_id: str
+    tags: list[str]
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    @classmethod
+    def from_record(cls, r: dict) -> BoundedContextNode:
+        return cls(
+            id=r["id"],
+            name=r["name"],
+            domain=r.get("domain"),
+            workspace_id=r["workspace_id"],
+            tags=list(r.get("tags") or []),
+            created_at=_dt(r["created_at"]),
+            updated_at=_dt(r.get("updated_at")),
+        )
+
+
+@dataclass
 class GovernanceTokenNode:
     id: str
     content_preview: str
