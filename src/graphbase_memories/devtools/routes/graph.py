@@ -6,9 +6,9 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from neo4j import AsyncDriver
 
 from graphbase_memories.config import settings
+from graphbase_memories.devtools.deps import DriverDep
 from graphbase_memories.devtools.utils import staleness
 
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -60,14 +60,9 @@ _TOPOLOGY_EDGE_TYPES = [
 ]
 
 
-def _get_driver() -> AsyncDriver:
-    from graphbase_memories.devtools.server import _get_driver as _gd
-
-    return _gd()
-
-
 @router.get("/overview")
 async def graph_overview(
+    driver: DriverDep,
     max_nodes: Annotated[int, Query(ge=1, le=1000)] = 200,
     include_stale: Annotated[bool, Query()] = True,
     workspace_id: Annotated[str | None, Query()] = None,
@@ -87,7 +82,7 @@ async def graph_overview(
     """
     now = datetime.now(UTC)
 
-    async with _get_driver().session(database=settings.neo4j_database) as session:
+    async with driver.session(database=settings.neo4j_database) as session:
         # ── Q1: Workspace nodes ────────────────────────────────────────────────
         if workspace_id:
             ws_result = await session.run(
@@ -297,13 +292,17 @@ async def graph_overview(
                 )
                 topology_edges += [dict(r) async for r in topo_edge_result]
 
-        # ── Q5: Per-label summary counts (Python loop — no UNION) ──────────────
+        # ── Q5: Per-label summary counts — single UNION ALL (1 RTT, was 13) ─────
+        counts_query = "\nUNION ALL\n".join(
+            f'MATCH (n:{lbl}) RETURN "{lbl}" AS lbl, count(n) AS cnt'
+            for lbl in _SUMMARY_LABELS
+        )
+        counts_result = await session.run(counts_query)
         label_counts: dict[str, int] = {}
-        for label in _SUMMARY_LABELS:
-            # NOTE: never use $query as a param name — neo4j driver collision.
-            cnt_result = await session.run(f"MATCH (n:{label}) RETURN count(n) AS c")
-            rec = await cnt_result.single()
-            label_counts[label] = rec["c"] if rec else 0
+        async for r in counts_result:
+            label_counts[r["lbl"]] = r["cnt"]
+        for lbl in _SUMMARY_LABELS:
+            label_counts.setdefault(lbl, 0)
 
         # ── Q6: Edge type distribution ─────────────────────────────────────────
         edge_dist_result = await session.run("MATCH ()-[r]->() RETURN type(r) AS t, count(r) AS c")

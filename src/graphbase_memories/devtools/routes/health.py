@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
-from neo4j import AsyncDriver
 
 from graphbase_memories.config import settings
+from graphbase_memories.devtools.deps import DriverDep
 from graphbase_memories.engines import impact as impact_engine
 
 router = APIRouter(tags=["health"])
@@ -37,20 +37,14 @@ _REL_TYPES = [
 ]
 
 
-def _get_driver() -> AsyncDriver:
-    from graphbase_memories.devtools.server import _get_driver as _gd
-
-    return _gd()
-
-
 @router.get("/graph/stats")
-async def graph_stats():
+async def graph_stats(driver: DriverDep):
     """Return node counts by label and relationship counts by type."""
     now = datetime.now(UTC)
     node_counts: dict[str, int] = {}
     rel_counts: dict[str, int] = {}
 
-    async with _get_driver().session(database=settings.neo4j_database) as session:
+    async with driver.session(database=settings.neo4j_database) as session:
         for lbl in _NODE_LABELS:
             res = await session.run(f"MATCH (n:{lbl}) RETURN count(n) AS cnt")
             rec = await res.single()
@@ -69,11 +63,11 @@ async def graph_stats():
 
 
 @router.get("/graph/stats/workspace/{workspace_id}")
-async def workspace_health(workspace_id: str):
+async def workspace_health(workspace_id: str, driver: DriverDep):
     """Return health metrics for all services in a workspace."""
     try:
         report = await impact_engine.graph_health(
-            workspace_id, _get_driver(), settings.neo4j_database
+            workspace_id, driver, settings.neo4j_database
         )
         return report.model_dump()
     except Exception as exc:
@@ -81,11 +75,11 @@ async def workspace_health(workspace_id: str):
 
 
 @router.get("/graph/conflicts/{workspace_id}")
-async def workspace_conflicts(workspace_id: str, limit: int = 100):
+async def workspace_conflicts(workspace_id: str, driver: DriverDep, limit: int = 100):
     """Return all CONTRADICTS cross-service links in a workspace."""
     try:
         conflicts = await impact_engine.detect_conflicts(
-            workspace_id, limit, _get_driver(), settings.neo4j_database
+            workspace_id, limit, driver, settings.neo4j_database
         )
         return [c.model_dump() for c in conflicts]
     except Exception as exc:
@@ -93,7 +87,7 @@ async def workspace_conflicts(workspace_id: str, limit: int = 100):
 
 
 @router.post("/graph/repair/orphaned-entities/{workspace_id}")
-async def repair_orphaned_entities(workspace_id: str):
+async def repair_orphaned_entities(workspace_id: str, driver: DriverDep):
     """
     Repair EntityFact nodes that are not linked to any Project.
 
@@ -104,7 +98,7 @@ async def repair_orphaned_entities(workspace_id: str):
     This repair finds orphaned EntityFact nodes and links them to any Project
     in the given workspace.
     """
-    async with _get_driver().session(database=settings.neo4j_database) as session:
+    async with driver.session(database=settings.neo4j_database) as session:
         # Count orphaned entities first
         count_result = await session.run(
             """

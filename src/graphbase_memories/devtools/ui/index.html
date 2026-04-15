@@ -79,7 +79,8 @@
   <main>
 
     <!-- Projects tab -->
-    <div class="panel" :class="tab==='projects'&&'active'" x-data="projectsPanel()" x-init="init()">
+    <div class="panel" :class="tab==='projects'&&'active'" x-data="projectsPanel()"
+         x-effect="if ($store.neo4j.status === 'ok' && !projects.length && !loading) init()">
       <template x-if="loading"><p style="color:#94a3b8">Loading projects…</p></template>
       <template x-if="!loading && projects.length===0">
         <p style="color:#94a3b8">No projects registered. Run the MCP server to create projects.</p>
@@ -113,7 +114,8 @@
     </div>
 
     <!-- Tools tab -->
-    <div class="panel" :class="tab==='tools'&&'active'" x-data="toolsPanel()" x-init="init()">
+    <div class="panel" :class="tab==='tools'&&'active'" x-data="toolsPanel()"
+         x-effect="if ($store.neo4j.status === 'ok' && !tools.length) init()">
       <div class="split">
         <div>
           <input type="search" placeholder="Filter tools…" x-model="filter">
@@ -174,7 +176,8 @@
     </div>
 
     <!-- Health tab -->
-    <div class="panel" :class="tab==='health'&&'active'" x-data="healthPanel()" x-init="init()">
+    <div class="panel" :class="tab==='health'&&'active'" x-data="healthPanel()"
+         x-effect="if ($store.neo4j.status === 'ok' && !stats) init()">
       <template x-if="stats">
         <div class="grid-2">
           <div class="card">
@@ -234,7 +237,8 @@
     </div>
 
     <!-- Hygiene tab -->
-    <div class="panel" :class="tab==='hygiene'&&'active'" x-data="hygienePanel()" x-init="init()">
+    <div class="panel" :class="tab==='hygiene'&&'active'" x-data="hygienePanel()"
+         x-effect="if ($store.neo4j.status === 'ok' && !status) init()">
       <div class="grid-2">
         <div class="card">
           <h2>Project Status</h2>

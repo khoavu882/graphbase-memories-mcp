@@ -2,24 +2,20 @@
 Integration: GET /graph/overview route against live Neo4j.
 
 Tests use direct function call (driver injection pattern) rather than an HTTP client.
-The devtools server module-level _driver is replaced with the test fixture driver.
 """
 
 from __future__ import annotations
 
 from conftest import TEST_DB, TEST_PROJECT_ID
 
-import graphbase_memories.devtools.server as devtools_server
-
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
 async def _call(driver, **kwargs):
-    """Inject driver and call graph_overview with given kwargs."""
-    devtools_server._driver = driver
+    """Call graph_overview with driver and given kwargs."""
     from graphbase_memories.devtools.routes.graph import graph_overview
 
-    return await graph_overview(**kwargs)
+    return await graph_overview(driver, **kwargs)
 
 
 # ── tests ──────────────────────────────────────────────────────────────────────
