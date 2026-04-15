@@ -111,7 +111,9 @@ async def execute(
 def _build_next_step(bundle: ContextBundle, project_id: str) -> str:
     """Return a contextual next-step hint based on the bundle's retrieval state."""
     if bundle.conflicts_found:
-        return "Conflicts detected: call detect_conflicts(workspace_id=...) to resolve CONTRADICTS edges."
+        return (
+            "Conflicts detected: call detect_conflicts(workspace_id=...) to resolve CONTRADICTS edges."
+        )
     if bundle.hygiene_due:
         return f"Hygiene overdue: call run_hygiene(project_id='{project_id}') to clean stale nodes."
     if bundle.retrieval_status.value == "empty":

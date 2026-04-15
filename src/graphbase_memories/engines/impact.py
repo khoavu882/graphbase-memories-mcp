@@ -182,7 +182,9 @@ async def graph_health(
 
     total_conflicts = sum(s.conflict_count for s in services)
     if total_conflicts > 0:
-        health_next_step = "Conflicts detected: call detect_conflicts(workspace_id=...) to resolve CONTRADICTS edges."
+        health_next_step = (
+            "Conflicts detected: call detect_conflicts(workspace_id=...) to resolve CONTRADICTS edges."
+        )
     elif any(s.hygiene_status in ("needs_hygiene", "critical") for s in services):
         health_next_step = (
             "Hygiene needed: call run_hygiene() on services with needs_hygiene or critical status."

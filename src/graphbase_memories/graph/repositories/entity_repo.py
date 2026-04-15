@@ -21,11 +21,11 @@ ALLOWED_RELATIONSHIPS = {
     "PRODUCED",
     "MERGES_INTO",
     # topology relationships
-    "PRODUCES",   # Service → KafkaTopic (producer)
-    "CONSUMES",   # Service → KafkaTopic (consumer)
-    "READS",      # Service → DBTable
-    "WRITES",     # Service → DBTable
-    "INVOLVES",   # Feature → Service
+    "PRODUCES",  # Service → KafkaTopic (producer)
+    "CONSUMES",  # Service → KafkaTopic (consumer)
+    "READS",  # Service → DBTable
+    "WRITES",  # Service → DBTable
+    "INVOLVES",  # Feature → Service
 }
 
 

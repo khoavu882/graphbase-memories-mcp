@@ -23,9 +23,17 @@ _NODE_LABELS = [
     "ImpactEvent",
 ]
 _REL_TYPES = [
-    "BELONGS_TO", "MEMBER_OF", "CROSS_SERVICE_LINK", "IMPACT_OF",
-    "PRODUCES", "CONSUMES", "READS", "WRITES", "INVOLVES",
-    "CONFLICTS_WITH", "MERGES_INTO",
+    "BELONGS_TO",
+    "MEMBER_OF",
+    "CROSS_SERVICE_LINK",
+    "IMPACT_OF",
+    "PRODUCES",
+    "CONSUMES",
+    "READS",
+    "WRITES",
+    "INVOLVES",
+    "CONFLICTS_WITH",
+    "MERGES_INTO",
 ]
 
 
@@ -124,7 +132,7 @@ async def repair_orphaned_entities(workspace_id: str):
             raise HTTPException(
                 status_code=404,
                 detail=f"No projects found in workspace '{workspace_id}'. "
-                       "Run register_service first.",
+                "Run register_service first.",
             )
         target_project_id = proj_rec["project_id"]
 
