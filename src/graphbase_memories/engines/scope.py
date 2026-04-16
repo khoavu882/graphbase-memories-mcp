@@ -52,3 +52,31 @@ def is_write_allowed(scope_state: ScopeState) -> bool:
 def is_read_allowed(scope_state: ScopeState) -> bool:
     """FR-10: reads allowed when scope is resolved or uncertain (with degraded context)."""
     return scope_state in (ScopeState.resolved, ScopeState.uncertain)
+
+
+async def validate_workspace(
+    workspace_id: str | None,
+    driver: AsyncDriver,
+    database: str = "neo4j",
+) -> ScopeState:
+    """
+    Validate that a Workspace node exists in the graph.
+
+    resolved   — workspace exists
+    unresolved — workspace_id missing or workspace not found
+
+    Distinct from validate(): workspace is a topology-layer anchor, not a project.
+    Returns unresolved (not uncertain) for missing workspace because there is no
+    auto-creation path — callers must register the workspace explicitly first.
+    """
+    if not workspace_id:
+        return ScopeState.unresolved
+
+    async with driver.session(database=database) as session:
+        result = await session.run(
+            "MATCH (w:Workspace {id: $wid}) RETURN w.id AS id LIMIT 1",
+            wid=workspace_id,
+        )
+        record = await result.single()
+
+    return ScopeState.resolved if record is not None else ScopeState.unresolved

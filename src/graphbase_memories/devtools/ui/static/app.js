@@ -1,14 +1,22 @@
 // Graphbase Devtools — Alpine.js data stores
 // Served as static file from devtools/ui/static/app.js
 
+document.addEventListener('alpine:init', () => {
+  Alpine.store('neo4j', {
+    status: 'connecting',
+    toolCount: 0,
+    get connected() { return this.status === 'ok' || this.status === 'degraded'; },
+  });
+});
+
 function appRoot() {
   return { tab: "projects" };
 }
 
 function connectionStatus() {
   return {
-    status: "connecting",
-    toolCount: 0,
+    get status()    { return Alpine.store('neo4j').status; },
+    get toolCount() { return Alpine.store('neo4j').toolCount; },
     statusLabel() {
       return { connecting: "Connecting", ok: "Connected", degraded: "Degraded", disconnected: "Disconnected" }[this.status] || this.status;
     },
@@ -16,10 +24,10 @@ function connectionStatus() {
       const es = new EventSource("/events");
       es.addEventListener("heartbeat", (e) => {
         const d = JSON.parse(e.data);
-        this.status = d.neo4j_connected ? "ok" : "degraded";
-        this.toolCount = d.tool_count || 0;
+        Alpine.store('neo4j').status    = d.neo4j_connected ? "ok" : "degraded";
+        Alpine.store('neo4j').toolCount = d.tool_count || 0;
       });
-      es.onerror = () => { this.status = "disconnected"; };
+      es.onerror = () => { Alpine.store('neo4j').status = "disconnected"; };
     },
   };
 }

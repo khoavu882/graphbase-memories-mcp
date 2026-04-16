@@ -98,7 +98,8 @@ async def federated_sync(
                 "   contradictions introduced by the new links.\n"
                 "6. Report: how many new links were created, how many conflicts detected, "
                 "   and which services now share the most cross-service entities.\n\n"
-                "Use `CONTRADICTS` only when the entity facts are mutually exclusive across services."
+                "Use `CONTRADICTS` only when the entity facts are mutually exclusive"
+                " across services."
             ),
         )
     ]

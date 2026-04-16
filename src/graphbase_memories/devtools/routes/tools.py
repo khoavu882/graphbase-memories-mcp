@@ -11,6 +11,7 @@ from neo4j import AsyncDriver
 from pydantic import BaseModel
 
 from graphbase_memories.config import settings
+from graphbase_memories.devtools.deps import DriverDep
 from graphbase_memories.engines import federation as federation_engine
 from graphbase_memories.engines import hygiene as hygiene_engine
 from graphbase_memories.engines import impact as impact_engine
@@ -59,12 +60,6 @@ _MODULE_MAP: dict[str, str] = {
     "memory_surface": "retrieval",
     "memory_freshness": "freshness",
 }
-
-
-def _get_driver() -> AsyncDriver:
-    from graphbase_memories.devtools.server import _get_driver as _gd
-
-    return _gd()
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +242,7 @@ class InvokeRequest(BaseModel):
 
 
 @router.post("/{name}/invoke")
-async def invoke_tool(name: str, body: InvokeRequest):
+async def invoke_tool(name: str, body: InvokeRequest, driver: DriverDep):
     """
     Invoke an MCP tool via the engine layer.
 
@@ -277,7 +272,6 @@ async def invoke_tool(name: str, body: InvokeRequest):
             "params_received": body.params,
         }
 
-    driver = _get_driver()
     t_start = time.monotonic()
     try:
         result = await fn(body.params, driver)

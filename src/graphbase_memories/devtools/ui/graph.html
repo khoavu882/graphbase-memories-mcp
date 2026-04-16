@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Graphbase — Graph Overview</title>
   <meta name="description" content="Interactive graph topology canvas for graphbase-memories devtools — visualise Workspace, Project, and federation edges.">
-  <script src="https://unpkg.com/vis-network@9/standalone/umd/vis-network.min.js"></script>
+  <link rel="icon" href="data:,">
+  <script src="/ui/static/vis-network.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0;
@@ -18,34 +19,53 @@
     .back-link { color: #94a3b8; font-size: 13px; text-decoration: none; }
     .back-link:hover { color: #e2e8f0; }
     .header-sep { color: #475569; }
+    .mode-badge { margin-left: auto; padding: 2px 10px; border-radius: 9999px; font-size: 11px;
+                  font-weight: 600; background: #1e3a5f; color: #93c5fd; }
+    .mode-badge.topology { background: #134e4a; color: #6ee7b7; }
 
     /* ── Body layout ────────────────────────────────────────────────────── */
     .body { display: flex; flex: 1; overflow: hidden; }
 
     /* ── Sidebar ────────────────────────────────────────────────────────── */
-    aside { width: 230px; flex-shrink: 0; background: #1e293b; border-right: 1px solid #334155;
-            display: flex; flex-direction: column; overflow-y: auto; padding: 16px 14px; gap: 16px; }
+    aside { width: 240px; flex-shrink: 0; background: #1e293b; border-right: 1px solid #334155;
+            display: flex; flex-direction: column; overflow-y: auto; padding: 14px 12px; gap: 14px; }
     aside h2 { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase;
                letter-spacing: 0.05em; margin-bottom: 6px; }
-    .filter-group { display: flex; flex-direction: column; gap: 5px; }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; }
     .filter-item { display: flex; align-items: center; gap: 8px; cursor: pointer;
-                   padding: 4px 6px; border-radius: 4px; user-select: none; }
+                   padding: 3px 6px; border-radius: 4px; user-select: none; }
     .filter-item:hover { background: #334155; }
-    .filter-item input[type="checkbox"] { accent-color: #3b82f6; width: 14px; height: 14px;
+    .filter-item input[type="checkbox"] { accent-color: #3b82f6; width: 13px; height: 13px;
                                           cursor: pointer; flex-shrink: 0; }
-    .filter-item label { font-size: 13px; color: #cbd5e1; cursor: pointer; flex: 1; }
-    .color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .filter-item span.lbl { font-size: 12px; color: #cbd5e1; flex: 1; }
+    .color-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Workspace input ────────────────────────────────────────────────── */
+    .ws-input-wrap { display: flex; gap: 6px; align-items: stretch; }
+    .ws-input-wrap input { flex: 1; background: #0f172a; border: 1px solid #475569; color: #e2e8f0;
+                           border-radius: 6px; padding: 5px 8px; font-size: 12px; min-width: 0; }
+    .ws-input-wrap input:focus { outline: none; border-color: #3b82f6; }
+    .ws-input-wrap button { padding: 5px 9px; background: #334155; border: none; color: #e2e8f0;
+                            border-radius: 6px; cursor: pointer; font-size: 12px; flex-shrink: 0; }
+    .ws-input-wrap button:hover { background: #3b82f6; }
+
+    /* ── Topology toggle ────────────────────────────────────────────────── */
+    .toggle-wrap { display: flex; background: #0f172a; border-radius: 6px; padding: 3px; gap: 2px; }
+    .toggle-btn { flex: 1; padding: 5px; border: none; border-radius: 4px; cursor: pointer;
+                  font-size: 12px; font-weight: 500; background: transparent; color: #94a3b8; }
+    .toggle-btn.active { background: #1d4ed8; color: #fff; }
+    .toggle-btn.active.topo { background: #0f766e; }
 
     /* ── Summary strip ──────────────────────────────────────────────────── */
-    .summary { background: #0f172a; border-radius: 6px; padding: 10px 12px; }
+    .summary { background: #0f172a; border-radius: 6px; padding: 8px 10px; }
     .summary-row { display: flex; justify-content: space-between; padding: 2px 0;
                    font-size: 12px; color: #94a3b8; border-bottom: 1px solid #1e293b; }
     .summary-row:last-child { border-bottom: none; }
     .summary-row span:last-child { color: #e2e8f0; font-weight: 500; }
-    .summary-total { font-size: 11px; color: #475569; margin-top: 8px; text-align: center; }
+    .summary-total { font-size: 11px; color: #475569; margin-top: 6px; text-align: center; }
 
-    button.btn-refresh { width: 100%; padding: 7px; background: #334155; border: none;
-                         color: #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    button.btn-refresh { width: 100%; padding: 6px; background: #334155; border: none;
+                         color: #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 12px; }
     button.btn-refresh:hover { background: #3b82f6; }
     button.btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -53,8 +73,9 @@
     .canvas-wrap { flex: 1; position: relative; overflow: hidden; }
     #graph { width: 100%; height: 100%; }
     .loading-overlay { position: absolute; inset: 0; display: flex; align-items: center;
-                       justify-content: center; background: #0f172a; z-index: 10; }
+                       justify-content: center; background: #0f172a; z-index: 10; flex-direction: column; gap: 8px; }
     .loading-overlay p { color: #94a3b8; font-size: 14px; }
+    .loading-overlay small { color: #475569; font-size: 12px; }
     .error-overlay { position: absolute; inset: 0; display: flex; align-items: center;
                      justify-content: center; background: #0f172a; z-index: 10; flex-direction: column; gap: 8px; }
     .error-overlay p { color: #fca5a5; font-size: 14px; }
@@ -69,12 +90,15 @@
     .inspect-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
     .inspect-value { font-size: 13px; color: #e2e8f0; font-weight: 500; max-width: 200px;
                      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .inspect-value.wrap { white-space: normal; max-width: 360px; line-height: 1.4; font-weight: 400; }
     .inspect-badge { display: inline-block; padding: 1px 8px; border-radius: 9999px;
                      font-size: 11px; font-weight: 600; }
-    .badge-project   { background: #1e3a5f; color: #93c5fd; }
-    .badge-workspace { background: #4c1d95; color: #c4b5fd; }
-    .badge-stale     { background: #78350f; color: #fde68a; }
-    .badge-fresh     { background: #166534; color: #86efac; }
+    .badge-project      { background: #1e3a5f; color: #93c5fd; }
+    .badge-workspace    { background: #4c1d95; color: #c4b5fd; }
+    .badge-entityfact   { background: #0c4a6e; color: #7dd3fc; }
+    .badge-stale        { background: #78350f; color: #fde68a; }
+    .badge-fresh        { background: #166534; color: #86efac; }
+    .badge-category     { background: #1c1917; color: #d4d4aa; border: 1px solid #44403c; }
     .counts-table { display: flex; gap: 10px; flex-wrap: wrap; }
     .count-item { text-align: center; }
     .count-num { font-size: 16px; font-weight: 700; color: #f1f5f9; }
@@ -82,6 +106,23 @@
     .inspect-close { margin-left: auto; background: none; border: none; color: #64748b;
                      cursor: pointer; font-size: 18px; line-height: 1; padding: 0 4px; }
     .inspect-close:hover { color: #e2e8f0; }
+
+    /* ── Canvas controls (top-right floating buttons) ──────────────────── */
+    .canvas-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 6; }
+    .ctrl-btn { padding: 5px 10px; background: #1e293b; border: 1px solid #334155; color: #94a3b8;
+                border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500;
+                transition: background 0.15s, color 0.15s; }
+    .ctrl-btn:hover { background: #334155; color: #e2e8f0; }
+    .ctrl-btn.physics-on { border-color: #22c55e; color: #4ade80; }
+
+    /* ── Topology-only sections ─────────────────────────────────────────── */
+    .topo-section { display: none; }
+    .topo-section.visible { display: block; }
+    .collapsed-section { display: block; }
+    .collapsed-section.hidden { display: none; }
+
+    /* ── Divider ────────────────────────────────────────────────────────── */
+    .sidebar-divider { border: none; border-top: 1px solid #334155; margin: 0; }
   </style>
 </head>
 <body>
@@ -89,57 +130,230 @@
     <a href="/ui/index.html" class="back-link">← Devtools</a>
     <span class="header-sep">/</span>
     <h1>Graph Overview</h1>
+    <span class="mode-badge" id="mode-badge">Collapsed</span>
   </header>
 
   <div class="body">
     <!-- Sidebar -->
     <aside>
+      <!-- Workspace scope input -->
       <div>
+        <h2>Workspace</h2>
+        <div class="ws-input-wrap">
+          <input id="ws-input" type="text" placeholder="workspace id…" title="Filter graph by workspace ID">
+          <button id="ws-apply" title="Apply workspace filter">Go</button>
+        </div>
+      </div>
+
+      <hr class="sidebar-divider">
+
+      <!-- View mode toggle -->
+      <div>
+        <h2>View Mode</h2>
+        <div class="toggle-wrap">
+          <button class="toggle-btn active" id="btn-collapsed" title="Show Workspace + Project nodes only">Collapsed</button>
+          <button class="toggle-btn topo"   id="btn-topology"  title="Show full EntityFact service topology">Topology</button>
+        </div>
+      </div>
+
+      <hr class="sidebar-divider">
+
+      <!-- Collapsed-mode: node type filters -->
+      <div class="collapsed-section" id="sec-collapsed-nodes">
         <h2>Node Types</h2>
         <div class="filter-group" id="node-filters">
           <label class="filter-item">
             <input type="checkbox" checked data-filter="node" data-label="Workspace">
-            <span class="color-dot" style="background:#7c3aed"></span>
-            <label>Workspace</label>
+            <span class="color-dot" aria-hidden="true" style="background:#7c3aed"></span>
+            <span class="lbl">Workspace</span>
           </label>
           <label class="filter-item">
             <input type="checkbox" checked data-filter="node" data-label="Project">
-            <span class="color-dot" style="background:#2563eb"></span>
-            <label>Project</label>
+            <span class="color-dot" aria-hidden="true" style="background:#2563eb"></span>
+            <span class="lbl">Project</span>
           </label>
         </div>
       </div>
 
-      <div>
+      <!-- Topology-mode: EntityFact category filters -->
+      <div class="topo-section" id="sec-topo-nodes">
+        <h2>Categories</h2>
+        <div class="filter-group" id="category-filters">
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="category" data-category="Service">
+            <span class="color-dot" aria-hidden="true" style="background:#0ea5e9"></span>
+            <span class="lbl">Service</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="category" data-category="BoundedContext">
+            <span class="color-dot" aria-hidden="true" style="background:#f59e0b"></span>
+            <span class="lbl">BoundedContext</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="category" data-category="Topic">
+            <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
+            <span class="lbl">Topic</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="category" data-category="DataStore">
+            <span class="color-dot" aria-hidden="true" style="background:#8b5cf6"></span>
+            <span class="lbl">DataStore</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="category" data-category="External">
+            <span class="color-dot" aria-hidden="true" style="background:#f97316"></span>
+            <span class="lbl">External</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="category" data-category="Feature">
+            <span class="color-dot" aria-hidden="true" style="background:#ec4899"></span>
+            <span class="lbl">Feature</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="category" data-category="DataSource">
+            <span class="color-dot" aria-hidden="true" style="background:#8b5cf6"></span>
+            <span class="lbl">DataSource</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="category" data-category="MessageQueue">
+            <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
+            <span class="lbl">MessageQueue</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" data-filter="category" data-category="EntityFact">
+            <span class="color-dot" aria-hidden="true" style="background:#94a3b8"></span>
+            <span class="lbl">Other</span>
+          </label>
+        </div>
+      </div>
+
+      <hr class="sidebar-divider">
+
+      <!-- Collapsed-mode: edge type filters -->
+      <div class="collapsed-section" id="sec-collapsed-edges">
         <h2>Edge Types</h2>
         <div class="filter-group" id="edge-filters">
           <label class="filter-item">
             <input type="checkbox" checked data-filter="edge" data-edge="MEMBER_OF">
-            <span class="color-dot" style="background:#475569"></span>
-            <label>MEMBER_OF</label>
+            <span class="color-dot" aria-hidden="true" style="background:#475569"></span>
+            <span class="lbl">MEMBER_OF</span>
           </label>
           <label class="filter-item">
             <input type="checkbox" checked data-filter="edge" data-edge="CROSS_SERVICE_LINK">
-            <span class="color-dot" style="background:#10b981"></span>
-            <label>CROSS_SERVICE_LINK</label>
+            <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
+            <span class="lbl">CROSS_SERVICE_LINK</span>
           </label>
           <label class="filter-item">
             <input type="checkbox" checked data-filter="edge" data-edge="AFFECTS">
-            <span class="color-dot" style="background:#ef4444"></span>
-            <label>AFFECTS</label>
+            <span class="color-dot" aria-hidden="true" style="background:#ef4444"></span>
+            <span class="lbl">AFFECTS</span>
           </label>
         </div>
       </div>
 
+      <!-- Topology-mode: edge type filters -->
+      <div class="topo-section" id="sec-topo-edges">
+        <h2>Edge Types</h2>
+        <div class="filter-group" id="topo-edge-filters">
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="MEMBER_OF">
+            <span class="color-dot" aria-hidden="true" style="background:#475569"></span>
+            <span class="lbl">MEMBER_OF</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="BELONGS_TO">
+            <span class="color-dot" aria-hidden="true" style="background:#475569"></span>
+            <span class="lbl">BELONGS_TO</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="INVOLVES">
+            <span class="color-dot" aria-hidden="true" style="background:#ec4899"></span>
+            <span class="lbl">INVOLVES</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="CONSUMES">
+            <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
+            <span class="lbl">CONSUMES</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="PRODUCES">
+            <span class="color-dot" aria-hidden="true" style="background:#3b82f6"></span>
+            <span class="lbl">PRODUCES</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="READS">
+            <span class="color-dot" aria-hidden="true" style="background:#94a3b8"></span>
+            <span class="lbl">READS</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="WRITES">
+            <span class="color-dot" aria-hidden="true" style="background:#f59e0b"></span>
+            <span class="lbl">WRITES</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="CONFLICTS_WITH">
+            <span class="color-dot" aria-hidden="true" style="background:#ef4444"></span>
+            <span class="lbl">CONFLICTS_WITH</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="MERGES_INTO">
+            <span class="color-dot" aria-hidden="true" style="background:#a78bfa"></span>
+            <span class="lbl">MERGES_INTO</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="CALLS_DOWNSTREAM">
+            <span class="color-dot" aria-hidden="true" style="background:#3b82f6"></span>
+            <span class="lbl">CALLS_DOWNSTREAM</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="CALLS_UPSTREAM">
+            <span class="color-dot" aria-hidden="true" style="background:#6366f1"></span>
+            <span class="lbl">CALLS_UPSTREAM</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="READS_FROM">
+            <span class="color-dot" aria-hidden="true" style="background:#94a3b8"></span>
+            <span class="lbl">READS_FROM</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="WRITES_TO">
+            <span class="color-dot" aria-hidden="true" style="background:#f59e0b"></span>
+            <span class="lbl">WRITES_TO</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="PUBLISHES_TO">
+            <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
+            <span class="lbl">PUBLISHES_TO</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="SUBSCRIBES_TO">
+            <span class="color-dot" aria-hidden="true" style="background:#06b6d4"></span>
+            <span class="lbl">SUBSCRIBES_TO</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="MEMBER_OF_CONTEXT">
+            <span class="color-dot" aria-hidden="true" style="background:#f59e0b"></span>
+            <span class="lbl">MEMBER_OF_CONTEXT</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="PART_OF">
+            <span class="color-dot" aria-hidden="true" style="background:#475569"></span>
+            <span class="lbl">PART_OF</span>
+          </label>
+          <label class="filter-item">
+            <input type="checkbox" checked data-filter="topo-edge" data-edge="HAS_FEATURE">
+            <span class="color-dot" aria-hidden="true" style="background:#ec4899"></span>
+            <span class="lbl">HAS_FEATURE</span>
+          </label>
+        </div>
+      </div>
+
+      <hr class="sidebar-divider">
+
+      <!-- Summary -->
       <div>
         <h2>Summary</h2>
-        <div class="summary" id="summary-panel">
-          <div class="summary-row"><span>Projects</span><span id="cnt-Project">—</span></div>
-          <div class="summary-row"><span>Workspaces</span><span id="cnt-Workspace">—</span></div>
-          <div class="summary-row"><span>Sessions</span><span id="cnt-Session">—</span></div>
-          <div class="summary-row"><span>Decisions</span><span id="cnt-Decision">—</span></div>
-          <div class="summary-row"><span>Entities</span><span id="cnt-EntityFact">—</span></div>
-        </div>
+        <div class="summary" id="summary-panel"><!-- injected by updateSummary() --></div>
         <p class="summary-total" id="total-label"></p>
       </div>
 
@@ -148,12 +362,21 @@
 
     <!-- Canvas -->
     <main class="canvas-wrap">
-      <div class="loading-overlay" id="loading"><p>Loading graph…</p></div>
+      <div class="loading-overlay" id="loading">
+        <p>Loading graph…</p>
+        <small id="loading-hint"></small>
+      </div>
       <div class="error-overlay" id="error-panel" style="display:none">
         <p id="error-msg">Failed to load graph data.</p>
         <small>Is the devtools server running at port 8765?</small>
       </div>
-      <div id="graph"></div>
+      <div id="graph" role="img" aria-label="Interactive graph canvas — click nodes to inspect"></div>
+
+      <!-- Canvas controls -->
+      <div class="canvas-controls">
+        <button class="ctrl-btn" id="btn-fit" title="Fit all nodes into view">⊡ Fit</button>
+        <button class="ctrl-btn" id="btn-physics" title="Toggle force-directed physics">⚡ Physics</button>
+      </div>
 
       <!-- Inspect panel -->
       <div id="inspect">
@@ -165,11 +388,19 @@
           <span class="inspect-label">Label</span>
           <span id="insp-label-badge" class="inspect-badge">—</span>
         </div>
+        <div class="inspect-field" id="insp-category-wrap" style="display:none">
+          <span class="inspect-label">Category</span>
+          <span id="insp-category-badge" class="inspect-badge badge-category">—</span>
+        </div>
         <div class="inspect-field">
           <span class="inspect-label">Display</span>
           <span class="inspect-value" id="insp-display">—</span>
         </div>
-        <div class="inspect-field">
+        <div class="inspect-field" id="insp-fact-wrap" style="display:none">
+          <span class="inspect-label">Fact</span>
+          <span class="inspect-value wrap" id="insp-fact">—</span>
+        </div>
+        <div class="inspect-field" id="insp-stale-wrap">
           <span class="inspect-label">Staleness</span>
           <span id="insp-stale-badge" class="inspect-badge">—</span>
         </div>
@@ -182,203 +413,6 @@
     </main>
   </div>
 
-  <script>
-    // ── Color config ────────────────────────────────────────────────────────
-    const NODE_COLORS = {
-      Workspace: { background: '#7c3aed', border: '#6d28d9', highlight: { background: '#8b5cf6', border: '#7c3aed' } },
-      Project:   { background: '#2563eb', border: '#1d4ed8', highlight: { background: '#3b82f6', border: '#2563eb' } },
-      Stale:     { background: '#b45309', border: '#92400e', highlight: { background: '#d97706', border: '#b45309' } },
-    };
-    const EDGE_COLORS = {
-      MEMBER_OF:          { color: '#475569', highlight: '#64748b' },
-      CROSS_SERVICE_LINK: { color: '#10b981', highlight: '#34d399' },
-      AFFECTS:            { color: '#ef4444', highlight: '#f87171' },
-    };
-
-    // ── State ───────────────────────────────────────────────────────────────
-    let rawData = null;   // { nodes: [], edges: [], summary: {} } from API
-    let network = null;
-    const nodeDataset = new vis.DataSet();
-    const edgeDataset = new vis.DataSet();
-
-    // ── Active filters ──────────────────────────────────────────────────────
-    function activeNodeLabels() {
-      return [...document.querySelectorAll('[data-filter="node"]')]
-        .filter(cb => cb.checked).map(cb => cb.dataset.label);
-    }
-    function activeEdgeTypes() {
-      return [...document.querySelectorAll('[data-filter="edge"]')]
-        .filter(cb => cb.checked).map(cb => cb.dataset.edge);
-    }
-
-    // ── Build vis node/edge objects ─────────────────────────────────────────
-    function toVisNode(n) {
-      const colorKey = n.is_stale ? 'Stale' : n.label;
-      return {
-        id: n.id,
-        label: n.display,
-        title: `${n.label}: ${n.id}`,
-        color: NODE_COLORS[colorKey] || NODE_COLORS.Project,
-        size: n.label === 'Workspace' ? 24 : 16,
-        font: { size: 12, color: '#e2e8f0' },
-        shape: n.label === 'Workspace' ? 'star' : 'dot',
-        borderWidth: 2,
-        _raw: n,   // store original for inspect panel
-      };
-    }
-
-    function toVisEdge(e, idx) {
-      const col = EDGE_COLORS[e.type] || { color: '#334155', highlight: '#475569' };
-      return {
-        id: `e-${idx}`,
-        from: e.source,
-        to: e.target,
-        label: e.type === 'MEMBER_OF' ? '' : e.type,
-        color: col,
-        arrows: { to: { enabled: true, scaleFactor: 0.6 } },
-        smooth: { type: 'continuous' },
-        font: { size: 9, color: '#64748b', align: 'middle' },
-        _type: e.type,
-      };
-    }
-
-    // ── Apply filters to DataSets (no network reinit) ───────────────────────
-    function applyFilters() {
-      if (!rawData) return;
-      const labels = activeNodeLabels();
-      const types  = activeEdgeTypes();
-
-      const visibleNodes = rawData.nodes.filter(n => labels.includes(n.label));
-      const visibleIds   = new Set(visibleNodes.map(n => n.id));
-      const visibleEdges = rawData.edges.filter(e =>
-        types.includes(e.type) &&
-        visibleIds.has(e.source) &&
-        visibleIds.has(e.target)
-      );
-
-      nodeDataset.clear();
-      edgeDataset.clear();
-      nodeDataset.add(visibleNodes.map(toVisNode));
-      edgeDataset.add(visibleEdges.map(toVisEdge));
-    }
-
-    // ── Update summary strip ────────────────────────────────────────────────
-    function updateSummary(summary) {
-      ['Project', 'Workspace', 'Session', 'Decision', 'EntityFact'].forEach(lbl => {
-        const el = document.getElementById(`cnt-${lbl}`);
-        if (el) el.textContent = (summary.counts[lbl] ?? 0).toLocaleString();
-      });
-      const total = summary.total_nodes_in_graph ?? 0;
-      const capped = summary.capped_at ?? 200;
-      const totalEl = document.getElementById('total-label');
-      if (totalEl) {
-        totalEl.textContent = total > capped
-          ? `Showing ≤${capped} of ${total.toLocaleString()} total nodes`
-          : `${total.toLocaleString()} total nodes`;
-      }
-    }
-
-    // ── Inspect panel ───────────────────────────────────────────────────────
-    function showInspect(nodeId) {
-      const item = rawData && rawData.nodes.find(n => n.id === nodeId);
-      if (!item) return;
-      document.getElementById('insp-id').textContent = item.id;
-      document.getElementById('insp-display').textContent = item.display;
-
-      const lbl = document.getElementById('insp-label-badge');
-      lbl.textContent = item.label;
-      lbl.className = `inspect-badge badge-${item.label.toLowerCase()}`;
-
-      const staleBadge = document.getElementById('insp-stale-badge');
-      if (item.staleness_days != null) {
-        staleBadge.textContent = item.is_stale
-          ? `Stale — ${item.staleness_days.toFixed(1)} days`
-          : `Fresh — ${item.staleness_days.toFixed(1)} days`;
-        staleBadge.className = `inspect-badge ${item.is_stale ? 'badge-stale' : 'badge-fresh'}`;
-      } else {
-        staleBadge.textContent = '—';
-        staleBadge.className = 'inspect-badge';
-      }
-
-      const countsWrap = document.getElementById('insp-counts-wrap');
-      const countsEl   = document.getElementById('insp-counts');
-      if (item.badge_counts) {
-        countsWrap.style.display = '';
-        countsEl.innerHTML = Object.entries(item.badge_counts)
-          .map(([k, v]) => `<div class="count-item"><div class="count-num">${v}</div><div class="count-lbl">${k}</div></div>`)
-          .join('');
-      } else {
-        countsWrap.style.display = 'none';
-      }
-
-      document.getElementById('inspect').classList.add('visible');
-    }
-
-    document.getElementById('inspect-close').addEventListener('click', () => {
-      document.getElementById('inspect').classList.remove('visible');
-      if (network) network.unselectAll();
-    });
-
-    // ── Bootstrap vis-network ───────────────────────────────────────────────
-    function initNetwork() {
-      const container = document.getElementById('graph');
-      const options = {
-        physics: {
-          solver: 'forceAtlas2Based',
-          forceAtlas2Based: { avoidOverlap: 0.5, gravitationalConstant: -50 },
-          stabilization: { iterations: 150, updateInterval: 25 },
-        },
-        interaction: { hover: true, tooltipDelay: 200, zoomView: true, dragView: true },
-        layout: { improvedLayout: false },
-      };
-      network = new vis.Network(container, { nodes: nodeDataset, edges: edgeDataset }, options);
-      network.on('click', params => {
-        if (params.nodes.length > 0) {
-          showInspect(params.nodes[0]);
-        } else {
-          document.getElementById('inspect').classList.remove('visible');
-        }
-      });
-      network.on('stabilizationIterationsDone', () => {
-        network.setOptions({ physics: { enabled: false } });
-      });
-    }
-
-    // ── Fetch & render ──────────────────────────────────────────────────────
-    async function load() {
-      document.getElementById('loading').style.display = 'flex';
-      document.getElementById('error-panel').style.display = 'none';
-      document.getElementById('btn-refresh').disabled = true;
-
-      try {
-        const res = await fetch('/graph/overview');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        rawData = await res.json();
-
-        updateSummary(rawData.summary);
-        applyFilters();
-
-        if (!network) {
-          initNetwork();
-        }
-        document.getElementById('loading').style.display = 'none';
-      } catch (err) {
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('error-msg').textContent = `Failed to load: ${err.message}`;
-        document.getElementById('error-panel').style.display = 'flex';
-      } finally {
-        document.getElementById('btn-refresh').disabled = false;
-      }
-    }
-
-    // ── Wire up controls ────────────────────────────────────────────────────
-    document.querySelectorAll('[data-filter]').forEach(cb => {
-      cb.addEventListener('change', applyFilters);
-    });
-    document.getElementById('btn-refresh').addEventListener('click', load);
-
-    // ── Boot ────────────────────────────────────────────────────────────────
-    load();
-  </script>
+  <script src="/ui/static/graph.js"></script>
 </body>
 </html>

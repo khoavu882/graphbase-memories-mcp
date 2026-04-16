@@ -28,6 +28,7 @@ def _register_tools() -> None:
         impact,
         retrieval,
         session,
+        topology,
     )
 
 

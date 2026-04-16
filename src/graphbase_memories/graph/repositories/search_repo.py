@@ -50,10 +50,21 @@ async def bm25_fetch(
     async with driver.session(database=database) as session:
         for index_name, _label in _BM25_INDEXES:
             try:
+                # Traverse BELONGS_TO relationship to find project-scoped nodes.
+                # Also match when project_id is a workspace_id (p.workspace_id).
+                # Nodes with scope='global' are always included.
+                # Falls back to returning all nodes when project_id is empty.
                 result = await session.run(
                     "CALL db.index.fulltext.queryNodes($index_name, $search_text) "
                     "YIELD node, score "
-                    "WHERE node.project_id = $project_id OR node.scope = 'global' "
+                    "WHERE ("
+                    "  node.scope = 'global' "
+                    "  OR $project_id = '' "
+                    "  OR EXISTS { "
+                    "    MATCH (node)-[:BELONGS_TO]->(p:Project) "
+                    "    WHERE p.id = $project_id OR p.workspace_id = $project_id "
+                    "  } "
+                    ") "
                     "RETURN node {.*} AS item, labels(node)[0] AS label, score AS bm25_score "
                     "ORDER BY bm25_score DESC LIMIT $limit",
                     index_name=index_name,
