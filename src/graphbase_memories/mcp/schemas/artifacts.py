@@ -1,4 +1,5 @@
-"""Artifact input schemas — SessionSchema, DecisionSchema, PatternSchema, ContextSchema, EntityFactSchema."""
+"""Artifact input schemas — SessionSchema, DecisionSchema, PatternSchema,
+ContextSchema, EntityFactSchema."""
 
 from __future__ import annotations
 

@@ -135,7 +135,8 @@ async def find_by_hash(
 ) -> dict | None:
     async with driver.session(database=database) as session:
         result = await session.run(
-            "MATCH (d:Decision {content_hash: $h, scope: $scope}) RETURN d.id AS id, d.title AS title LIMIT 1",
+            "MATCH (d:Decision {content_hash: $h, scope: $scope})"
+            " RETURN d.id AS id, d.title AS title LIMIT 1",
             h=content_hash,
             scope=scope,
         )

@@ -28,13 +28,20 @@ async def driver():
     d = AsyncGraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     await d.verify_connectivity()
 
-    # Ensure schema is applied
-    from graphbase_memories.graph.driver import SCHEMA_DDL, SCHEMA_V2_DDL, split_statements
+    # Ensure schema is applied (idempotent — safe to run on every test)
+    from graphbase_memories.graph.driver import (
+        SCHEMA_DDL,
+        SCHEMA_V2_DDL,
+        SCHEMA_V3_DDL,
+        split_statements,
+    )
 
     async with d.session(database=TEST_DB) as session:
         for stmt in split_statements(SCHEMA_DDL):
             await session.run(stmt)
         for stmt in split_statements(SCHEMA_V2_DDL):
+            await session.run(stmt)
+        for stmt in split_statements(SCHEMA_V3_DDL):
             await session.run(stmt)
 
     yield d

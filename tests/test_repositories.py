@@ -67,7 +67,8 @@ async def test_session_link_produced(driver, fresh_project):
 
     async with driver.session(database=TEST_DB) as s:
         result = await s.run(
-            "MATCH (s:Session {id: $sid})-[:PRODUCED]->(d:Decision {id: $did}) RETURN count(*) AS c",
+            "MATCH (s:Session {id: $sid})-[:PRODUCED]->(d:Decision {id: $did})"
+            " RETURN count(*) AS c",
             sid=session_node.id,
             did=decision_node.id,
         )
@@ -136,7 +137,8 @@ async def test_decision_add_supersedes(driver, fresh_project):
 
     async with driver.session(database=TEST_DB) as s:
         result = await s.run(
-            "MATCH (n:Decision {id: $nid})-[:SUPERSEDES]->(o:Decision {id: $oid}) RETURN count(*) AS c",
+            "MATCH (n:Decision {id: $nid})-[:SUPERSEDES]->(o:Decision {id: $oid})"
+            " RETURN count(*) AS c",
             nid=newer.id,
             oid=older.id,
         )

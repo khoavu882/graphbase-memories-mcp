@@ -3,24 +3,19 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
-from neo4j import AsyncDriver
 from pydantic import BaseModel
 
 from graphbase_memories.config import settings
+from graphbase_memories.devtools.deps import DriverDep
 
 router = APIRouter(tags=["memory"])
 
 _ALLOWED_LABELS = {"Session", "Decision", "Pattern", "Context", "EntityFact"}
 
 
-def _get_driver() -> AsyncDriver:
-    from graphbase_memories.devtools.server import _get_driver as _gd
-
-    return _gd()
-
-
 @router.get("/memory")
 async def list_memory(
+    driver: DriverDep,
     project_id: str = Query(None),
     label: str = Query(
         None, description="Node label: Session, Decision, Pattern, Context, EntityFact"
@@ -32,7 +27,7 @@ async def list_memory(
     project_clause = (
         "AND EXISTS { MATCH (n)-[:BELONGS_TO]->(:Project {id: $pid}) }" if project_id else ""
     )
-    async with _get_driver().session(database=settings.neo4j_database) as session:
+    async with driver.session(database=settings.neo4j_database) as session:
         result = await session.run(
             f"""
             MATCH (n{label_clause})
@@ -52,9 +47,9 @@ async def list_memory(
 
 
 @router.get("/memory/{node_id}/relationships")
-async def node_relationships(node_id: str):
+async def node_relationships(node_id: str, driver: DriverDep):
     """Return incoming and outgoing relationships for any memory node."""
-    async with _get_driver().session(database=settings.neo4j_database) as session:
+    async with driver.session(database=settings.neo4j_database) as session:
         node_result = await session.run(
             "MATCH (n {id: $id}) RETURN n {.*} AS node, labels(n)[0] AS label LIMIT 1",
             id=node_id,
@@ -107,9 +102,9 @@ async def node_relationships(node_id: str):
 
 
 @router.get("/memory/{node_id}")
-async def get_node(node_id: str):
+async def get_node(node_id: str, driver: DriverDep):
     """Get a single memory node by id."""
-    async with _get_driver().session(database=settings.neo4j_database) as session:
+    async with driver.session(database=settings.neo4j_database) as session:
         result = await session.run(
             "MATCH (n {id: $id}) RETURN n {.*} AS node, labels(n)[0] AS label LIMIT 1",
             id=node_id,
@@ -131,7 +126,7 @@ class MemorySearchRequest(BaseModel):
 
 
 @router.post("/memory/search")
-async def search_memory(body: MemorySearchRequest):
+async def search_memory(body: MemorySearchRequest, driver: DriverDep):
     """Full-text search across memory nodes using CONTAINS on content fields."""
     label_clause = f":{body.label}" if body.label in _ALLOWED_LABELS else ""
     project_clause = (
@@ -140,7 +135,7 @@ async def search_memory(body: MemorySearchRequest):
     since_clause = (
         "AND n.created_at > datetime() - duration({days: $since_days})" if body.since_days else ""
     )
-    async with _get_driver().session(database=settings.neo4j_database) as session:
+    async with driver.session(database=settings.neo4j_database) as session:
         result = await session.run(
             f"""
             MATCH (n{label_clause})

@@ -36,9 +36,12 @@ def _load_cypher(name: str) -> str:
 # but their content is embedded inline in the calling module.
 SCHEMA_DDL = _load_cypher("schema")
 SCHEMA_V2_DDL = _load_cypher("schema_v2")
+SCHEMA_V3_DDL = _load_cypher("schema_v3")
 FEDERATION_QUERIES = _load_cypher("federation")
 IMPACT_QUERIES = _load_cypher("impact")
 FRESHNESS_QUERIES = _load_cypher("freshness")
+TOPOLOGY_QUERIES = _load_cypher("topology")
+TOPOLOGY_Q_QUERIES = _load_cypher("topology_queries")
 _load_cypher("retrieval")
 _load_cypher("write")
 _load_cypher("dedup")
@@ -74,6 +77,8 @@ async def neo4j_lifespan(server):
         for statement in split_statements(SCHEMA_DDL):
             await session.run(statement)
         for statement in split_statements(SCHEMA_V2_DDL):
+            await session.run(statement)
+        for statement in split_statements(SCHEMA_V3_DDL):
             await session.run(statement)
 
     try:

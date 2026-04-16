@@ -16,7 +16,8 @@ async def route_analysis(
     Route a task to the appropriate analysis mode (FR-26).
 
     Returns: mode (sequential/debate/socratic), rationale, and suggested_steps (M-1).
-    Only the final synthesized conclusion from analysis should be saved — not intermediate discussion (FR-27).
+    Only the final synthesized conclusion from analysis should be saved —
+    not intermediate discussion (FR-27).
 
     task_type_hint: optional keyword hint (e.g. "trade-off", "strategic", "requirements")
     """

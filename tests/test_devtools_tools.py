@@ -5,13 +5,9 @@ Tests list_tools, get_tool, and invoke_tool handler functions directly.
 
 from __future__ import annotations
 
-import graphbase_memories.devtools.server as devtools_server
-
 
 async def test_list_tools_returns_all_registered(driver):
     """GET /tools returns all MCP-registered tools with required fields."""
-    devtools_server._driver = driver
-
     from graphbase_memories.devtools.routes.tools import list_tools
 
     result = await list_tools()
@@ -30,8 +26,6 @@ async def test_list_tools_returns_all_registered(driver):
 
 async def test_list_tools_includes_known_tools(driver):
     """Known tool names are present in the registry."""
-    devtools_server._driver = driver
-
     from graphbase_memories.devtools.routes.tools import list_tools
 
     result = await list_tools()
@@ -54,8 +48,6 @@ async def test_list_tools_includes_known_tools(driver):
 
 async def test_list_tools_read_only_not_require_confirmation(driver):
     """Read-only tools have requires_confirmation=False."""
-    devtools_server._driver = driver
-
     from graphbase_memories.devtools.routes.tools import _READ_ONLY_TOOLS, list_tools
 
     result = await list_tools()
@@ -68,8 +60,6 @@ async def test_list_tools_read_only_not_require_confirmation(driver):
 
 async def test_list_tools_write_tools_require_confirmation(driver):
     """Write tools (propagate_impact, link_cross_service, etc.) require confirmation."""
-    devtools_server._driver = driver
-
     from graphbase_memories.devtools.routes.tools import list_tools
 
     result = await list_tools()
@@ -90,8 +80,6 @@ async def test_list_tools_write_tools_require_confirmation(driver):
 
 async def test_get_tool_returns_single_tool(driver):
     """GET /tools/{name} returns the named tool's metadata."""
-    devtools_server._driver = driver
-
     from graphbase_memories.devtools.routes.tools import get_tool
 
     result = await get_tool("graph_health")
@@ -102,8 +90,6 @@ async def test_get_tool_returns_single_tool(driver):
 
 async def test_get_tool_not_found_raises_404(driver):
     """GET /tools/nonexistent raises HTTPException 404."""
-    devtools_server._driver = driver
-
     from fastapi import HTTPException
 
     from graphbase_memories.devtools.routes.tools import get_tool
@@ -117,15 +103,13 @@ async def test_get_tool_not_found_raises_404(driver):
 
 async def test_invoke_tool_write_without_confirm_returns_preview(driver):
     """POST /tools/propagate_impact/invoke without confirm=True returns status=preview."""
-    devtools_server._driver = driver
-
     from graphbase_memories.devtools.routes.tools import InvokeRequest, invoke_tool
 
     body = InvokeRequest(
         params={"entity_id": "test-entity", "change_description": "breaking change"},
         confirm=False,
     )
-    result = await invoke_tool("propagate_impact", body)
+    result = await invoke_tool("propagate_impact", body, driver)
 
     assert result["status"] == "preview"
     assert "params_received" in result
@@ -133,24 +117,20 @@ async def test_invoke_tool_write_without_confirm_returns_preview(driver):
 
 async def test_invoke_tool_not_dispatched_returns_not_supported(driver):
     """POST /tools/save_decision/invoke returns status=not_supported."""
-    devtools_server._driver = driver
-
     from graphbase_memories.devtools.routes.tools import InvokeRequest, invoke_tool
 
     body = InvokeRequest(params={}, confirm=False)
-    result = await invoke_tool("save_decision", body)
+    result = await invoke_tool("save_decision", body, driver)
 
     assert result["status"] == "not_supported"
 
 
 async def test_invoke_read_tool_executes_immediately(driver):
     """POST /tools/run_hygiene/invoke (read-only) executes without confirm."""
-    devtools_server._driver = driver
-
     from graphbase_memories.devtools.routes.tools import InvokeRequest, invoke_tool
 
     body = InvokeRequest(params={"scope": "global"}, confirm=False)
-    result = await invoke_tool("run_hygiene", body)
+    result = await invoke_tool("run_hygiene", body, driver)
 
     # Should return ok status with a result (hygiene report)
     assert result["status"] == "ok"

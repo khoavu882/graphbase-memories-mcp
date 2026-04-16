@@ -21,11 +21,11 @@ ALLOWED_RELATIONSHIPS = {
     "PRODUCED",
     "MERGES_INTO",
     # topology relationships
-    "PRODUCES",   # Service → KafkaTopic (producer)
-    "CONSUMES",   # Service → KafkaTopic (consumer)
-    "READS",      # Service → DBTable
-    "WRITES",     # Service → DBTable
-    "INVOLVES",   # Feature → Service
+    "PRODUCES",  # Service → KafkaTopic (producer)
+    "CONSUMES",  # Service → KafkaTopic (consumer)
+    "READS",  # Service → DBTable
+    "WRITES",  # Service → DBTable
+    "INVOLVES",  # Feature → Service
 }
 
 
@@ -45,14 +45,24 @@ async def upsert(
         # ON CREATE: set id to the new uuid. ON MATCH: preserve existing id by re-setting it
         # (SET e.id = e.id is a no-op — but we use COALESCE to keep existing id on match).
         # This avoids depending on execute_write return value (which the driver discards).
+        #
+        # Project lookup: try direct id match first, then workspace_id match.
+        # This handles the case where project_id is a workspace id (e.g. "timo-platform"),
+        # in which case we link to ANY project that belongs to that workspace.
         await tx.run(
             """
             MERGE (e:EntityFact {entity_name: $entity_name, scope: $scope})
             ON CREATE SET e.id = $id, e.created_at = datetime()
             SET e.fact = $fact
             WITH e
-            MATCH (proj:Project {id: $project_id})
-            MERGE (e)-[:BELONGS_TO]->(proj)
+            OPTIONAL MATCH (proj_direct:Project {id: $project_id})
+            WITH e, proj_direct
+            OPTIONAL MATCH (proj_via_ws:Project {workspace_id: $project_id})
+              WHERE proj_direct IS NULL
+            WITH e, coalesce(proj_direct, proj_via_ws) AS proj
+            FOREACH (_ IN CASE WHEN proj IS NOT NULL THEN [1] ELSE [] END |
+              MERGE (e)-[:BELONGS_TO]->(proj)
+            )
             """,
             id=entity_id,
             entity_name=entity_name,

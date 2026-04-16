@@ -11,6 +11,8 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from neo4j import AsyncDriver
 
+from graphbase_memories.devtools.deps import DriverDep
+
 router = APIRouter(tags=["events"])
 
 HEARTBEAT_INTERVAL = 5  # seconds
@@ -46,11 +48,8 @@ async def _heartbeat_generator(driver: AsyncDriver) -> AsyncIterator[str]:
 
 
 @router.get("/events")
-async def sse_heartbeat():
+async def sse_heartbeat(driver: DriverDep):
     """Stream Neo4j heartbeat events via Server-Sent Events."""
-    from graphbase_memories.devtools.server import _get_driver as _gd
-
-    driver = _gd()
     return StreamingResponse(
         _heartbeat_generator(driver),
         media_type="text/event-stream",

@@ -122,7 +122,9 @@ async def save_decision(
             return _add_save_hint(
                 SaveResult(
                     status=SaveStatus.failed,
-                    message="Global writes require a governance token. Call request_global_write_approval first.",
+                    message=(
+                        "Global writes require a governance token. Call request_global_write_approval first."
+                    ),
                 )
             )
         valid = await token_repo.validate_and_consume(governance_token, driver, database)

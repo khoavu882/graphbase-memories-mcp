@@ -37,7 +37,7 @@ AGENTS.md
 ARCHITECTURE.md
 CLAUDE.md
 CHANGELOG.md
-REQUIREMENT.md
+agent-docs/REQUIREMENT.md
 
 # uv lockfile (local-only; not tracking for this template project)
 uv.lock
@@ -50,3 +50,4 @@ uv.lock
 local-site-*.png
 docs-*.png
 page-*.png
+verify-*.png
