@@ -2,7 +2,7 @@
 
 **Graph-backed persistent memory for AI coding agents, exposed as an MCP server.**
 
-Agents (Claude, Codex, Gemini, and others) call 20 structured tools to read and write scoped memory into a **Neo4j** graph database. Memory survives across sessions, accumulates decisions and patterns over time, and surfaces the most relevant context when you need it.
+Agents (Claude, Codex, Gemini, and others) call 22 structured tools to read and write scoped memory into a **Neo4j** graph database. Memory survives across sessions, accumulates decisions and patterns over time, and surfaces the most relevant context when you need it.
 
 ---
 

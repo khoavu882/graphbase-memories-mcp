@@ -4,7 +4,7 @@
       "command": "uvx",
       "args": [
         "--python", "3.11",
-        "--from", "git+https://github.com/khoavu882/graphbase-memories-mcp@v1.4.0",
+        "--from", "git+https://github.com/khoavu882/graphbase-memories-mcp@v1.5.0",
         "graphbase", "serve"
       ],
       "env": {

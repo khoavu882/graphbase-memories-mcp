@@ -41,13 +41,15 @@ async def lifespan(app: FastAPI):
         max_connection_pool_size=_DEVTOOLS_POOL_SIZE,
         connection_acquisition_timeout=30,
     )
-    await driver.verify_connectivity()
-    app.state.driver = driver
-    async with driver.session(database=settings.neo4j_database) as session:
-        for stmt in split_statements(SCHEMA_DDL):
-            await session.run(stmt)
-    yield
-    await driver.close()
+    try:
+        await driver.verify_connectivity()
+        app.state.driver = driver
+        async with driver.session(database=settings.neo4j_database) as session:
+            for stmt in split_statements(SCHEMA_DDL):
+                await session.run(stmt)
+        yield
+    finally:
+        await driver.close()
 
 
 app = FastAPI(

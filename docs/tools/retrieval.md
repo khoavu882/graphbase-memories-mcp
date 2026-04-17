@@ -1,6 +1,6 @@
 # Retrieval Tools
 
-Two tools for loading memory before an agent begins reasoning.
+Three tools for loading memory before an agent begins reasoning.
 
 ---
 
@@ -101,3 +101,66 @@ Resolve the scope state for a given `project_id` and optional focus. Call this b
 !!! tip "When to call this"
     Call `get_scope_state` at the start of every session before loading or saving memory.
     It is cheap (one graph lookup) and prevents wasted write attempts with `blocked_scope` results.
+
+---
+
+## `memory_surface`
+
+Lightweight BM25 keyword lookup for a specific topic — faster and narrower than `retrieve_context`.
+Use this before editing a file, starting a sub-task, or when you have a precise keyword and do not
+need a full scope-aware context bundle.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `query` | `string` | Yes | BM25 search query — keyword or short phrase |
+| `project_id` | `string \| null` | No | Restrict search to a specific project; `null` searches across all projects |
+| `limit` | `integer` | No | Max results to return (default: `5`) |
+
+### Returns: `SurfaceResult`
+
+```json
+{
+  "matches": [
+    {
+      "id": "uuid",
+      "label": "Decision",
+      "name": "Use SHA-256 for dedup",
+      "content": "Deterministic and explainable without embeddings.",
+      "scope": "project",
+      "freshness": "current",
+      "bm25_score": 4.23,
+      "project_id": "my-project"
+    }
+  ],
+  "query_used": "dedup hash",
+  "total_found": 1,
+  "next_step": null
+}
+```
+
+| Field | Values | Meaning |
+|---|---|---|
+| `label` | `Decision`, `Pattern`, `Context`, `EntityFact` | Node type matched |
+| `freshness` | `current`, `recent`, `stale` | Age relative to the freshness threshold |
+| `bm25_score` | float | Relevance score from Neo4j full-text index |
+
+### When to use `memory_surface` vs `retrieve_context`
+
+| Use case | Recommended tool |
+|---|---|
+| "What do we know about authentication?" | `memory_surface(query="authentication")` |
+| Load full context before starting a session | `retrieve_context(scope="project")` |
+| Quick topic scan before editing a single file | `memory_surface` |
+| Need conflict detection and hygiene signals | `retrieve_context` |
+
+### Example
+
+```python
+memory_surface(
+    query="dedup jaccard threshold",
+    project_id="my-project",
+    limit=3
+)
+```

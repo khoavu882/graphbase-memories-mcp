@@ -30,7 +30,7 @@ Edit the file with the absolute path to your installed binary:
 }
 ```
 
-Restart Claude Code. The 12 `graphbase-memories` tools will appear in the tool panel.
+Restart Claude Code. The 22 `graphbase-memories` tools will appear in the tool panel.
 
 !!! tip "Find your binary path"
     ```bash
@@ -104,6 +104,23 @@ Endpoints:
 
 | Endpoint | Description |
 |---|---|
-| `GET /health` | Liveness check |
+| `GET /health` | Liveness check and Neo4j connectivity status |
+| `GET /projects` | List all registered projects with staleness and node counts |
 | `GET /memory?project_id=<id>` | List all memory nodes for a project |
 | `GET /memory/<node-id>` | Fetch a single node by ID |
+| `GET /memory/<node-id>/relationships` | Fetch all graph edges for a node |
+| `GET /memory/search?q=<query>&project_id=<id>` | Full-text keyword search across memory nodes |
+| `GET /tools` | List all registered MCP tools |
+| `POST /tools/<name>/invoke` | Invoke a tool directly (add `confirm: true` for write tools) |
+| `GET /workspace/health?workspace_id=<id>` | Workspace health metrics across all services |
+| `GET /workspace/conflicts?workspace_id=<id>` | List cross-service CONTRADICTS links |
+| `GET /hygiene/status?project_id=<id>` | Current hygiene status for a project |
+| `POST /hygiene/run` | Trigger a hygiene scan and return the `HygieneReport` |
+| `GET /events` | SSE stream — emits `heartbeat` every 5 s with Neo4j connectivity |
+
+!!! note "Write tool confirmation"
+    Tools that mutate graph state (`propagate_impact`, `link_cross_service`, `register_service`,
+    `deregister_service`) require `{ "confirm": true }` in the POST body. Without it, the response
+    is `{ "status": "preview", ... }` — a dry-run showing what would change.
+
+See [Development Guide](development.md) for full architecture notes on the devtools server.
