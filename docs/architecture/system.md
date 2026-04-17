@@ -10,7 +10,7 @@ and tool dispatch, a business logic layer with specialized engines, and a graph 
 ```mermaid
 graph TD
     A["AI Agent<br/>(Claude / Codex / Gemini)"]
-    B["MCP Server Layer<br/>FastMCP · 12 async tools · stdio JSON-RPC 2.0<br/>────────────────<br/>HTTP Devtools (optional)<br/>FastAPI · uvicorn · read-only"]
+    B["MCP Server Layer<br/>FastMCP · 22 async tools · stdio JSON-RPC 2.0<br/>────────────────<br/>HTTP Devtools (optional)<br/>FastAPI · uvicorn · read-only"]
     C["ScopeEngine<br/>resolved / uncertain / unresolved"]
     D["RetrievalEngine<br/>focus → project → global priority<br/>5s timeout · 1 retry"]
     E["WriteEngine<br/>+ DedupEngine<br/>SHA-256 · Jaccard · GovernanceToken<br/>1 retry on ServiceUnavailable"]
@@ -62,7 +62,7 @@ src/graphbase_memories/
 ├── config.py             pydantic-settings: all GRAPHBASE_* env vars
 ├── mcp/
 │   ├── server.py         FastMCP app instance + tool registration
-│   ├── tools/            12 tool handlers (one file per group)
+│   ├── tools/            22 tool handlers (one file per group)
 │   └── schemas/          Pydantic I/O models (artifacts, results, enums)
 ├── engines/              Business logic (scope, retrieval, write, dedup, analysis, hygiene)
 ├── graph/

@@ -1,6 +1,6 @@
 # Hygiene Tools
 
-Two tools for memory maintenance and health monitoring.
+Three tools for memory maintenance and health monitoring.
 
 ---
 
@@ -84,6 +84,61 @@ List pending or failed saves for a project. Useful for diagnosing write failures
 | `pending_retry` | Some saves are queued for retry |
 | `failed` | Some saves failed permanently |
 | `partial` | Mix of saved and failed |
+
+---
+
+## `memory_freshness`
+
+Preview nodes approaching or past the staleness threshold, ranked oldest-first. Use this before
+`run_hygiene` to understand which nodes are at risk of being flagged, without triggering a full
+hygiene scan.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project_id` | `string \| null` | No | Project to scan; `null` scans all projects |
+| `scope` | `"global" \| "project" \| "focus"` | No | Scope filter (default: `project`) |
+| `stale_after_days` | `integer \| null` | No | Override the staleness threshold (default: `GRAPHBASE_FRESHNESS_STALE_DAYS`, i.e. 30) |
+| `limit` | `integer` | No | Max nodes to return (default: `50`, max: `200`) |
+
+### Returns: `FreshnessReport`
+
+```json
+{
+  "stale_count": 2,
+  "recent_count": 5,
+  "current_count": 18,
+  "stale_items": [
+    {
+      "node_id": "uuid-a",
+      "label": "Decision",
+      "title": "Use SHA-256 for dedup",
+      "age_days": 45,
+      "freshness": "stale",
+      "project_id": "my-project"
+    }
+  ],
+  "checked_at": "2026-04-17T10:00:00Z",
+  "next_step": "Run run_hygiene() to get full candidate_ids for mutation."
+}
+```
+
+| `freshness` | Meaning |
+|---|---|
+| `current` | Updated within the threshold (≤ `stale_after_days` days ago) |
+| `recent` | Between threshold and 2× threshold |
+| `stale` | Older than 2× threshold — likely to be flagged by hygiene |
+
+### Recommended workflow
+
+```python
+# 1. Preview which nodes are at risk
+memory_freshness(project_id="my-project", stale_after_days=30)
+
+# 2. If stale_count > 0, run a full hygiene scan for actionable candidate IDs
+run_hygiene(project_id="my-project")
+```
 
 ---
 
