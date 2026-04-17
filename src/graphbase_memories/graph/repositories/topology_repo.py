@@ -15,6 +15,7 @@ pre-SET property values in some Neo4j driver versions.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import json
 import re
 
@@ -92,6 +93,32 @@ def _tq(name: str) -> str:
     if not m:
         raise KeyError(f"Query block '{name}' not found in topology_queries.cypher")
     return m.group(1).strip().rstrip(";")
+
+
+@dataclass
+class LinkEdgeProps:
+    """Optional edge properties for topology link operations.
+
+    Bundles the per-rel-type metadata that link_topology_nodes dispatches to
+    individual link_* functions.  Only the fields relevant to each rel_type are
+    forwarded — unused fields are silently ignored by the downstream function.
+    """
+
+    # Service → Service
+    protocol: str | None = None
+    timeout_ms: int | None = None
+    criticality: str | None = None
+    # Service → DataSource
+    access_pattern: str | None = None
+    # Service → MessageQueue
+    event_type: str | None = None
+    # Feature → Service
+    step_order: int | None = None
+    role: str | None = None
+    # Service → BoundedContext
+    ownership: str | None = None
+    # Shared
+    metadata: dict = field(default_factory=dict)
 
 
 # ── Upsert operations ────────────────────────────────────────────────────────
@@ -498,20 +525,13 @@ async def link_service_context(
 
 
 async def link_topology_nodes(
+    *,
     from_id: str,
     to_id: str,
     rel_type: str,
     driver: AsyncDriver,
     database: str,
-    step_order: int | None = None,
-    role: str | None = None,
-    ownership: str | None = None,
-    protocol: str | None = None,
-    timeout_ms: int | None = None,
-    criticality: str | None = None,
-    access_pattern: str | None = None,
-    event_type: str | None = None,
-    metadata: dict | None = None,
+    edge_props: LinkEdgeProps | None = None,
     dry_run: bool = False,
 ) -> dict:
     """Unified topology link dispatch — validates node types and rel_type compatibility.
@@ -570,6 +590,7 @@ async def link_topology_nodes(
         }
 
     # ── 4. Dispatch to existing private link functions ─────────────────────
+    ep = edge_props or LinkEdgeProps()
     pair = (from_label, to_label)
     if pair == ("Service", "Service"):
         return await link_service_dependency(
@@ -578,10 +599,10 @@ async def link_topology_nodes(
             from_id=from_id,
             to_id=to_id,
             rel_type=rel_type,
-            protocol=protocol,
-            timeout_ms=timeout_ms,
-            criticality=criticality,
-            metadata=metadata,
+            protocol=ep.protocol,
+            timeout_ms=ep.timeout_ms,
+            criticality=ep.criticality,
+            metadata=ep.metadata or None,
             dry_run=dry_run,
         )
     if pair == ("Service", "DataSource"):
@@ -591,8 +612,8 @@ async def link_topology_nodes(
             service_id=from_id,
             source_id=to_id,
             rel_type=rel_type,
-            access_pattern=access_pattern,
-            metadata=metadata,
+            access_pattern=ep.access_pattern,
+            metadata=ep.metadata or None,
             dry_run=dry_run,
         )
     if pair == ("Service", "MessageQueue"):
@@ -602,8 +623,8 @@ async def link_topology_nodes(
             service_id=from_id,
             queue_id=to_id,
             rel_type=rel_type,
-            event_type=event_type,
-            metadata=metadata,
+            event_type=ep.event_type,
+            metadata=ep.metadata or None,
             dry_run=dry_run,
         )
     if pair == ("Feature", "Service"):
@@ -612,8 +633,8 @@ async def link_topology_nodes(
             database=database,
             feature_id=from_id,
             service_id=to_id,
-            step_order=step_order if step_order is not None else 1,
-            role=role or "participant",
+            step_order=ep.step_order if ep.step_order is not None else 1,
+            role=ep.role or "participant",
             dry_run=dry_run,
         )
     # ("Service", "BoundedContext")
@@ -622,7 +643,7 @@ async def link_topology_nodes(
         database=database,
         service_id=from_id,
         context_id=to_id,
-        ownership=ownership or "owner",
+        ownership=ep.ownership or "owner",
         dry_run=dry_run,
     )
 

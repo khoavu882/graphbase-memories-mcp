@@ -10,6 +10,7 @@ import json
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from neo4j import AsyncDriver
+from neo4j.exceptions import DriverError, Neo4jError
 
 from graphbase_memories.devtools.deps import DriverDep
 
@@ -30,7 +31,7 @@ async def _heartbeat_generator(driver: AsyncDriver) -> AsyncIterator[str]:
             await driver.verify_connectivity()
             connected = True
             error = None
-        except Exception as exc:
+        except (Neo4jError, DriverError, OSError) as exc:
             connected = False
             error = str(exc)
 
