@@ -2,7 +2,7 @@
 
 Graph-backed persistent memory for AI coding agents, exposed as an MCP server (stdio transport).
 
-Agents call structured tools to read and write scoped memory into a **Neo4j** graph database. Memory is organized into three scopes — `global`, `project`, and `focus` — and four artifact types: sessions, decisions, patterns, and context snippets.
+Agents call structured tools to read and write scoped memory into a **Neo4j** graph database. Memory is organized into three scopes — `global`, `project`, and `focus` — and five artifact types: sessions, decisions, patterns, context snippets, and entity facts.
 
 ---
 
@@ -60,8 +60,20 @@ All settings are read from environment variables with the `GRAPHBASE_` prefix.
 | `GRAPHBASE_NEO4J_MAX_POOL_SIZE` | `10` | Connection pool size |
 | `GRAPHBASE_RETRIEVAL_TIMEOUT_S` | `5.0` | Per-attempt retrieval timeout (seconds) |
 | `GRAPHBASE_RETRIEVAL_MAX_RETRIES` | `1` | Max retries on timeout/transient error |
+| `GRAPHBASE_RETRIEVAL_FOCUS_LIMIT` | `10` | Max focus-scope results per retrieval |
+| `GRAPHBASE_RETRIEVAL_PROJECT_LIMIT` | `20` | Max project-scope results per retrieval |
+| `GRAPHBASE_RETRIEVAL_GLOBAL_LIMIT` | `5` | Max global-scope results per retrieval |
 | `GRAPHBASE_WRITE_MAX_RETRIES` | `1` | Max retries on `ServiceUnavailable` |
 | `GRAPHBASE_GOVERNANCE_TOKEN_TTL_S` | `60` | GovernanceToken expiry (seconds) |
+| `GRAPHBASE_FEDERATION_ACTIVE_WINDOW_MINUTES` | `60` | Service liveness window for federation |
+| `GRAPHBASE_FEDERATION_MAX_RESULTS` | `100` | Max cross-service search results |
+| `GRAPHBASE_IMPACT_MAX_DEPTH` | `3` | Max BFS depth for impact propagation |
+| `GRAPHBASE_WORKSPACE_ENFORCE_ISOLATION` | `true` | Enforce workspace isolation boundaries |
+| `GRAPHBASE_FTS_ENABLED` | `true` | Enable BM25 full-text search indexes |
+| `GRAPHBASE_FTS_LIMIT` | `20` | BM25 candidates per full-text index |
+| `GRAPHBASE_RRF_K` | `60` | RRF damping constant for hybrid search |
+| `GRAPHBASE_FRESHNESS_RECENT_DAYS` | `7` | Days threshold for "recent" freshness label |
+| `GRAPHBASE_FRESHNESS_STALE_DAYS` | `30` | Days threshold for "stale" freshness label |
 
 Set them in your shell or in a `.env` file. Example:
 
@@ -81,7 +93,7 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
   "mcpServers": {
     "graphbase-memories": {
       "command": "uvx",
-      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase@v1.0.0", "graphbase", "serve"],
+      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase@v1.5.0", "graphbase", "serve"],
       "env": {
         "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",
         "GRAPHBASE_NEO4J_USER": "neo4j",
@@ -92,9 +104,9 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
 }
 ```
 
-After saving, restart Claude Code. The 22 MCP tools will appear in the tool list.
+After saving, restart Claude Code. The 21 MCP tools will appear in the tool list.
 
-> **Tip**: Use `@v1.0.0` (or the latest tag) to pin to a stable release. `@main` tracks the development branch and may include unreleased changes.
+> **Tip**: Use `@v1.5.0` (or the latest tag) to pin to a stable release. `@main` tracks the development branch and may include unreleased changes.
 
 ---
 
@@ -102,28 +114,27 @@ After saving, restart Claude Code. The 22 MCP tools will appear in the tool list
 
 | Tool | Group | Description |
 |---|---|---|
-| `retrieve_context` | Retrieval | Load memory with priority merge: focus > project > global |
-| `get_scope_state` | Retrieval | Resolve project/focus scope state before reads or writes |
+| `retrieve_context` | Retrieval | Load memory with priority merge: focus > project > global; supports BM25 keyword fusion via RRF |
 | `memory_surface` | Retrieval | BM25 keyword surface: fast focused lookup without full context retrieval |
-| `save_session` | Session | Persist a session summary (objective, actions, decisions, next steps) |
-| `store_session_with_learnings` | Session | Batch save: session + related decisions + patterns in one call |
-| `save_decision` | Artifact | Save an architectural or technical decision with dedup + supersession |
+| `store_session_with_learnings` | Session | Batch save: session + related decisions + patterns in one call; pass `decisions=[]` for session-only |
+| `save_decision` | Artifact | Save an architectural or technical decision with dedup + supersession; requires governance token for `scope=global` |
 | `save_pattern` | Artifact | Save a repeatable workflow pattern with hash-based dedup |
 | `save_context` | Artifact | Save a free-form context snippet with relevance score |
-| `upsert_entity_with_deps` | Entity | Upsert a named entity fact and link related entities |
+| `upsert_entity_with_deps` | Entity | Upsert a named entity fact and link related entities with typed relationships |
 | `request_global_write_approval` | Governance | Obtain a one-time token required for global-scope writes |
 | `route_analysis` | Analysis | Route a task description to sequential / debate / socratic mode |
-| `run_hygiene` | Hygiene | Detect duplicates, stale decisions, obsolete patterns, entity drift |
-| `get_save_status` | Hygiene | List pending or failed saves for a project |
-| `memory_freshness` | Hygiene | List nodes not updated within the freshness threshold, oldest-first |
-| `register_service` | Federation | Register a service into a named workspace |
-| `deregister_service` | Federation | Remove a service from the registry |
+| `run_hygiene` | Hygiene | Detect duplicates, stale decisions, obsolete patterns, entity drift; pass `check_pending_only=True` to list pending/failed saves |
+| `register_federated_service` | Federation | Register (or deactivate via `active=False`) a service in a named workspace |
 | `list_active_services` | Federation | List services active within a time window |
-| `search_cross_service` | Federation | Federated memory search across services |
-| `link_cross_service` | Federation | Create a typed cross-service link (write) |
-| `propagate_impact` | Federation | Propagate a breaking change across the graph (write) |
-| `graph_health` | Federation | Get workspace health and cross-service metrics |
-| `detect_conflicts` | Federation | Find contradicting cross-service links |
+| `search_cross_service` | Federation | Federated memory search across services in a workspace |
+| `link_cross_service` | Federation | Create a typed cross-service link between entities in different services |
+| `propagate_impact` | Federation | BFS impact propagation across CROSS_SERVICE_LINK edges with risk scoring |
+| `graph_health` | Federation | Workspace health metrics; `include_conflicts=True` adds CONTRADICTS conflict detection |
+| `register_service` | Topology | Register or update a `:Project:Service` node in the topology graph |
+| `link_topology_nodes` | Topology | Create a typed relationship between any two topology nodes (Service, DataSource, MessageQueue, Feature, BoundedContext) |
+| `batch_upsert_shared_infrastructure` | Topology | Upsert multiple shared infrastructure nodes in one operation; requires governance token for N>1 |
+| `get_service_dependencies` | Topology | Traverse the service dependency graph upstream, downstream, or both directions |
+| `get_feature_workflow` | Topology | Return all services involved in a feature, ordered by workflow step |
 
 ---
 
@@ -168,7 +179,7 @@ MOUNT /ui                             Alpine.js dashboard (StaticFiles)
 GET  /                                → redirect to /ui
 ```
 
-Write tools (`propagate_impact`, `link_cross_service`, `register_service`, `deregister_service`) require `"confirm": true` in the POST body when invoked via `/tools/{name}/invoke`; without it the response is `{"status": "preview", ...}`.
+Write tools (`propagate_impact`, `link_cross_service`, `register_federated_service`) require `"confirm": true` in the POST body when invoked via `/tools/{name}/invoke`; without it the response is `{"status": "preview", ...}`.
 
 ---
 
@@ -185,13 +196,27 @@ Artifacts: Session     — what happened in a coding session
            Context     — free-form snippets with relevance score
            EntityFact  — named entity with a fact statement
 
-Graph edges:
+Topology:  Service         — a deployed service (:Project:Service dual-label)
+           DataSource      — database, cache, or storage node
+           MessageQueue    — event bus or queue node
+           Feature         — cross-service feature workflow anchor
+           BoundedContext  — domain boundary grouping services
+
+Graph edges (memory):
   [:BELONGS_TO]    artifact → Project | GlobalScope
   [:HAS_FOCUS]     artifact → FocusArea
   [:SUPERSEDES]    Decision → older Decision  (append-only lineage)
   [:CONFLICTS_WITH] Decision ↔ Decision
   [:PRODUCED]      Session → artifact  (traceability)
   [:MERGES_INTO]   EntityFact → EntityFact  (hygiene normalization)
+
+Graph edges (topology):
+  [:CALLS_DOWNSTREAM] / [:CALLS_UPSTREAM]   Service → Service
+  [:READS_FROM] / [:WRITES_TO] / [:READS_WRITES]  Service → DataSource
+  [:PUBLISHES_TO] / [:SUBSCRIBES_TO]        Service → MessageQueue
+  [:INVOLVES]                                Feature → Service  (step_order + role)
+  [:MEMBER_OF_CONTEXT]                       Service → BoundedContext
+  [:CROSS_SERVICE_LINK]                      entity → entity  (cross-workspace)
 ```
 
 ---
