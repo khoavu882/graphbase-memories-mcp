@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from graphbase_memories.mcp.schemas.enums import (
     DataSourceType,
@@ -205,12 +205,43 @@ class LinkServiceContextInput(BaseModel):
     )
 
 
+class LinkTopologyNodesInput(BaseModel):
+    """Unified link input for link_topology_nodes — replaces 5 specialized link tools."""
+
+    from_id: str = Field(..., description="ID of the source topology node")
+    to_id: str = Field(..., description="ID of the target topology node")
+    rel_type: TopologyLinkType = Field(..., description="Relationship type (validated against node label pair)")
+    workspace_id: str = Field(..., description="Workspace both nodes belong to")
+    # INVOLVES-specific
+    step_order: int | None = Field(None, description="Step position for INVOLVES edges (1-based)")
+    role: str | None = Field(None, description="Service role for INVOLVES edges (e.g. orchestrator)")
+    # MEMBER_OF_CONTEXT-specific
+    ownership: ServiceOwnership | None = Field(None, description="Ownership type for MEMBER_OF_CONTEXT edges")
+    # Service dependency-specific
+    protocol: str | None = Field(None, description="Transport protocol (REST, gRPC, kafka, etc.)")
+    timeout_ms: int | None = Field(None, ge=1, description="Call timeout in milliseconds")
+    criticality: Literal["high", "medium", "low"] | None = Field(None, description="Business criticality")
+    # DataSource access-specific
+    access_pattern: str | None = Field(None, description="Access pattern (e.g. cache-aside, read-heavy)")
+    # MessageQueue-specific
+    event_type: str | None = Field(None, description="Event/message type name published or consumed")
+    metadata: dict[str, str] | None = Field(None, description="Arbitrary string key/value metadata")
+    dry_run: bool = Field(False, description="If true, validates nodes exist without writing")
+
+
 class TopologyLinkResult(BaseModel):
     from_id: str
     to_id: str
     rel_type: str
-    status: str = "linked"  # "linked" | "dry_run_ok" | "dry_run_node_missing"
+    status: Literal[
+        "linked",
+        "dry_run_ok",
+        "dry_run_node_missing",
+        "node_not_found",
+        "invalid_rel_type",
+    ] = "linked"
     dry_run: bool = False
+    error: str | None = None  # populated on node_not_found / invalid_rel_type
 
 
 # ── Traversal inputs / results ────────────────────────────────────────────────
@@ -306,17 +337,26 @@ SharedInfraNodeSchema = Annotated[
 
 class BatchUpsertInfraInput(BaseModel):
     workspace_id: str = Field(..., description="Workspace all nodes belong to")
-    governance_token: str = Field(
-        ...,
+    governance_token: str | None = Field(
+        None,
         description=(
-            "Single governance token consumed once for the entire batch. "
-            "One token authorizes N nodes — weaker guarantee than per-node tokens, "
-            "documented in ADR-TOPO-001."
+            "Required when registering more than 1 node. "
+            "Optional for single-node registration. "
+            "Obtain via request_global_write_approval()."
         ),
     )
     nodes: list[SharedInfraNodeSchema] = Field(
         ..., min_length=1, description="Heterogeneous list of infra nodes to upsert"
     )
+
+    @model_validator(mode="after")
+    def _token_required_for_multi(self) -> BatchUpsertInfraInput:
+        if len(self.nodes) > 1 and not self.governance_token:
+            raise ValueError(
+                "governance_token required for multi-node batch. "
+                "Call request_global_write_approval() first."
+            )
+        return self
 
 
 class BatchInfraResult(BaseModel):

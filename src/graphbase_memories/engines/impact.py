@@ -14,6 +14,7 @@ from uuid import uuid4
 from neo4j import AsyncDriver
 
 from graphbase_memories.graph.repositories import federation_repo, impact_repo
+from graphbase_memories.mcp.schemas.errors import ErrorCode, MCPError
 from graphbase_memories.mcp.schemas.results import (
     AffectedServiceItem,
     ConflictRecord,
@@ -37,7 +38,22 @@ async def propagate_impact(
     max_depth: int,
     driver: AsyncDriver,
     database: str,
-) -> ImpactReport:
+) -> ImpactReport | MCPError:
+    # ── Pre-check — entity existence (moved from tool layer) ─────────────
+    async with driver.session(database=database) as session:
+        result = await session.run(
+            "MATCH (n {id: $id}) RETURN count(n) AS cnt LIMIT 1",
+            id=entity_id,
+        )
+        record = await result.single()
+        if not record or record["cnt"] == 0:
+            return MCPError(
+                code=ErrorCode.ENTITY_NOT_FOUND,
+                message=f"Entity '{entity_id}' not found in the graph.",
+                context={"entity_id": entity_id},
+                next_step="Call upsert_entity_with_deps() to create the entity first.",
+            )
+
     # ── Phase 1 — BFS (B-3: one Cypher per depth level) ──────────────────
     frontier: set[str] = {entity_id}
     visited: dict[str, dict] = {}
@@ -138,6 +154,7 @@ async def graph_health(
     workspace_id: str,
     driver: AsyncDriver,
     database: str,
+    include_conflicts: bool = True,
 ) -> WorkspaceHealthReport:
     workspace_id = workspace_id.lower().strip()
     records = await impact_repo.graph_health(
@@ -181,8 +198,16 @@ async def graph_health(
         )
 
     total_conflicts = sum(s.conflict_count for s in services)
+
+    # Absorb detect_conflicts when include_conflicts=True
+    conflict_records: list[ConflictRecord] = []
+    if include_conflicts and total_conflicts > 0:
+        conflict_records = await detect_conflicts(workspace_id, limit=100, driver=driver, database=database)
+
     if total_conflicts > 0:
-        health_next_step = "Conflicts detected: call detect_conflicts(workspace_id=...) to resolve CONTRADICTS edges."
+        health_next_step = (
+            "Conflicts detected: inspect conflict_records and resolve CONTRADICTS edges."
+        )
     elif any(s.hygiene_status in ("needs_hygiene", "critical") for s in services):
         health_next_step = (
             "Hygiene needed: call run_hygiene() on services with needs_hygiene or critical status."
@@ -197,6 +222,7 @@ async def graph_health(
         total_conflicts=total_conflicts,
         checked_at=now,
         next_step=health_next_step,
+        conflict_records=conflict_records,
     )
 
 

@@ -8,6 +8,7 @@ from neo4j.exceptions import Neo4jError
 from graphbase_memories.config import settings
 from graphbase_memories.graph.repositories import token_repo
 from graphbase_memories.mcp.schemas.errors import ErrorCode, MCPError
+from graphbase_memories.mcp.schemas.results import GovernanceTokenResult
 from graphbase_memories.mcp.server import mcp
 
 
@@ -15,7 +16,7 @@ from graphbase_memories.mcp.server import mcp
 async def request_global_write_approval(
     ctx: Context,
     content_preview: str,
-) -> dict | MCPError:
+) -> GovernanceTokenResult | MCPError:
     """
     Request approval to write to global scope (FR-55, S-1).
     Returns a one-time token valid for governance_token_ttl_s seconds.
@@ -39,9 +40,9 @@ async def request_global_write_approval(
             context={"detail": str(exc)},
             next_step="Verify Neo4j is running, then retry request_global_write_approval().",
         )
-    return {
-        "token": token.id,
-        "expires_at": token.expires_at.isoformat(),
-        "ttl_seconds": settings.governance_token_ttl_s,
-        "instructions": "Pass this token as governance_token in save_decision(scope='global').",
-    }
+    return GovernanceTokenResult(
+        token=token.id,
+        expires_at=token.expires_at.isoformat(),
+        ttl_seconds=settings.governance_token_ttl_s,
+        instructions="Pass this token as governance_token in save_decision(scope='global').",
+    )

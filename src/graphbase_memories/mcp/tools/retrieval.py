@@ -1,4 +1,4 @@
-"""Retrieval tools: retrieve_context, get_scope_state, memory_surface."""
+"""Retrieval tools: retrieve_context, memory_surface."""
 
 from __future__ import annotations
 
@@ -6,10 +6,8 @@ from fastmcp import Context
 
 from graphbase_memories.config import settings
 from graphbase_memories.engines import retrieval as retrieval_engine
-from graphbase_memories.engines import scope as scope_engine
 from graphbase_memories.engines import surface as surface_engine
-from graphbase_memories.mcp.schemas import ContextBundle, MemoryScope, ScopeStateResult
-from graphbase_memories.mcp.schemas.enums import ScopeState
+from graphbase_memories.mcp.schemas import ContextBundle, MemoryScope
 from graphbase_memories.mcp.schemas.results import SurfaceResult
 from graphbase_memories.mcp.server import mcp
 
@@ -25,7 +23,7 @@ async def retrieve_context(
 ) -> ContextBundle:
     """
     Retrieve memory context for a project, ordered by scope priority (focus > project > global).
-    Returns ContextBundle with retrieval_status and hygiene_due indicator.
+    Returns ContextBundle with retrieval_status, scope_state, and hygiene_due indicator.
     When keyword is provided, BM25 full-text search is fused with graph traversal via RRF.
     Each result item will include an _rrf_score field when keyword search is active.
     """
@@ -38,26 +36,6 @@ async def retrieve_context(
         keyword=keyword,
         driver=driver,
         database=settings.neo4j_database,
-    )
-
-
-@mcp.tool()
-async def get_scope_state(
-    ctx: Context,
-    project_id: str | None = None,
-    focus: str | None = None,
-) -> ScopeStateResult:
-    """
-    Check scope resolution state for a project without triggering any MCP read or write.
-    Returns scope_state (resolved/uncertain/unresolved) and project_exists flag.
-    """
-    driver = ctx.lifespan_context["driver"]
-    state = await scope_engine.validate(project_id, focus, driver, settings.neo4j_database)
-    return ScopeStateResult(
-        scope_state=state,
-        project_exists=state == ScopeState.resolved,
-        project_id=project_id,
-        focus=focus,
     )
 
 

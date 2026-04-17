@@ -15,38 +15,34 @@ from graphbase_memories.mcp.server import mcp
 
 
 @mcp.tool()
-async def register_service(
+async def register_federated_service(
     ctx: Context,
     service_id: str,
     workspace_id: str,
     display_name: str | None = None,
     description: str | None = None,
     tags: list[str] | None = None,
-) -> ServiceRegistrationResult:
+    active: bool = True,
+) -> ServiceRegistrationResult | ServiceInfo:
     """
     Register (or re-activate) a service in a workspace.
     Creates the Workspace node if it does not exist.
     workspace_id is normalized to lowercase automatically.
+
+    When active=False: marks the service as idle (deregistration path).
+    Does not delete any data. Replaces the removed deregister_service tool.
     """
     driver = ctx.lifespan_context["driver"]
-    return await federation_engine.register_service(
-        service_id,
-        workspace_id,
-        display_name,
-        description,
-        tags or [],
-        driver,
-        settings.neo4j_database,
-    )
-
-
-@mcp.tool()
-async def deregister_service(
-    ctx: Context,
-    service_id: str,
-) -> ServiceInfo:
-    """Mark a service as idle (not active). Does not delete any data."""
-    driver = ctx.lifespan_context["driver"]
+    if active:
+        return await federation_engine.register_service(
+            service_id,
+            workspace_id,
+            display_name,
+            description,
+            tags or [],
+            driver,
+            settings.neo4j_database,
+        )
     return await federation_engine.deregister_service(service_id, driver, settings.neo4j_database)
 
 

@@ -109,6 +109,8 @@ class TopologyLinkType(StrEnum):
     READS_WRITES = "READS_WRITES"
     PUBLISHES_TO = "PUBLISHES_TO"
     SUBSCRIBES_TO = "SUBSCRIBES_TO"
+    INVOLVES = "INVOLVES"
+    MEMBER_OF_CONTEXT = "MEMBER_OF_CONTEXT"
 
 
 class DependencyDirection(StrEnum):

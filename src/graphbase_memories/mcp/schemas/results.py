@@ -69,6 +69,15 @@ class AnalysisResult(BaseModel):
     suggested_steps: list[str]
 
 
+class GovernanceTokenResult(BaseModel):
+    """Typed result for request_global_write_approval — fixes H1 raw dict return."""
+
+    token: str
+    expires_at: str  # ISO 8601
+    ttl_seconds: int
+    instructions: str
+
+
 class HygieneReport(BaseModel):
     project_id: str | None
     scope: str
@@ -80,6 +89,12 @@ class HygieneReport(BaseModel):
     candidate_ids: dict[str, list[str]]  # category → [node_ids]
     checked_at: datetime
     next_step: str | None = None
+    # Freshness absorption (from memory_freshness)
+    stale_items: list[StaleItem] = []
+    # Save-status absorption (from get_save_status)
+    oldest_pending_at: datetime | None = None
+    pending_artifact_ids: list[str] = []
+    pending_only: bool = False  # True when check_pending_only=True fast-path is used
 
 
 class ServiceInfo(BaseModel):
@@ -153,6 +168,8 @@ class WorkspaceHealthReport(BaseModel):
     total_conflicts: int
     checked_at: datetime
     next_step: str | None = None
+    # detect_conflicts absorption
+    conflict_records: list[ConflictRecord] = []
 
 
 class ConflictRecord(BaseModel):

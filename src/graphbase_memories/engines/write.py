@@ -51,9 +51,9 @@ def _add_save_hint(result: SaveResult) -> SaveResult:
     elif result.status == SaveStatus.saved:
         hint = "Saved. Run retrieve_context to confirm integration into scope."
     elif result.status == SaveStatus.pending_retry:
-        hint = "Write pending retry. Call get_save_status() to check pending saves."
+        hint = "Write pending retry. Call run_hygiene(project_id=..., check_pending_only=True) to check pending saves."
     elif result.status == SaveStatus.failed:
-        hint = "Write failed. Check get_save_status() or retry with corrected input."
+        hint = "Write failed. Call run_hygiene(project_id=..., check_pending_only=True) or retry with corrected input."
     else:
         hint = None
     if hint is None:

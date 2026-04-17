@@ -26,8 +26,8 @@ async def test_memory_review_prompt_structure():
     text = _text(msg)
     assert "proj-test" in text
     assert "retrieve_context" in text
-    assert "memory_freshness" in text
     assert "run_hygiene" in text
+    assert "stale_items" in text
 
 
 async def test_impact_before_edit_prompt_structure():
