@@ -71,7 +71,7 @@ approval = request_global_write_approval(
 save_pattern(
     pattern={
         "trigger": "When starting any new coding session",
-        "repeatable_steps": ["Call get_scope_state", "Call retrieve_context"],
+        "repeatable_steps": ["Call retrieve_context(project_id, scope='project')", "Review decisions and patterns"],
         "scope": "global",
         "last_validated_at": "2026-04-08T10:00:00Z"
     },

@@ -56,14 +56,20 @@ async def hygiene_status(driver: DriverDep):
 class HygieneRunRequest(BaseModel):
     project_id: str | None = None
     scope: str = "global"
+    check_pending_only: bool = False
 
 
 @router.post("/run")
 async def run_hygiene(body: HygieneRunRequest, driver: DriverDep):
-    """Run the memory hygiene cycle. Report-only — does not auto-mutate graph nodes."""
+    """Run the memory hygiene cycle. Report-only — does not auto-mutate graph nodes.
+
+    Set check_pending_only=true to skip all content scans and only return pending-save
+    status. Does not update last_hygiene_at when check_pending_only is true.
+    """
     report = await hygiene_engine.run(
         project_id=body.project_id,
         scope=body.scope,
+        check_pending_only=body.check_pending_only,
         driver=driver,
         database=settings.neo4j_database,
     )

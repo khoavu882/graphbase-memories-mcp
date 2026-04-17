@@ -171,7 +171,7 @@ Architecture notes:
 
 - Connection pool capped at 2 (MCP server uses 8; Neo4j Community Edition allows 10 total).
 - All route handlers call engine functions directly with the devtools driver — no FastMCP Context needed.
-- Write tools (`propagate_impact`, `link_cross_service`, `register_service`, `deregister_service`) require `confirm: true` in the invoke body; without it, the response is `{"status": "preview", ...}`.
+- Write tools (`propagate_impact`, `link_cross_service`, `register_federated_service`) require `confirm: true` in the invoke body; without it, the response is `{"status": "preview", ...}`.
 - The SSE `/events` endpoint emits a `heartbeat` event every 5 seconds with Neo4j connectivity status.
 
 ---

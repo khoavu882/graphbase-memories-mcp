@@ -1,6 +1,8 @@
-"""Analysis tool: route_analysis."""
+"""Analysis tool: route_analysis (deprecated — use the analysis_routing prompt)."""
 
 from __future__ import annotations
+
+import warnings
 
 from graphbase_memories.engines.analysis import route
 from graphbase_memories.mcp.schemas.results import AnalysisResult
@@ -13,12 +15,14 @@ async def route_analysis(
     task_type_hint: str | None = None,
 ) -> AnalysisResult:
     """
-    Route a task to the appropriate analysis mode (FR-26).
-
-    Returns: mode (sequential/debate/socratic), rationale, and suggested_steps (M-1).
-    Only the final synthesized conclusion from analysis should be saved —
-    not intermediate discussion (FR-27).
+    DEPRECATED: Use the analysis_routing prompt instead.
+    This tool will be removed in the next release.
 
     task_type_hint: optional keyword hint (e.g. "trade-off", "strategic", "requirements")
     """
+    warnings.warn(
+        "route_analysis tool is deprecated. Use the analysis_routing prompt.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return route(task_description, task_type_hint)

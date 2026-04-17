@@ -9,7 +9,36 @@ from __future__ import annotations
 from fastmcp import Context
 from fastmcp.prompts import Message
 
+from graphbase_memories.engines.analysis import route as analysis_route
 from graphbase_memories.mcp.server import mcp
+
+# ── analysis_routing ──────────────────────────────────────────────────────────
+
+
+@mcp.prompt()
+def analysis_routing(
+    task_description: str,
+    task_type_hint: str | None = None,
+) -> list[Message]:
+    """
+    Route a task to the appropriate analysis mode (sequential/debate/socratic).
+    Returns guidance messages describing which mode to enter and suggested steps.
+    Replaces the deprecated route_analysis tool.
+    """
+    result = analysis_route(task_description, task_type_hint)
+    return [
+        Message(
+            role="user",
+            content=(
+                f"Analysis routing for: {task_description}\n\n"
+                f"Recommended mode: {result.mode}\n"
+                f"Rationale: {result.rationale}\n\n"
+                "Suggested steps:\n"
+                + "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(result.suggested_steps))
+            ),
+        )
+    ]
+
 
 # ── memory_review ─────────────────────────────────────────────────────────────
 
@@ -28,9 +57,10 @@ async def memory_review(
                 f"You are reviewing the memory graph for project '{project_id}' "
                 f"with scope '{scope}'. Follow these steps:\n\n"
                 "1. Call `retrieve_context(project_id, scope)` to load current memories.\n"
-                "2. Call `memory_freshness(project_id=project_id)` to identify stale nodes.\n"
-                "3. If freshness report shows `stale_count > 0`, call `run_hygiene(project_id)` "
-                "   and summarise what was archived or updated.\n"
+                "2. Call `run_hygiene(project_id=project_id)` — inspect `stale_items` in the "
+                "   report to identify stale nodes.\n"
+                "3. If the report shows `stale_count > 0` or `archived_count > 0`, "
+                "   summarise what was archived or flagged.\n"
                 "4. Report a brief summary: how many decisions, patterns, and entity facts "
                 "   are active, how many are stale, and what the next recommended action is.\n\n"
                 "Do not modify any memory content during this review — read-only assessment only."

@@ -72,32 +72,63 @@ retrieve_context(
 
 ---
 
-## `get_scope_state`
+## `memory_surface`
 
-Resolve the scope state for a given `project_id` and optional focus. Call this before any read or write to understand what operations are permitted.
+Lightweight BM25 keyword lookup for a specific topic — faster and narrower than `retrieve_context`.
+Use this before editing a file, starting a sub-task, or when you have a precise keyword and do not
+need a full scope-aware context bundle.
 
 ### Parameters
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `project_id` | `string \| null` | No | Project identifier |
-| `focus` | `string \| null` | No | Focus area name |
+| `query` | `string` | Yes | BM25 search query — keyword or short phrase |
+| `project_id` | `string \| null` | No | Restrict search to a specific project; `null` searches across all projects |
+| `limit` | `integer` | No | Max results to return (default: `5`) |
 
-### Returns
+### Returns: `SurfaceResult`
 
 ```json
 {
-  "scope_state": "resolved",
-  "project_exists": true
+  "matches": [
+    {
+      "id": "uuid",
+      "label": "Decision",
+      "name": "Use SHA-256 for dedup",
+      "content": "Deterministic and explainable without embeddings.",
+      "scope": "project",
+      "freshness": "current",
+      "bm25_score": 4.23,
+      "project_id": "my-project"
+    }
+  ],
+  "query_used": "dedup hash",
+  "total_found": 1,
+  "next_step": null
 }
 ```
 
-| `scope_state` | Meaning | Write permitted? |
+| Field | Values | Meaning |
 |---|---|---|
-| `resolved` | Project exists; focus (if given) exists | Yes |
-| `uncertain` | Project does not exist in graph yet | No — first `save_session` creates it |
-| `unresolved` | No `project_id` provided | No |
+| `label` | `Decision`, `Pattern`, `Context`, `EntityFact` | Node type matched |
+| `freshness` | `current`, `recent`, `stale` | Age relative to the freshness threshold |
+| `bm25_score` | float | Relevance score from Neo4j full-text index |
 
-!!! tip "When to call this"
-    Call `get_scope_state` at the start of every session before loading or saving memory.
-    It is cheap (one graph lookup) and prevents wasted write attempts with `blocked_scope` results.
+### When to use `memory_surface` vs `retrieve_context`
+
+| Use case | Recommended tool |
+|---|---|
+| "What do we know about authentication?" | `memory_surface(query="authentication")` |
+| Load full context before starting a session | `retrieve_context(scope="project")` |
+| Quick topic scan before editing a single file | `memory_surface` |
+| Need conflict detection and hygiene signals | `retrieve_context` |
+
+### Example
+
+```python
+memory_surface(
+    query="dedup jaccard threshold",
+    project_id="my-project",
+    limit=3
+)
+```

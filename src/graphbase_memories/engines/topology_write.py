@@ -33,11 +33,8 @@ from graphbase_memories.mcp.schemas.topology import (
     BatchInfraResult,
     BatchUpsertInfraInput,
     BoundedContextItem,
-    BoundedContextResult,
     DataSourceItem,
-    DataSourceResult,
     FeatureItem,
-    FeatureResult,
     FeatureWorkflowResult,
     FeatureWorkflowStep,
     GetFeatureWorkflowInput,
@@ -47,12 +44,8 @@ from graphbase_memories.mcp.schemas.topology import (
     LinkServiceDataSourceInput,
     LinkServiceDependencyInput,
     LinkServiceMQInput,
+    LinkTopologyNodesInput,
     MessageQueueItem,
-    MessageQueueResult,
-    RegisterBoundedContextInput,
-    RegisterDataSourceInput,
-    RegisterFeatureInput,
-    RegisterMessageQueueInput,
     RegisterServiceInput,
     ServiceDependencyItem,
     ServiceDependencyResult,
@@ -130,126 +123,6 @@ async def register_service(
         bounded_context=node.bounded_context,
         health_status=node.health_status or "unknown",
         status=node.status,
-        tags=node.tags,
-    )
-
-
-# ── DataSource ────────────────────────────────────────────────────────────────
-
-
-async def register_datasource(
-    inp: RegisterDataSourceInput,
-    driver: AsyncDriver,
-    database: str = "neo4j",
-) -> DataSourceResult:
-    await _require_workspace(inp.workspace_id, driver, database)
-    node = await _with_retry(
-        topology_repo.upsert_datasource,
-        driver=driver,
-        database=database,
-        source_id=inp.source_id,
-        source_type=inp.source_type.value,
-        host=inp.host,
-        workspace_id=inp.workspace_id,
-        owner_team=inp.owner_team,
-        health_status=inp.health_status.value,
-        version=inp.version,
-        tags=inp.tags,
-    )
-    return DataSourceResult(
-        source_id=node.id,
-        source_type=node.source_type,
-        host=node.host or None,
-        workspace_id=node.workspace_id,
-        health_status=node.health_status or "unknown",
-        tags=node.tags,
-    )
-
-
-# ── MessageQueue ──────────────────────────────────────────────────────────────
-
-
-async def register_message_queue(
-    inp: RegisterMessageQueueInput,
-    driver: AsyncDriver,
-    database: str = "neo4j",
-) -> MessageQueueResult:
-    await _require_workspace(inp.workspace_id, driver, database)
-    node = await _with_retry(
-        topology_repo.upsert_message_queue,
-        driver=driver,
-        database=database,
-        queue_id=inp.queue_id,
-        queue_type=inp.queue_type.value,
-        topic_or_exchange=inp.topic_or_exchange,
-        workspace_id=inp.workspace_id,
-        owner_team=inp.owner_team,
-        schema_version=inp.schema_version,
-        tags=inp.tags,
-    )
-    return MessageQueueResult(
-        queue_id=node.id,
-        queue_type=node.queue_type,
-        topic_or_exchange=node.topic_or_exchange or None,
-        workspace_id=node.workspace_id,
-        tags=node.tags,
-    )
-
-
-# ── Feature ───────────────────────────────────────────────────────────────────
-
-
-async def register_feature(
-    inp: RegisterFeatureInput,
-    driver: AsyncDriver,
-    database: str = "neo4j",
-) -> FeatureResult:
-    await _require_workspace(inp.workspace_id, driver, database)
-    node = await _with_retry(
-        topology_repo.upsert_feature,
-        driver=driver,
-        database=database,
-        feature_id=inp.feature_id,
-        name=inp.name,
-        workspace_id=inp.workspace_id,
-        workflow_order=inp.workflow_order,
-        owner_team=inp.owner_team,
-        tags=inp.tags,
-    )
-    return FeatureResult(
-        feature_id=node.id,
-        name=node.name,
-        workspace_id=node.workspace_id,
-        workflow_order=node.workflow_order,
-        owner_team=node.owner_team or None,
-        tags=node.tags,
-    )
-
-
-# ── BoundedContext ────────────────────────────────────────────────────────────
-
-
-async def register_bounded_context(
-    inp: RegisterBoundedContextInput,
-    driver: AsyncDriver,
-    database: str = "neo4j",
-) -> BoundedContextResult:
-    await _require_workspace(inp.workspace_id, driver, database)
-    node = await _with_retry(
-        topology_repo.upsert_bounded_context,
-        driver=driver,
-        database=database,
-        context_id=inp.context_id,
-        name=inp.name,
-        domain=inp.domain,
-        workspace_id=inp.workspace_id,
-        tags=inp.tags,
-    )
-    return BoundedContextResult(
-        context_id=node.id,
-        name=node.name,
-        domain=node.domain or None,
-        workspace_id=node.workspace_id,
         tags=node.tags,
     )
 
@@ -449,6 +322,43 @@ async def link_service_context(
 # ── Batch infra ───────────────────────────────────────────────────────────────
 
 
+async def link_topology_nodes(
+    inp: LinkTopologyNodesInput,
+    driver: AsyncDriver,
+    database: str = "neo4j",
+) -> TopologyLinkResult:
+    """Dispatch unified topology link to the correct repo function via label-based validation.
+
+    Returns TopologyLinkResult directly — error statuses (node_not_found, invalid_rel_type)
+    are encoded in .status + .error fields rather than raised as exceptions.
+    """
+    record = await topology_repo.link_topology_nodes(
+        from_id=inp.from_id,
+        to_id=inp.to_id,
+        rel_type=inp.rel_type.value,
+        driver=driver,
+        database=database,
+        step_order=inp.step_order,
+        role=inp.role,
+        ownership=inp.ownership.value if inp.ownership else None,
+        protocol=inp.protocol,
+        timeout_ms=inp.timeout_ms,
+        criticality=inp.criticality,
+        access_pattern=inp.access_pattern,
+        event_type=inp.event_type,
+        metadata=inp.metadata,
+        dry_run=inp.dry_run,
+    )
+    return TopologyLinkResult(
+        from_id=record.get("from_id", inp.from_id),
+        to_id=record.get("to_id", inp.to_id),
+        rel_type=record.get("rel_type", inp.rel_type.value),
+        status=record.get("status", "linked"),
+        dry_run=record.get("dry_run", inp.dry_run),
+        error=record.get("error"),
+    )
+
+
 async def batch_upsert_shared_infrastructure(
     inp: BatchUpsertInfraInput,
     driver: AsyncDriver,
@@ -456,16 +366,18 @@ async def batch_upsert_shared_infrastructure(
 ) -> BatchInfraResult:
     """
     Upsert N heterogeneous infrastructure nodes in a single authorized batch.
-    One governance token is consumed for the entire batch (ADR-TOPO-001 §Governance).
+    Single-node registration requires no governance token.
+    Multi-node (N>1) requires a governance token (ADR-TOPO-001 §Governance).
     """
     await _require_workspace(inp.workspace_id, driver, database)
 
-    valid = await token_repo.validate_and_consume(inp.governance_token, driver, database)
-    if not valid:
-        raise ValueError(
-            "Governance token is invalid, expired, or already used. "
-            "Call request_global_write_approval() to obtain a fresh token."
-        )
+    if inp.governance_token is not None:
+        valid = await token_repo.validate_and_consume(inp.governance_token, driver, database)
+        if not valid:
+            raise ValueError(
+                "Governance token is invalid, expired, or already used. "
+                "Call request_global_write_approval() to obtain a fresh token."
+            )
 
     upserted = 0
     errors: list[str] = []

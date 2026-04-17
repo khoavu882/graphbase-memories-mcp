@@ -35,11 +35,8 @@ def _load_cypher(name: str) -> str:
 # Remaining files are validated (FileNotFoundError at startup if missing)
 # but their content is embedded inline in the calling module.
 SCHEMA_DDL = _load_cypher("schema")
-SCHEMA_V2_DDL = _load_cypher("schema_v2")
-SCHEMA_V3_DDL = _load_cypher("schema_v3")
 FEDERATION_QUERIES = _load_cypher("federation")
 IMPACT_QUERIES = _load_cypher("impact")
-FRESHNESS_QUERIES = _load_cypher("freshness")
 TOPOLOGY_QUERIES = _load_cypher("topology")
 TOPOLOGY_Q_QUERIES = _load_cypher("topology_queries")
 _load_cypher("retrieval")
@@ -68,28 +65,34 @@ async def neo4j_lifespan(server):
         connection_timeout=settings.neo4j_connection_timeout,
     )
 
-    # Fail fast: verify connectivity before accepting any tool calls
-    await driver.verify_connectivity()
-
-    # Run idempotent schema DDL on every startup
-    # Neo4j 5: each statement in the file runs separately via session.run()
-    async with driver.session(database=settings.neo4j_database) as session:
-        for statement in split_statements(SCHEMA_DDL):
-            await session.run(statement)
-        for statement in split_statements(SCHEMA_V2_DDL):
-            await session.run(statement)
-        for statement in split_statements(SCHEMA_V3_DDL):
-            await session.run(statement)
-
     try:
+        # Fail fast: verify connectivity before accepting any tool calls
+        await driver.verify_connectivity()
+
+        # Run idempotent schema DDL on every startup
+        # Neo4j 5: each statement in the file runs separately via session.run()
+        async with driver.session(database=settings.neo4j_database) as session:
+            for statement in split_statements(SCHEMA_DDL):
+                await session.run(statement)
+
         yield {"driver": driver}
     finally:
-        # Safe: FastMCP ensures this runs only after all in-flight tool calls finish
+        # Safe: FastMCP ensures this runs only after all in-flight tool calls finish.
+        # try/finally wraps the full lifespan so driver.close() is called even if
+        # connectivity check or schema DDL raises before yield.
         await driver.close()
 
 
 def split_statements(cypher: str) -> list[str]:
-    """Split a multi-statement Cypher file by semicolons, skipping blank/comment lines."""
+    """Split a multi-statement Cypher file by semicolons, yielding non-empty statements.
+
+    Limitations (safe for schema DDL, but callers should be aware):
+    - Splits on bare `;` — semicolons inside quoted string literals would break the split.
+      None of the current schema or query files use semicolons in string values.
+    - Full-line `//` comments are stripped by this function; inline `//` comments are
+      passed through to Neo4j, which handles them natively.
+    - A trailing `;` at EOF produces an empty final segment, which is skipped correctly.
+    """
     statements = []
     for stmt in cypher.split(";"):
         cleaned = "\n".join(

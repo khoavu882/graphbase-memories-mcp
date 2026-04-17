@@ -6,6 +6,7 @@ from fastmcp import Context
 
 from graphbase_memories.config import settings
 from graphbase_memories.engines import federation as federation_engine
+from graphbase_memories.mcp.schemas.enums import CrossServiceLinkType
 from graphbase_memories.mcp.schemas.results import CrossServiceBundle, SaveResult
 from graphbase_memories.mcp.server import mcp
 
@@ -41,21 +42,20 @@ async def link_cross_service(
     ctx: Context,
     source_entity_id: str,
     target_entity_id: str,
-    relationship_type: str,
+    relationship_type: CrossServiceLinkType,
     rationale: str,
     confidence: float = 1.0,
     created_by: str | None = None,
 ) -> SaveResult:
     """
     Create a typed CROSS_SERVICE_LINK between entities in different services.
-    relationship_type must be one of: DEPENDS_ON, SHARES_CONCEPT, CONTRADICTS, SUPERSEDES, EXTENDS.
     Same-project links are rejected. Duplicate links are silently skipped (duplicate_skip).
     """
     driver = ctx.lifespan_context["driver"]
     return await federation_engine.create_cross_service_link(
         source_entity_id,
         target_entity_id,
-        relationship_type,
+        relationship_type.value,
         rationale,
         confidence,
         created_by,

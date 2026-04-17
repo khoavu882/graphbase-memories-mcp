@@ -1,13 +1,14 @@
 # Hygiene Tools
 
-Two tools for memory maintenance and health monitoring.
+One tool for memory maintenance and health monitoring.
 
 ---
 
 ## `run_hygiene`
 
-Run a full memory hygiene scan on a project or the global scope. Detects duplicates, stale decisions,
-obsolete patterns, entity drift, and unresolved saves.
+Run a memory hygiene scan on a project or the global scope. Detects duplicates, stale decisions,
+obsolete patterns, entity drift, and unresolved saves. Returns staleness previews inline via
+`stale_items` — no separate freshness tool needed.
 
 !!! important "Read-only — never auto-mutates"
     `run_hygiene` **only reports** problems. It never deletes, merges, or supersedes nodes automatically.
@@ -19,6 +20,7 @@ obsolete patterns, entity drift, and unresolved saves.
 |---|---|---|---|
 | `project_id` | `string \| null` | No | Specific project to scan; `null` scans all projects + global |
 | `scope` | `"global" \| "project" \| "focus" \| null` | No | Scope filter |
+| `check_pending_only` | `boolean` | No | Skip all content scans; return only pending/failed write status (default: `false`). Does **not** update `last_hygiene_at`. |
 
 ### Returns: `HygieneReport`
 
@@ -26,19 +28,33 @@ obsolete patterns, entity drift, and unresolved saves.
 {
   "project_id": "my-project",
   "scope": "project",
+  "pending_only": false,
   "duplicates_found": 2,
   "outdated_decisions": 1,
   "obsolete_patterns": 0,
   "entity_drift_count": 3,
-  "unresolved_saves": 0,
+  "pending_saves": 0,
+  "stale_items": [
+    {
+      "id": "uuid-a",
+      "label": "Decision",
+      "title": "Use SHA-256 for dedup",
+      "staleness_days": 45.2
+    }
+  ],
   "candidate_ids": {
     "duplicates": ["uuid-a", "uuid-b"],
     "outdated_decisions": ["uuid-c"],
     "entity_drift": ["uuid-d", "uuid-e", "uuid-f"]
   },
-  "checked_at": "2026-04-08T10:00:00Z"
+  "last_hygiene_at": "2026-04-08T10:00:00Z",
+  "checked_at": "2026-04-17T10:00:00Z"
 }
 ```
+
+When `check_pending_only=true`, only `pending_saves` and `pending_only: true` are meaningful.
+All scan fields (`duplicates_found`, `stale_items`, etc.) are zero/empty, and `last_hygiene_at`
+is not updated.
 
 ### What hygiene checks
 
@@ -54,36 +70,16 @@ obsolete patterns, entity drift, and unresolved saves.
 
 The server tracks `last_hygiene_at` on each Project and GlobalScope node. If it has been more than 30 days since the last hygiene run, `retrieve_context` returns `hygiene_due: true` in the `ContextBundle` to prompt the agent to run hygiene.
 
----
+### Recommended workflow
 
-## `get_save_status`
+```python
+# 1. Quick check — are there pending saves?
+run_hygiene(project_id="my-project", check_pending_only=True)
+# Returns: { "pending_saves": 2, "pending_only": true }
 
-List pending or failed saves for a project. Useful for diagnosing write failures without running a full hygiene scan.
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `project_id` | `string` | Yes | Project identifier |
-| `session_id` | `string \| null` | No | Filter to a specific session |
-
-### Returns: `SaveStatusSummary`
-
-```json
-{
-  "status": "pending_retry",
-  "count": 2,
-  "oldest_pending_at": "2026-04-07T08:30:00Z",
-  "artifact_ids": ["uuid-x", "uuid-y"]
-}
+# 2. Full scan when ready — get actionable candidate_ids and stale_items
+run_hygiene(project_id="my-project")
 ```
-
-| `status` | Meaning |
-|---|---|
-| `saved` | All saves for this project succeeded |
-| `pending_retry` | Some saves are queued for retry |
-| `failed` | Some saves failed permanently |
-| `partial` | Mix of saved and failed |
 
 ---
 

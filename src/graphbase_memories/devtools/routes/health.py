@@ -74,7 +74,11 @@ async def workspace_health(workspace_id: str, driver: DriverDep):
 
 @router.get("/graph/conflicts/{workspace_id}")
 async def workspace_conflicts(workspace_id: str, driver: DriverDep, limit: int = 100):
-    """Return all CONTRADICTS cross-service links in a workspace."""
+    """Return CONTRADICTS cross-service links in a workspace.
+
+    Deprecated: conflict_records are now included in GET /graph/stats/workspace/{workspace_id}.
+    This endpoint remains for backwards compatibility.
+    """
     try:
         conflicts = await impact_engine.detect_conflicts(
             workspace_id, limit, driver, settings.neo4j_database

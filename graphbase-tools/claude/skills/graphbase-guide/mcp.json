@@ -1,8 +1,25 @@
 {
   "tools": [
-    { "name": "memory_surface", "server": "graphbase-memories" },
-    { "name": "retrieve_context", "server": "graphbase-memories" },
-    { "name": "get_scope_state", "server": "graphbase-memories" },
-    { "name": "analyze_memory_needs", "server": "graphbase-memories" }
+    { "name": "retrieve_context",                "server": "graphbase-memories" },
+    { "name": "memory_surface",                  "server": "graphbase-memories" },
+    { "name": "upsert_entity_with_deps",         "server": "graphbase-memories" },
+    { "name": "save_decision",                   "server": "graphbase-memories" },
+    { "name": "save_pattern",                    "server": "graphbase-memories" },
+    { "name": "save_context",                    "server": "graphbase-memories" },
+    { "name": "store_session_with_learnings",    "server": "graphbase-memories" },
+    { "name": "run_hygiene",                     "server": "graphbase-memories" },
+    { "name": "route_analysis",                  "server": "graphbase-memories" },
+    { "name": "propagate_impact",                "server": "graphbase-memories" },
+    { "name": "graph_health",                    "server": "graphbase-memories" },
+    { "name": "register_service",                "server": "graphbase-memories" },
+    { "name": "link_topology_nodes",             "server": "graphbase-memories" },
+    { "name": "batch_upsert_shared_infrastructure", "server": "graphbase-memories" },
+    { "name": "get_service_dependencies",        "server": "graphbase-memories" },
+    { "name": "get_feature_workflow",            "server": "graphbase-memories" },
+    { "name": "request_global_write_approval",   "server": "graphbase-memories" },
+    { "name": "register_federated_service",      "server": "graphbase-memories" },
+    { "name": "list_active_services",            "server": "graphbase-memories" },
+    { "name": "search_cross_service",            "server": "graphbase-memories" },
+    { "name": "link_cross_service",              "server": "graphbase-memories" }
   ]
 }

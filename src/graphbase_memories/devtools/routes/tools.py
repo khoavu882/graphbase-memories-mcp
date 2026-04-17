@@ -24,14 +24,10 @@ router = APIRouter(prefix="/tools", tags=["tools"])
 _READ_ONLY_TOOLS = {
     "route_analysis",
     "retrieve_context",
-    "get_scope_state",
     "graph_health",
-    "detect_conflicts",
     "list_active_services",
     "search_cross_service",
-    "get_save_status",
     "run_hygiene",
-    "memory_freshness",
     "memory_surface",
 }
 
@@ -44,21 +40,20 @@ _MODULE_MAP: dict[str, str] = {
     "search_cross_service": "cross_service",
     "link_cross_service": "cross_service",
     "upsert_entity_with_deps": "entity",
-    "register_service": "federation",
-    "deregister_service": "federation",
+    "register_federated_service": "federation",
     "list_active_services": "federation",
     "request_global_write_approval": "governance",
     "run_hygiene": "hygiene",
-    "get_save_status": "hygiene",
     "propagate_impact": "impact",
     "graph_health": "impact",
-    "detect_conflicts": "impact",
     "retrieve_context": "retrieval",
-    "get_scope_state": "retrieval",
-    "save_session": "session",
     "store_session_with_learnings": "session",
     "memory_surface": "retrieval",
-    "memory_freshness": "freshness",
+    "register_service": "topology",
+    "link_topology_nodes": "topology",
+    "batch_upsert_shared_infrastructure": "topology",
+    "get_service_dependencies": "topology",
+    "get_feature_workflow": "topology",
 }
 
 
@@ -82,15 +77,6 @@ _TOOL_DISPATCH: dict[str, tuple[DispatchFn, bool]] = {
     ),
     "graph_health": (
         lambda p, d: impact_engine.graph_health(p["workspace_id"], d, settings.neo4j_database),
-        False,
-    ),
-    "detect_conflicts": (
-        lambda p, d: impact_engine.detect_conflicts(
-            p["workspace_id"],
-            p.get("limit", 100),
-            d,
-            settings.neo4j_database,
-        ),
         False,
     ),
     "list_active_services": (
@@ -148,7 +134,7 @@ _TOOL_DISPATCH: dict[str, tuple[DispatchFn, bool]] = {
         ),
         True,
     ),
-    "register_service": (
+    "register_federated_service": (
         lambda p, d: federation_engine.register_service(
             p["service_id"],
             p["workspace_id"],
@@ -157,12 +143,6 @@ _TOOL_DISPATCH: dict[str, tuple[DispatchFn, bool]] = {
             p.get("tags", []),
             d,
             settings.neo4j_database,
-        ),
-        True,
-    ),
-    "deregister_service": (
-        lambda p, d: federation_engine.deregister_service(
-            p["service_id"], d, settings.neo4j_database
         ),
         True,
     ),

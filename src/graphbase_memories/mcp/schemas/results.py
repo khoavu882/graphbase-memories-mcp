@@ -16,15 +16,6 @@ from graphbase_memories.mcp.schemas.enums import (
 )
 
 
-class ScopeStateResult(BaseModel):
-    """Typed return for get_scope_state tool — replaces raw dict for agent discoverability."""
-
-    scope_state: ScopeState
-    project_exists: bool
-    project_id: str | None = None
-    focus: str | None = None
-
-
 class SaveResult(BaseModel):
     status: SaveStatus
     artifact_id: str | None = None
@@ -52,21 +43,21 @@ class ContextBundle(BaseModel):
     next_step: str | None = None
 
 
-class SaveStatusSummary(BaseModel):
-    """S-4: typed replacement for raw dict get_pending_saves."""
-
-    status: SaveStatus
-    count: int
-    oldest_pending_at: datetime | None = None
-    artifact_ids: list[str] = []
-
-
 class AnalysisResult(BaseModel):
     """M-1: actionable routing result with suggested_steps."""
 
     mode: AnalysisMode
     rationale: str
     suggested_steps: list[str]
+
+
+class GovernanceTokenResult(BaseModel):
+    """Typed result for request_global_write_approval — fixes H1 raw dict return."""
+
+    token: str
+    expires_at: str  # ISO 8601
+    ttl_seconds: int
+    instructions: str
 
 
 class HygieneReport(BaseModel):
@@ -80,6 +71,12 @@ class HygieneReport(BaseModel):
     candidate_ids: dict[str, list[str]]  # category → [node_ids]
     checked_at: datetime
     next_step: str | None = None
+    # Freshness absorption (from memory_freshness)
+    stale_items: list[StaleItem] = []
+    # Save-status absorption (from get_save_status)
+    oldest_pending_at: datetime | None = None
+    pending_artifact_ids: list[str] = []
+    pending_only: bool = False  # True when check_pending_only=True fast-path is used
 
 
 class ServiceInfo(BaseModel):
@@ -153,6 +150,8 @@ class WorkspaceHealthReport(BaseModel):
     total_conflicts: int
     checked_at: datetime
     next_step: str | None = None
+    # detect_conflicts absorption
+    conflict_records: list[ConflictRecord] = []
 
 
 class ConflictRecord(BaseModel):
@@ -173,15 +172,6 @@ class StaleItem(BaseModel):
     age_days: int
     freshness: FreshnessLevel
     project_id: str | None
-
-
-class FreshnessReport(BaseModel):
-    stale_count: int
-    recent_count: int
-    current_count: int
-    stale_items: list[StaleItem]
-    checked_at: datetime
-    next_step: str | None = None
 
 
 class SurfaceMatch(BaseModel):
