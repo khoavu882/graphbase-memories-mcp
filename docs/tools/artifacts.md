@@ -105,7 +105,7 @@ enough that Jaccard similarity is not needed.
 {
   "trigger": "When starting a new session on a known project",
   "repeatable_steps": [
-    "Call get_scope_state(project_id)",
+    "Call retrieve_context(project_id, scope='project')",
     "Call retrieve_context(project_id, scope='project')",
     "Review decisions and patterns before reasoning"
   ],

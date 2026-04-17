@@ -19,7 +19,7 @@ graph LR
 
 | Scope | Purpose | Example |
 |---|---|---|
-| `global` | Patterns and decisions reusable across all projects | "Always call get_scope_state before retrieve_context" |
+| `global` | Patterns and decisions reusable across all projects | "Always call retrieve_context before reasoning to load session context" |
 | `project` | Knowledge specific to one initiative or codebase | "graphbase-memories uses Jaccard threshold 0.70 for supersede" |
 | `focus` | Narrow runtime context within a project | "Current session is refactoring the dedup engine" |
 

@@ -2,9 +2,18 @@
 
 One tool for routing a task description to the most appropriate reasoning mode.
 
+!!! note "Prefer the `analysis_routing` prompt"
+    `analysis_routing` is now registered as an MCP **prompt** (not a tool call), so it does not
+    consume tool-call budget. Most agent hosts surface it via the prompts panel. Use
+    `route_analysis` only if your host does not support MCP prompts.
+
 ---
 
 ## `route_analysis`
+
+!!! warning "Deprecated — use `analysis_routing` prompt instead"
+    `route_analysis` still works but emits a `DeprecationWarning`. It will be removed in a future
+    release. Switch to the `analysis_routing` MCP prompt.
 
 Analyze a task description and recommend a reasoning mode: **sequential**, **debate**, or **socratic**.
 This tool does not perform the analysis itself — it routes the task so the agent can apply the right

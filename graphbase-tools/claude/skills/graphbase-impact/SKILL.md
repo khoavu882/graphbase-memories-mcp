@@ -1,11 +1,11 @@
 ---
 name: graphbase-impact
 description: Use when analyzing the blast radius of a code change, before editing a shared entity, or when evaluating cross-service risk. Surfaces affected services and risk levels.
-version: 1.0.0
+version: 2.0.0
 tools:
   - propagate_impact
-  - detect_conflicts
   - graph_health
+  - memory_surface
 ---
 
 # graphbase-impact — Blast-Radius Analysis Skill
@@ -19,41 +19,51 @@ tools:
 ## Impact Analysis Workflow
 
 ```
-1. memory_surface(query="<entity being changed>")
+1. memory_surface(query="<entity being changed>", project_id="<project>")
    → identify which EntityFact / Decision nodes are relevant
+   → note the node_id of the entity you are changing
 
 2. propagate_impact(
      source_entity_id="<entity id from step 1>",
      change_description="<what is changing>",
      impact_type="breaking_change"   # or "deprecation", "behavior_change"
    )
-   → ImpactReport with affected_services, risk levels, depth
+   → ImpactReport {
+       affected_services: [{ project_id, depth, risk_level, entity_count }],
+       overall_risk: "low" | "medium" | "high",
+       impact_event_id,
+       next_step
+     }
 
 3. If overall_risk == "high":
    → review affected_services list
    → notify those teams before merging
 ```
 
-## Conflict Detection
+## Workspace Health & Conflict Detection
 
-```
-detect_conflicts(
-  project_id="<project>",
-  scope="project"
-)
-```
-
-Returns `ConflictRecord` list — pairs of nodes with contradictory content. Resolve conflicts
-before running hygiene to avoid false merges.
-
-## Workspace Health
+Conflicts between decisions are surfaced passively inside `graph_health` — no separate
+conflict-detection call is needed:
 
 ```
 graph_health(workspace_id="<workspace>")
+→ WorkspaceHealthReport {
+    services: [{ service_id, entity_count, conflict_count, staleness_days, hygiene_status }],
+    total_conflicts,
+    conflict_records: [
+      {
+        source_id, source_project, source_summary,
+        target_id, target_project, target_summary,
+        link_rationale, link_confidence
+      }
+    ],
+    next_step
+  }
 ```
 
-Returns `WorkspaceHealthReport` — per-service entity counts, staleness days, conflict counts.
 Run periodically (or after large refactors) to keep the workspace graph healthy.
+When `conflict_records` is non-empty, review and resolve before running `run_hygiene` to
+avoid false merges.
 
 ## Risk Levels
 

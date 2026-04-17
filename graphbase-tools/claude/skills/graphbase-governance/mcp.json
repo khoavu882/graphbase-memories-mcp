@@ -1,6 +1,5 @@
 {
   "tools": [
-    { "name": "check_governance_policy", "server": "graphbase-memories" },
     { "name": "request_global_write_approval", "server": "graphbase-memories" }
   ]
 }

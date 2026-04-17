@@ -1,9 +1,8 @@
 ---
 name: graphbase-governance
 description: Govern global memory writes. Use when you need to write a cross-service standard, policy, or decision that affects all services in the workspace. Requires a governance token.
-version: 1.0.0
+version: 2.0.0
 tools:
-  - check_governance_policy
   - request_global_write_approval
 ---
 
@@ -18,25 +17,25 @@ time-limited write approvals that ensure intentional global writes.
 ## Governance Workflow
 
 ```
-1. check_governance_policy(
-     proposed_decision="<description of what you want to write globally>",
-     project_id="<your project>"
-   )
-   → AnalysisResult with mode and suggested_steps
+request_global_write_approval(
+  rationale="<why this write must be global — one clear sentence>",
+  content_preview="<brief summary of what will be written>",
+  ttl_seconds=300   # 5 minutes — enough for the write operation
+)
+→ GovernanceToken { id, expires_at }
+```
 
-2. If policy allows:
-   request_global_write_approval(
-     rationale="<why this must be global>",
-     ttl_seconds=300   # 5 minutes — enough for the write operation
-   )
-   → GovernanceToken with id
+Pass the token immediately to the write call:
 
-3. Pass token to write tool:
-   save_decision(
-     ...,
-     scope="global",
-     governance_token_id="<token.id>"
-   )
+```
+store_session_with_learnings(
+  ...,
+  decisions=[{
+    ...,
+    scope="global",
+    governance_token_id="<token.id>"
+  }]
+)
 ```
 
 ## Token Rules
@@ -46,11 +45,15 @@ time-limited write approvals that ensure intentional global writes.
 - Tokens are consumed on use — request a new one if the write fails.
 - Never persist or reuse tokens across sessions.
 
-## When NOT to use global scope
+## When to invoke governance
 
-| Write | Correct scope |
-|-------|--------------|
-| Team convention for this service | `project` |
-| Auth pattern used only in this repo | `project` |
-| OpenTelemetry span standard for all services | `global` |
-| REST versioning policy for the platform | `global` |
+| You want to write | Scope | Needs token? |
+|---|---|---|
+| Team convention specific to this service | `project` | No |
+| Auth pattern used only in this repo | `project` | No |
+| OpenTelemetry span standard for all services | `global` | **Yes** |
+| REST versioning policy for the platform | `global` | **Yes** |
+| ADR that governs multiple services | `global` | **Yes** |
+
+Only invoke this skill when the write scope is `global`. For project-scoped writes,
+use `store_session_with_learnings` directly without a token.
