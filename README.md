@@ -75,7 +75,7 @@ All settings are read from environment variables with the `GRAPHBASE_` prefix.
 | `GRAPHBASE_FRESHNESS_RECENT_DAYS` | `7` | Days threshold for "recent" freshness label |
 | `GRAPHBASE_FRESHNESS_STALE_DAYS` | `30` | Days threshold for "stale" freshness label |
 
-Set them in your shell or in a `.env` file. Example:
+Set them in your shell or pass them through your MCP host config. Example:
 
 ```bash
 export GRAPHBASE_NEO4J_URI=bolt://my-neo4j-host:7687
@@ -93,7 +93,7 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
   "mcpServers": {
     "graphbase-memories": {
       "command": "uvx",
-      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase@v1.5.0", "graphbase", "serve"],
+      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase-memories-mcp@v1.5.0", "graphbase", "serve"],
       "env": {
         "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",
         "GRAPHBASE_NEO4J_USER": "neo4j",
@@ -150,6 +150,9 @@ graphbase devtools --port 8765
 # Run the memory hygiene cycle and print the report as JSON
 graphbase hygiene --project-id <uuid>
 graphbase hygiene --scope global
+
+# Surface scoped memories for editor and hook integrations
+graphbase surface "jwt rotation" --project-id auth-service
 ```
 
 ---

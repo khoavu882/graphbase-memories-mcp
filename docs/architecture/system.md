@@ -10,7 +10,7 @@ and tool dispatch, a business logic layer with specialized engines, and a graph 
 ```mermaid
 graph TD
     A["AI Agent<br/>(Claude / Codex / Gemini)"]
-    B["MCP Server Layer<br/>FastMCP · 21 async tools · stdio JSON-RPC 2.0<br/>────────────────<br/>HTTP Devtools (optional)<br/>FastAPI · uvicorn · read-only"]
+    B["MCP Server Layer<br/>FastMCP · 21 async tools · stdio JSON-RPC 2.0<br/>────────────────<br/>HTTP Devtools (optional)<br/>FastAPI · uvicorn · inspection + invoke"]
     C["ScopeEngine<br/>resolved / uncertain / unresolved"]
     D["RetrievalEngine<br/>focus → project → global priority<br/>5s timeout · 1 retry"]
     E["WriteEngine<br/>+ DedupEngine<br/>SHA-256 · Jaccard · GovernanceToken<br/>1 retry on ServiceUnavailable"]
@@ -58,19 +58,21 @@ responses to stdout. No network port is opened for agent use. The optional HTTP 
 
 ```
 src/graphbase_memories/
-├── main.py               CLI entry (typer): serve | devtools | hygiene
+├── main.py               CLI entry (typer): serve | devtools | hygiene | surface
 ├── config.py             pydantic-settings: all GRAPHBASE_* env vars
 ├── mcp/
-│   ├── server.py         FastMCP app instance + tool registration
+│   ├── server.py         FastMCP app instance + tool/prompt/resource registration
 │   ├── tools/            21 tool handlers (one file per group)
-│   └── schemas/          Pydantic I/O models (artifacts, results, enums)
-├── engines/              Business logic (scope, retrieval, write, dedup, analysis, hygiene)
+│   ├── prompts.py        MCP prompt templates
+│   ├── resources.py      MCP resources
+│   └── schemas/          Pydantic I/O models (artifacts, results, enums, topology, errors)
+├── engines/              Business logic (scope, retrieval, write, dedup, analysis, hygiene, surface, federation, impact, topology)
 ├── graph/
 │   ├── driver.py         AsyncGraphDatabase singleton + lifespan context manager
 │   ├── models.py         Node/relationship Python dataclasses
-│   ├── queries/          Cypher files (schema.cypher, retrieval, write, dedup, hygiene)
-│   └── repositories/     One repo per node type (session, decision, pattern, context, entity, hygiene, token)
-└── devtools/             FastAPI HTTP inspection server
+│   ├── queries/          Cypher files (schema, retrieval, write, dedup, hygiene, federation, impact, topology, surface)
+│   └── repositories/     Repositories for sessions, artifacts, topology, federation, search, hygiene, tokens, and workspaces
+└── devtools/             FastAPI HTTP inspection server + Alpine.js UI
 ```
 
 ---

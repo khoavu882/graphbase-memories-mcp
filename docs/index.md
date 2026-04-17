@@ -34,8 +34,7 @@ graph TD
 |---|---|
 | Load context before reasoning | `retrieve_context` |
 | Fast BM25 keyword lookup for a specific topic | `memory_surface` |
-| Save a session summary | `save_session` |
-| Save session + decisions + patterns in one call | `store_session_with_learnings` |
+| Save a session summary, optionally with decisions and patterns | `store_session_with_learnings` |
 | Save an architectural decision (with dedup) | `save_decision` |
 | Save a repeatable workflow pattern | `save_pattern` |
 | Save a free-form context snippet | `save_context` |

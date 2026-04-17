@@ -90,8 +90,10 @@ Expected response:
 }
 ```
 
-`empty` with `scope_state: "uncertain"` means the server is reachable and no project node exists yet — that is correct and expected on the first call.
-See [Scope Resolution](concepts/scope-resolution.md) for how to create a project and move to `resolved`.
+`empty` with `scope_state: "uncertain"` means the server is reachable and no matching `Project`
+node exists yet. That is correct and expected on the first call. See
+[Scope Resolution](concepts/scope-resolution.md) for how to move from `uncertain` to `resolved`
+before attempting writes.
 
 ---
 
@@ -107,16 +109,18 @@ Endpoints:
 
 | Endpoint | Description |
 |---|---|
-| `GET /health` | Liveness check and Neo4j connectivity status |
 | `GET /projects` | List all registered projects with staleness and node counts |
 | `GET /memory?project_id=<id>` | List all memory nodes for a project |
 | `GET /memory/<node-id>` | Fetch a single node by ID |
 | `GET /memory/<node-id>/relationships` | Fetch all graph edges for a node |
-| `GET /memory/search?q=<query>&project_id=<id>` | Full-text keyword search across memory nodes |
+| `POST /memory/search` | Search memory nodes with JSON body: `query`, `project_id`, `label`, `limit`, `since_days` |
 | `GET /tools` | List all registered MCP tools |
 | `POST /tools/<name>/invoke` | Invoke a tool directly (add `confirm: true` for write tools) |
-| `GET /workspace/health?workspace_id=<id>` | Workspace health metrics across all services |
-| `GET /workspace/conflicts?workspace_id=<id>` | List cross-service CONTRADICTS links |
+| `GET /graph/overview` | Workspace and project graph overview for the UI canvas |
+| `GET /graph/stats` | Node and relationship counts across the graph |
+| `GET /graph/stats/workspace/<workspace_id>` | Workspace health metrics across all services |
+| `GET /graph/conflicts/<workspace_id>` | Cross-service conflict records for a workspace |
+| `POST /graph/repair/orphaned-entities/<workspace_id>` | Repair orphaned `EntityFact` nodes by linking them to a workspace project |
 | `GET /hygiene/status?project_id=<id>` | Current hygiene status for a project |
 | `POST /hygiene/run` | Trigger a hygiene scan and return the `HygieneReport` |
 | `GET /events` | SSE stream — emits `heartbeat` every 5 s with Neo4j connectivity |
