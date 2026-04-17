@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 
 from neo4j import AsyncDriver
+from neo4j.exceptions import Neo4jError
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ async def bm25_fetch(
                         item["_label"] = record["label"]
                         item["bm25_score"] = float(record["bm25_score"])
                         all_items.append(item)
-            except Exception:
+            except Neo4jError:
                 logger.warning("BM25 query failed for index %s — skipping", index_name)
 
     return all_items

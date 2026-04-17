@@ -28,6 +28,7 @@ from neo4j.exceptions import Neo4jError, ServiceUnavailable
 from graphbase_memories.config import settings
 from graphbase_memories.engines import scope as scope_engine
 from graphbase_memories.graph.repositories import token_repo, topology_repo
+from graphbase_memories.graph.repositories.topology_repo import LinkEdgeProps
 from graphbase_memories.mcp.schemas.enums import ScopeState
 from graphbase_memories.mcp.schemas.topology import (
     BatchInfraResult,
@@ -338,15 +339,17 @@ async def link_topology_nodes(
         rel_type=inp.rel_type.value,
         driver=driver,
         database=database,
-        step_order=inp.step_order,
-        role=inp.role,
-        ownership=inp.ownership.value if inp.ownership else None,
-        protocol=inp.protocol,
-        timeout_ms=inp.timeout_ms,
-        criticality=inp.criticality,
-        access_pattern=inp.access_pattern,
-        event_type=inp.event_type,
-        metadata=inp.metadata,
+        edge_props=LinkEdgeProps(
+            step_order=inp.step_order,
+            role=inp.role,
+            ownership=inp.ownership.value if inp.ownership else None,
+            protocol=inp.protocol,
+            timeout_ms=inp.timeout_ms,
+            criticality=inp.criticality,
+            access_pattern=inp.access_pattern,
+            event_type=inp.event_type,
+            metadata=inp.metadata or {},
+        ),
         dry_run=inp.dry_run,
     )
     return TopologyLinkResult(
@@ -431,7 +434,7 @@ async def batch_upsert_shared_infrastructure(
                     tags=item.tags,
                 )
             upserted += 1
-        except Exception as exc:
+        except (Neo4jError, KeyError, ValueError) as exc:
             logger.exception("Batch upsert failed for item %s", getattr(item, "node_type", "?"))
             errors.append(str(exc))
 
