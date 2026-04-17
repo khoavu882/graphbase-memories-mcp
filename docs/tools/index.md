@@ -11,7 +11,7 @@
     | Group | Tools | Purpose |
     |---|---|---|
     | [Retrieval](retrieval.md) | `retrieve_context`, `memory_surface` | Load memory before reasoning |
-    | [Session](session.md) | `save_session`, `store_session_with_learnings` | Persist session summaries |
+    | [Session](session.md) | `store_session_with_learnings` | Persist session summaries |
     | [Artifacts](artifacts.md) | `save_decision`, `save_pattern`, `save_context` | Save structured knowledge |
     | [Entity](entity.md) | `upsert_entity_with_deps` | Named entity graph nodes |
     | [Governance](governance.md) | `request_global_write_approval` | Gate global-scope writes |
@@ -40,12 +40,15 @@
 
 ## Scope requirement
 
-Every tool that reads or writes memory requires a `project_id`. Without it, scope remains `unresolved` and most tools return early with an empty or blocked result.
+Every tool that reads or writes memory requires a `project_id`. Without it, scope remains
+`unresolved` and most tools return early with an empty or blocked result.
 
 !!! info "First time with a new project"
     Call `retrieve_context(project_id="your-project", scope="project")` first. If the project
-    doesn't exist yet, `retrieval_status` will be `empty`. A first `save_session` call creates the
-    Project node automatically.
+    doesn't exist yet, `retrieval_status` will be `empty` and `scope_state` will be `uncertain`.
+    Memory writes, including `store_session_with_learnings`, require a resolved project. In
+    service-oriented setups, `register_federated_service(service_id=project_id, ...)` is the
+    simplest way to create that scope anchor.
 
 ---
 
@@ -56,7 +59,7 @@ All tools return structured Pydantic models serialized to JSON:
 | Model | Returned by |
 |---|---|
 | `ContextBundle` | `retrieve_context` |
-| `SaveResult` | `save_session`, `save_decision`, `save_pattern`, `save_context`, `upsert_entity_with_deps`, `link_cross_service` |
+| `SaveResult` | `save_decision`, `save_pattern`, `save_context`, `upsert_entity_with_deps`, `link_cross_service` |
 | `BatchSaveResult` | `store_session_with_learnings` |
 | `HygieneReport` | `run_hygiene` |
 | `AnalysisResult` | `route_analysis` |

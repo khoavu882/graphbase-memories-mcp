@@ -43,11 +43,8 @@ Default credentials: `neo4j` / `graphbase` on `bolt://localhost:7687`.
     python3 -m venv .venv
     source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
-    # Install (editable mode for development)
-    pip install -e ".[dev]"
-
-    # Or install without dev extras
-    pip install .
+    # Install the package
+    pip install -e .
     ```
 
 Verify the CLI is available:
@@ -56,7 +53,7 @@ Verify the CLI is available:
 graphbase --help
 # Expected output:
 #  Usage: graphbase [OPTIONS] COMMAND [ARGS]...
-#  Commands: serve, devtools, hygiene
+#  Commands: serve, devtools, hygiene, surface
 ```
 
 ---
@@ -88,29 +85,39 @@ Expected response:
 }
 ```
 
-`empty` with `scope_state: "uncertain"` is correct — no project node exists in the graph yet. Save a session to create it:
+`empty` with `scope_state: "uncertain"` is correct — the server is reachable, but the `project_id`
+does not map to an existing `:Project` node yet.
 
-```
-save_session(
-  session={
-    "objective": "Testing graphbase",
-    "actions_taken": ["Installed the server", "Ran quick start"],
-    "decisions_made": [],
-    "open_items": [],
-    "next_actions": ["Explore MCP tools"],
-    "save_scope": "project"
-  },
-  project_id="my-first-project"
+Writes require `scope_state: "resolved"`. In service-oriented setups, the simplest bootstrap path is
+to register the service first:
+
+```python
+register_federated_service(
+    service_id="my-first-project",
+    workspace_id="demo-workspace"
 )
 ```
 
-Then retrieve context:
+Then you can persist a session summary:
 
-```
-retrieve_context(project_id="my-first-project", scope="project")
+```python
+store_session_with_learnings(
+    session={
+        "objective": "Testing graphbase",
+        "actions_taken": ["Installed the server", "Ran quick start"],
+        "decisions_made": [],
+        "open_items": [],
+        "next_actions": ["Explore MCP tools"],
+        "save_scope": "project"
+    },
+    project_id="my-first-project",
+    decisions=[],
+    patterns=[]
+)
 ```
 
-You should see your session node in the response with `retrieval_status: "succeeded"`.
+After that, `retrieve_context(project_id="my-first-project", scope="project")` should return
+`scope_state: "resolved"`.
 
 ---
 
@@ -126,4 +133,7 @@ graphbase devtools --port 8765
 # Run the memory hygiene cycle and print report as JSON
 graphbase hygiene --project-id <uuid>
 graphbase hygiene --scope global
+
+# Surface relevant memories for a keyword or symbol
+graphbase surface "dedup hash" --project-id my-project
 ```
