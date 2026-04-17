@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 
 from fastmcp import Context
+from neo4j.exceptions import Neo4jError
 
 from graphbase_memories.mcp.server import mcp
 
@@ -103,7 +104,7 @@ async def services_resource(ctx: Context) -> str:
                 "ORDER BY w.id, p.id"
             )
             records = [dict(r) async for r in result]
-    except Exception:
+    except Neo4jError:
         logger.exception("services_resource: Neo4j query failed")
         return "error: Could not fetch services from Neo4j."
 
@@ -132,7 +133,7 @@ async def health_resource(ctx: Context, workspace_id: str) -> str:
     driver = ctx.lifespan_context["driver"]
     try:
         report = await impact_engine.graph_health(workspace_id, driver, settings.neo4j_database)
-    except Exception:
+    except Neo4jError:
         logger.exception("health_resource: graph_health failed for workspace %s", workspace_id)
         return f"error: Could not fetch health for workspace '{workspace_id}'."
 
@@ -171,7 +172,7 @@ async def session_resource(ctx: Context, session_id: str) -> str:
                 sid=session_id,
             )
             record = await result.single()
-    except Exception:
+    except Neo4jError:
         logger.exception("session_resource: Neo4j query failed for session %s", session_id)
         return f"error: Could not fetch session '{session_id}' from Neo4j."
 

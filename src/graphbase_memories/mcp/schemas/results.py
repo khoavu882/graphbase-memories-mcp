@@ -174,6 +174,16 @@ class StaleItem(BaseModel):
     project_id: str | None
 
 
+class FreshnessReport(BaseModel):
+    """Result of freshness.scan() — stale memory nodes for a given project."""
+
+    project_id: str | None
+    stale_count: int
+    stale_items: list[StaleItem]
+    checked_at: datetime
+    next_step: str | None = None
+
+
 class SurfaceMatch(BaseModel):
     """Single memory node returned by memory_surface or surface CLI."""
 
