@@ -196,6 +196,86 @@
         </div>
       </template>
       <template x-if="!stats"><p style="color:#94a3b8">Loading health data…</p></template>
+
+      <!-- Workspace health + conflict_records -->
+      <div class="card" style="margin-top:12px">
+        <h2>Workspace Health</h2>
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:12px">
+          <div style="flex:1">
+            <label style="font-size:12px;color:#94a3b8">Workspace ID</label>
+            <input placeholder="e.g. my-workspace" x-model="workspaceId"
+                   @keydown.enter="loadWorkspaceHealth()">
+          </div>
+          <button class="btn btn-primary" @click="loadWorkspaceHealth()" :disabled="loadingWorkspace"
+                  x-text="loadingWorkspace?'Loading…':'Load'"></button>
+        </div>
+        <template x-if="workspaceReport">
+          <div>
+            <div class="grid-2" style="margin-bottom:12px">
+              <div>
+                <div class="stat-row">
+                  <span>Services</span><span x-text="workspaceReport.service_count"></span>
+                </div>
+                <div class="stat-row">
+                  <span>Total conflicts</span>
+                  <span :class="workspaceReport.total_conflicts>0?'stale':'fresh'"
+                        x-text="workspaceReport.total_conflicts"></span>
+                </div>
+                <div class="stat-row">
+                  <span>Checked at</span>
+                  <span style="color:#94a3b8;font-size:11px" x-text="workspaceReport.checked_at"></span>
+                </div>
+                <template x-if="workspaceReport.next_step">
+                  <p style="font-size:12px;color:#fde68a;margin-top:8px" x-text="workspaceReport.next_step"></p>
+                </template>
+              </div>
+              <div>
+                <p style="font-size:12px;color:#94a3b8;margin-bottom:4px">Services</p>
+                <template x-for="svc in workspaceReport.services" :key="svc.service_id">
+                  <div class="stat-row">
+                    <span x-text="svc.service_id"></span>
+                    <span :class="svc.hygiene_status==='clean'?'fresh':'stale'"
+                          x-text="svc.hygiene_status"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+            <template x-if="workspaceReport.conflict_records?.length > 0">
+              <div>
+                <p style="font-size:12px;color:#fca5a5;margin-bottom:6px"
+                   x-text="`${workspaceReport.conflict_records.length} conflict(s) detected`"></p>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Source</th><th>Target</th><th>Confidence</th><th>Rationale</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template x-for="(c, i) in workspaceReport.conflict_records" :key="i">
+                      <tr>
+                        <td>
+                          <span style="font-size:11px;color:#94a3b8" x-text="c.source_project+' › '"></span>
+                          <span x-text="(c.source_summary||'').slice(0,40)"></span>
+                        </td>
+                        <td>
+                          <span style="font-size:11px;color:#94a3b8" x-text="c.target_project+' › '"></span>
+                          <span x-text="(c.target_summary||'').slice(0,40)"></span>
+                        </td>
+                        <td x-text="c.link_confidence!=null ? (c.link_confidence*100).toFixed(0)+'%' : '—'"></td>
+                        <td style="font-size:11px;color:#94a3b8"
+                            x-text="(c.link_rationale||'').slice(0,60)"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </template>
+            <template x-if="workspaceReport.conflict_records?.length === 0">
+              <p style="font-size:12px;color:#86efac">No conflicts detected.</p>
+            </template>
+          </div>
+        </template>
+      </div>
     </div>
 
     <!-- Memory tab -->
@@ -272,12 +352,55 @@
               <option value="project">project</option>
             </select>
           </div>
+          <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="checkPendingOnly" x-model="checkPendingOnly"
+                   style="width:auto;margin-top:0">
+            <label for="checkPendingOnly" style="font-size:12px;color:#94a3b8;cursor:pointer">
+              Check pending only (skip full content scan)
+            </label>
+          </div>
           <button class="btn btn-primary" @click="runHygiene()" :disabled="running"
                   x-text="running?'Running…':'Run Hygiene'"></button>
           <template x-if="report">
             <div style="margin-top:12px">
-              <p style="font-size:12px;color:#94a3b8;margin-bottom:4px">Report</p>
-              <pre x-text="JSON.stringify(report,null,2)"></pre>
+              <p style="font-size:12px;color:#94a3b8;margin-bottom:4px"
+                 x-text="report.pending_only ? 'Report (pending check only — last_hygiene_at not updated)' : 'Report'"></p>
+              <div style="margin-bottom:8px">
+                <div class="stat-row">
+                  <span>Pending saves</span>
+                  <span :class="report.pending_saves>0?'stale':'fresh'" x-text="report.pending_saves ?? 0"></span>
+                </div>
+                <div class="stat-row" x-show="!report.pending_only">
+                  <span>Stale items</span>
+                  <span :class="(report.stale_items?.length??0)>0?'stale':'fresh'"
+                        x-text="report.stale_items?.length ?? 0"></span>
+                </div>
+                <div class="stat-row" x-show="!report.pending_only">
+                  <span>Last hygiene</span>
+                  <span style="color:#94a3b8" x-text="report.last_hygiene_at ?? '—'"></span>
+                </div>
+              </div>
+              <template x-if="report.stale_items?.length > 0">
+                <div>
+                  <p style="font-size:12px;color:#fde68a;margin-bottom:4px">Stale Items</p>
+                  <table>
+                    <thead><tr><th>ID</th><th>Label</th><th>Staleness (days)</th></tr></thead>
+                    <tbody>
+                      <template x-for="item in report.stale_items" :key="item.id">
+                        <tr>
+                          <td style="font-size:11px;color:#94a3b8" x-text="item.id"></td>
+                          <td x-text="item.label ?? '—'"></td>
+                          <td class="stale" x-text="item.staleness_days?.toFixed(1) ?? '—'"></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </template>
+              <details style="margin-top:8px">
+                <summary style="font-size:11px;color:#475569;cursor:pointer">Raw JSON</summary>
+                <pre x-text="JSON.stringify(report,null,2)"></pre>
+              </details>
             </div>
           </template>
         </div>
