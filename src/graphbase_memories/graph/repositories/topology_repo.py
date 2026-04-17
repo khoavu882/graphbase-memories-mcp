@@ -40,6 +40,8 @@ TOPOLOGY_LINK_TYPES: frozenset[str] = frozenset(
         "READS_WRITES",
         "PUBLISHES_TO",
         "SUBSCRIBES_TO",
+        "INVOLVES",
+        "MEMBER_OF_CONTEXT",
     ]
 )
 
@@ -48,6 +50,21 @@ TOPOLOGY_LINK_TYPES: frozenset[str] = frozenset(
 _ALLOWED_NODE_LABELS: frozenset[str] = frozenset(
     ["Service", "DataSource", "MessageQueue", "Feature", "BoundedContext"]
 )
+
+# Topology node labels — used by link_topology_nodes to identify node type.
+_TOPOLOGY_LABELS: frozenset[str] = frozenset(
+    {"Service", "DataSource", "MessageQueue", "Feature", "BoundedContext"}
+)
+
+# Allowed relationship types per (from_label, to_label) pair.
+# Static matrix — prevents invalid cross-node-type edges at validation time.
+_LINK_COMPATIBILITY: dict[tuple[str, str], frozenset[str]] = {
+    ("Service", "Service"): frozenset({"CALLS_DOWNSTREAM", "CALLS_UPSTREAM"}),
+    ("Service", "DataSource"): frozenset({"READS_FROM", "WRITES_TO", "READS_WRITES"}),
+    ("Service", "MessageQueue"): frozenset({"PUBLISHES_TO", "SUBSCRIBES_TO"}),
+    ("Feature", "Service"): frozenset({"INVOLVES"}),
+    ("Service", "BoundedContext"): frozenset({"MEMBER_OF_CONTEXT"}),
+}
 
 # Maps direction string → named query block in topology_queries.cypher.
 # Three separate blocks exist because Neo4j does not support parameterized
@@ -478,6 +495,136 @@ async def link_service_context(
             f"link_service_context: MATCH found no nodes — verify service={service_id!r}, context={context_id!r} exist"
         )
     return dict(record)
+
+
+async def link_topology_nodes(
+    from_id: str,
+    to_id: str,
+    rel_type: str,
+    driver: AsyncDriver,
+    database: str,
+    step_order: int | None = None,
+    role: str | None = None,
+    ownership: str | None = None,
+    protocol: str | None = None,
+    timeout_ms: int | None = None,
+    criticality: str | None = None,
+    access_pattern: str | None = None,
+    event_type: str | None = None,
+    metadata: dict | None = None,
+    dry_run: bool = False,
+) -> dict:
+    """Unified topology link dispatch — validates node types and rel_type compatibility.
+
+    Returns a dict with keys: from_id, to_id, rel_type, status, dry_run, error.
+    status values: "linked" | "dry_run_ok" | "dry_run_node_missing" | "node_not_found" | "invalid_rel_type"
+    Does NOT raise on validation failures — returns status dict instead.
+    """
+    # ── 1. Resolve node labels in a single round-trip ──────────────────────
+    async with driver.session(database=database) as session:
+        result = await session.run(
+            "OPTIONAL MATCH (a {id: $from_id}) "
+            "OPTIONAL MATCH (b {id: $to_id}) "
+            "RETURN labels(a) AS from_labels, labels(b) AS to_labels",
+            from_id=from_id,
+            to_id=to_id,
+        )
+        record = await result.single()
+
+    from_raw = set(record["from_labels"] or []) if record and record["from_labels"] else set()
+    to_raw = set(record["to_labels"] or []) if record and record["to_labels"] else set()
+    from_topo = from_raw & _TOPOLOGY_LABELS
+    to_topo = to_raw & _TOPOLOGY_LABELS
+
+    # ── 2. Node existence check ────────────────────────────────────────────
+    from_label = next(iter(from_topo), None)
+    to_label = next(iter(to_topo), None)
+    if from_label is None or to_label is None:
+        missing = []
+        if from_label is None:
+            missing.append(f"from_id={from_id!r}")
+        if to_label is None:
+            missing.append(f"to_id={to_id!r}")
+        return {
+            "from_id": from_id,
+            "to_id": to_id,
+            "rel_type": rel_type,
+            "status": "node_not_found",
+            "dry_run": dry_run,
+            "error": f"Topology node(s) not found: {', '.join(missing)}",
+        }
+
+    # ── 3. Compatibility validation ────────────────────────────────────────
+    allowed = _LINK_COMPATIBILITY.get((from_label, to_label), frozenset())
+    if rel_type not in allowed:
+        return {
+            "from_id": from_id,
+            "to_id": to_id,
+            "rel_type": rel_type,
+            "status": "invalid_rel_type",
+            "dry_run": dry_run,
+            "error": (
+                f"{rel_type!r} is not valid for {from_label}→{to_label}. "
+                f"Allowed: {', '.join(sorted(allowed))}"
+            ),
+        }
+
+    # ── 4. Dispatch to existing private link functions ─────────────────────
+    pair = (from_label, to_label)
+    if pair == ("Service", "Service"):
+        return await link_service_dependency(
+            driver=driver,
+            database=database,
+            from_id=from_id,
+            to_id=to_id,
+            rel_type=rel_type,
+            protocol=protocol,
+            timeout_ms=timeout_ms,
+            criticality=criticality,
+            metadata=metadata,
+            dry_run=dry_run,
+        )
+    if pair == ("Service", "DataSource"):
+        return await link_service_datasource(
+            driver=driver,
+            database=database,
+            service_id=from_id,
+            source_id=to_id,
+            rel_type=rel_type,
+            access_pattern=access_pattern,
+            metadata=metadata,
+            dry_run=dry_run,
+        )
+    if pair == ("Service", "MessageQueue"):
+        return await link_service_mq(
+            driver=driver,
+            database=database,
+            service_id=from_id,
+            queue_id=to_id,
+            rel_type=rel_type,
+            event_type=event_type,
+            metadata=metadata,
+            dry_run=dry_run,
+        )
+    if pair == ("Feature", "Service"):
+        return await link_feature_service(
+            driver=driver,
+            database=database,
+            feature_id=from_id,
+            service_id=to_id,
+            step_order=step_order if step_order is not None else 1,
+            role=role or "participant",
+            dry_run=dry_run,
+        )
+    # ("Service", "BoundedContext")
+    return await link_service_context(
+        driver=driver,
+        database=database,
+        service_id=from_id,
+        context_id=to_id,
+        ownership=ownership or "owner",
+        dry_run=dry_run,
+    )
 
 
 # ── Traversal queries ────────────────────────────────────────────────────────

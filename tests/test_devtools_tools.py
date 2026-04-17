@@ -34,14 +34,14 @@ async def test_list_tools_includes_known_tools(driver):
     expected = {
         "route_analysis",
         "graph_health",
-        "detect_conflicts",
         "list_active_services",
         "search_cross_service",
         "run_hygiene",
         "propagate_impact",
         "link_cross_service",
         "register_service",
-        "deregister_service",
+        "link_topology_nodes",
+        "register_federated_service",
     }
     assert expected.issubset(names), f"Missing tools: {expected - names}"
 

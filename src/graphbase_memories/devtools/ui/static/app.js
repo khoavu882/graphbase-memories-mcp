@@ -124,9 +124,23 @@ function toolsPanel() {
 function healthPanel() {
   return {
     stats: null,
+    workspaceId: "",
+    workspaceReport: null,
+    loadingWorkspace: false,
     async init() {
       const r = await fetch("/graph/stats");
       this.stats = await r.json();
+    },
+    async loadWorkspaceHealth() {
+      if (!this.workspaceId.trim()) return;
+      this.loadingWorkspace = true;
+      this.workspaceReport = null;
+      try {
+        const r = await fetch(`/graph/stats/workspace/${encodeURIComponent(this.workspaceId.trim())}`);
+        this.workspaceReport = await r.json();
+      } finally {
+        this.loadingWorkspace = false;
+      }
     },
   };
 }
@@ -167,6 +181,7 @@ function hygienePanel() {
     running: false,
     runProjectId: "",
     runScope: "global",
+    checkPendingOnly: false,
     async init() {
       const r = await fetch("/hygiene/status");
       this.status = await r.json();
@@ -180,6 +195,7 @@ function hygienePanel() {
           body: JSON.stringify({
             project_id: this.runProjectId || null,
             scope: this.runScope,
+            check_pending_only: this.checkPendingOnly,
           }),
         });
         this.report = await r.json();

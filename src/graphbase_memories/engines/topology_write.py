@@ -47,6 +47,7 @@ from graphbase_memories.mcp.schemas.topology import (
     LinkServiceDataSourceInput,
     LinkServiceDependencyInput,
     LinkServiceMQInput,
+    LinkTopologyNodesInput,
     MessageQueueItem,
     MessageQueueResult,
     RegisterBoundedContextInput,
@@ -449,6 +450,43 @@ async def link_service_context(
 # ── Batch infra ───────────────────────────────────────────────────────────────
 
 
+async def link_topology_nodes(
+    inp: LinkTopologyNodesInput,
+    driver: AsyncDriver,
+    database: str = "neo4j",
+) -> TopologyLinkResult:
+    """Dispatch unified topology link to the correct repo function via label-based validation.
+
+    Returns TopologyLinkResult directly — error statuses (node_not_found, invalid_rel_type)
+    are encoded in .status + .error fields rather than raised as exceptions.
+    """
+    record = await topology_repo.link_topology_nodes(
+        from_id=inp.from_id,
+        to_id=inp.to_id,
+        rel_type=inp.rel_type.value,
+        driver=driver,
+        database=database,
+        step_order=inp.step_order,
+        role=inp.role,
+        ownership=inp.ownership.value if inp.ownership else None,
+        protocol=inp.protocol,
+        timeout_ms=inp.timeout_ms,
+        criticality=inp.criticality,
+        access_pattern=inp.access_pattern,
+        event_type=inp.event_type,
+        metadata=inp.metadata,
+        dry_run=inp.dry_run,
+    )
+    return TopologyLinkResult(
+        from_id=record.get("from_id", inp.from_id),
+        to_id=record.get("to_id", inp.to_id),
+        rel_type=record.get("rel_type", inp.rel_type.value),
+        status=record.get("status", "linked"),
+        dry_run=record.get("dry_run", inp.dry_run),
+        error=record.get("error"),
+    )
+
+
 async def batch_upsert_shared_infrastructure(
     inp: BatchUpsertInfraInput,
     driver: AsyncDriver,
@@ -456,16 +494,18 @@ async def batch_upsert_shared_infrastructure(
 ) -> BatchInfraResult:
     """
     Upsert N heterogeneous infrastructure nodes in a single authorized batch.
-    One governance token is consumed for the entire batch (ADR-TOPO-001 §Governance).
+    Single-node registration requires no governance token.
+    Multi-node (N>1) requires a governance token (ADR-TOPO-001 §Governance).
     """
     await _require_workspace(inp.workspace_id, driver, database)
 
-    valid = await token_repo.validate_and_consume(inp.governance_token, driver, database)
-    if not valid:
-        raise ValueError(
-            "Governance token is invalid, expired, or already used. "
-            "Call request_global_write_approval() to obtain a fresh token."
-        )
+    if inp.governance_token is not None:
+        valid = await token_repo.validate_and_consume(inp.governance_token, driver, database)
+        if not valid:
+            raise ValueError(
+                "Governance token is invalid, expired, or already used. "
+                "Call request_global_write_approval() to obtain a fresh token."
+            )
 
     upserted = 0
     errors: list[str] = []

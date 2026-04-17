@@ -232,8 +232,8 @@ async def test_upsert_bounded_context(driver):
 # ── Relationship creation ─────────────────────────────────────────────────────
 
 
-async def test_link_service_dependency_creates_edge(driver):
-    """link_service_dependency creates a CALLS_DOWNSTREAM edge between two services."""
+async def test_link_topology_nodes_creates_edge(driver):
+    """link_topology_nodes dispatches to link_service_dependency, creating a CALLS_DOWNSTREAM edge."""
     await _setup_workspace(driver)
     from graphbase_memories.graph.repositories import topology_repo
 
@@ -244,12 +244,15 @@ async def test_link_service_dependency_creates_edge(driver):
         await topology_repo.upsert_service(
             driver, TEST_DB, service_id=SVC_B, name="B", workspace_id=WS_ID
         )
-        record = await topology_repo.link_service_dependency(
-            driver, TEST_DB, from_id=SVC_A, to_id=SVC_B, rel_type="CALLS_DOWNSTREAM"
+        record = await topology_repo.link_topology_nodes(
+            from_id=SVC_A, to_id=SVC_B, rel_type="CALLS_DOWNSTREAM",
+            driver=driver, database=TEST_DB,
         )
         assert record["from_id"] == SVC_A
         assert record["to_id"] == SVC_B
         assert record["rel_type"] == "CALLS_DOWNSTREAM"
+        assert record.get("status") != "node_not_found"
+        assert record.get("status") != "invalid_rel_type"
 
         # Verify edge exists in graph
         async with driver.session(database=TEST_DB) as s:
@@ -264,18 +267,28 @@ async def test_link_service_dependency_creates_edge(driver):
         await _cleanup(driver, [SVC_A, SVC_B], [WS_ID])
 
 
-async def test_link_invalid_rel_type_raises_value_error(driver):
-    """link_service_dependency raises ValueError for rel_type not in TOPOLOGY_LINK_TYPES."""
-    import pytest
-
+async def test_link_topology_nodes_invalid_rel_type_returns_status(driver):
+    """link_topology_nodes returns status='invalid_rel_type' for an incompatible rel_type."""
+    await _setup_workspace(driver)
     from graphbase_memories.graph.repositories import topology_repo
-    from graphbase_memories.graph.repositories.topology_repo import TOPOLOGY_LINK_TYPES
 
-    assert "MALICIOUS_TYPE" not in TOPOLOGY_LINK_TYPES
-    with pytest.raises(ValueError, match="whitelist"):
-        await topology_repo.link_service_dependency(
-            driver, TEST_DB, from_id="x", to_id="y", rel_type="MALICIOUS_TYPE"
+    try:
+        await topology_repo.upsert_service(
+            driver, TEST_DB, service_id=SVC_A, name="A", workspace_id=WS_ID
         )
+        await topology_repo.upsert_service(
+            driver, TEST_DB, service_id=SVC_B, name="B", workspace_id=WS_ID
+        )
+        # READS_FROM is valid for Service→DataSource, not Service→Service
+        record = await topology_repo.link_topology_nodes(
+            from_id=SVC_A, to_id=SVC_B, rel_type="READS_FROM",
+            driver=driver, database=TEST_DB,
+        )
+        assert record["status"] == "invalid_rel_type"
+        assert "error" in record
+        assert "CALLS_DOWNSTREAM" in record["error"] or "CALLS_UPSTREAM" in record["error"]
+    finally:
+        await _cleanup(driver, [SVC_A, SVC_B], [WS_ID])
 
 
 # ── Batch upsert with governance token ────────────────────────────────────────
@@ -356,8 +369,9 @@ async def test_get_service_dependencies_downstream(driver):
         )
         from graphbase_memories.graph.repositories import topology_repo
 
-        await topology_repo.link_service_dependency(
-            driver, TEST_DB, from_id=svc_root, to_id=svc_leaf, rel_type="CALLS_DOWNSTREAM"
+        await topology_repo.link_topology_nodes(
+            from_id=svc_root, to_id=svc_leaf, rel_type="CALLS_DOWNSTREAM",
+            driver=driver, database=TEST_DB,
         )
         result = await eng.get_service_dependencies(
             GetServiceDependenciesInput(service_id=svc_root, direction="downstream", depth=2),
