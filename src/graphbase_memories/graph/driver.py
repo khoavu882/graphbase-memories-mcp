@@ -37,7 +37,6 @@ def _load_cypher(name: str) -> str:
 SCHEMA_DDL = _load_cypher("schema")
 FEDERATION_QUERIES = _load_cypher("federation")
 IMPACT_QUERIES = _load_cypher("impact")
-FRESHNESS_QUERIES = _load_cypher("freshness")
 TOPOLOGY_QUERIES = _load_cypher("topology")
 TOPOLOGY_Q_QUERIES = _load_cypher("topology_queries")
 _load_cypher("retrieval")

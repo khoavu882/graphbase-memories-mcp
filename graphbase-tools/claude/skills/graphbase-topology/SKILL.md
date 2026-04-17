@@ -1,23 +1,15 @@
 ---
 name: graphbase-topology
 description: Upsert service topology into the graph — register services, shared infrastructure, features, and all relationships between them. Use when onboarding a new service, after a dependency refactor, or before running blast-radius analysis.
-version: 1.0.0
+version: 2.0.0
 tools:
+  - retrieve_context
   - register_service
-  - register_datasource
-  - register_message_queue
-  - register_feature
-  - register_bounded_context
-  - link_service_dependency
-  - link_service_datasource
-  - link_service_mq
-  - link_feature_service
-  - link_service_context
   - batch_upsert_shared_infrastructure
+  - link_topology_nodes
   - get_service_dependencies
   - get_feature_workflow
   - request_global_write_approval
-  - check_governance_policy
 ---
 
 # graphbase-topology — Service Topology Upsert Skill
@@ -91,22 +83,24 @@ Execute in strict order. Each phase is a prerequisite for the next.
 ### Phase 0 — Prerequisites
 
 ```
-1. get_scope_state(project_id=<workspace_id>)
-   → must return scope_state: "resolved"
-   → if "unresolved": ask user for correct workspace_id
-
-2. (Only if using batch_upsert_shared_infrastructure)
-   check_governance_policy(
-     proposed_decision="batch infrastructure upsert for workspace <workspace_id>",
-     project_id=<workspace_id>
-   )
-   → if policy allows:
-   request_global_write_approval(
-     rationale="Batch-registering shared infra nodes for <workspace_id> topology upsert",
-     ttl_seconds=600
-   )
-   → save token.id — consumed once in Phase 1
+retrieve_context(project_id=<workspace_id>, scope="project")
+→ ContextBundle.scope_state:
+    "resolved"   — workspace exists, context loaded → proceed
+    "uncertain"  — workspace exists but has few memories → proceed with caution
+    "unresolved" — workspace not found → ask user for correct workspace_id
 ```
+
+**Governance token (only when batch-upserting >1 infra node):**
+
+```
+request_global_write_approval(
+  rationale="Batch-registering shared infra nodes for <workspace_id> topology upsert",
+  ttl_seconds=600
+)
+→ save token.id — consumed once in Phase 1 Option B
+```
+
+Single-node `batch_upsert_shared_infrastructure` calls (N=1) do **not** require a token.
 
 ---
 
@@ -114,40 +108,44 @@ Execute in strict order. Each phase is a prerequisite for the next.
 
 Register all infrastructure nodes before any services. All operations use MERGE — idempotent.
 
-**Option A — Individual (no governance token required):**
+**Option A — Single node (no governance token required):**
 
 ```
-register_datasource(inp={
-  source_id: "redis-session",
-  source_type: "redis",
+batch_upsert_shared_infrastructure(inp={
   workspace_id: <workspace_id>,
-  host: "redis.internal",
-  owner_team: "platform"
+  nodes: [
+    { node_type: "datasource", source_id: "redis-session", source_type: "redis",
+      host: "redis.internal", owner_team: "platform" }
+  ]
 })
+→ check: upserted == 1 AND failed == 0
 
-register_message_queue(inp={
-  queue_id: "login-events",
-  queue_type: "kafka",
-  topic_or_exchange: "login.events.v1",
-  workspace_id: <workspace_id>
-})
-
-register_feature(inp={
-  feature_id: "user-login-flow",
-  name: "User Login Flow",
+batch_upsert_shared_infrastructure(inp={
   workspace_id: <workspace_id>,
-  workflow_order: 1
+  nodes: [
+    { node_type: "messagequeue", queue_id: "login-events", queue_type: "kafka",
+      topic_or_exchange: "login.events.v1" }
+  ]
 })
 
-register_bounded_context(inp={
-  context_id: "identity",
-  name: "Identity",
-  domain: "Platform",
-  workspace_id: <workspace_id>
+batch_upsert_shared_infrastructure(inp={
+  workspace_id: <workspace_id>,
+  nodes: [
+    { node_type: "feature", feature_id: "user-login-flow",
+      name: "User Login Flow", workflow_order: 1 }
+  ]
+})
+
+batch_upsert_shared_infrastructure(inp={
+  workspace_id: <workspace_id>,
+  nodes: [
+    { node_type: "boundedcontext", context_id: "identity",
+      name: "Identity", domain: "Platform" }
+  ]
 })
 ```
 
-**Option B — Batch (governance token required, for >5 infra nodes):**
+**Option B — Batch (governance token required, for >1 infra node in one call):**
 
 ```
 batch_upsert_shared_infrastructure(inp={
@@ -201,19 +199,24 @@ register_service(inp={
 
 ### Phase 3 — Register Relationships
 
+All relationship writes use `link_topology_nodes`. The server validates `rel_type` against
+the labels of `from_id` and `to_id` — use the IDs you assigned in Phases 1 and 2.
+
 **Always run the dry-run pass first.** This validates that both endpoint nodes exist before
 committing any writes. Fix missing nodes before proceeding to the write pass.
 
 **Dry-run pass:**
 
 ```
-link_service_dependency(
-  inp={from_service_id:"api-gateway", to_service_id:"login-service",
-       rel_type:"CALLS_DOWNSTREAM", dry_run:true},
-  workspace_id:<workspace_id>
-)
-→ {status: "dry_run_ok"}  — both nodes found, safe to write
-→ {status: "dry_run_node_missing"}  — stop, fix missing node first
+link_topology_nodes(inp={
+  from_id: "api-gateway",
+  to_id:   "login-service",
+  rel_type: "CALLS_DOWNSTREAM",
+  workspace_id: <workspace_id>,
+  dry_run: true
+})
+→ {status: "dry_run_ok"}          — both nodes found, safe to write
+→ {status: "dry_run_node_missing"} — stop, fix missing node first
 ```
 
 **Write pass** (after all dry-runs return `dry_run_ok`):
@@ -221,95 +224,93 @@ link_service_dependency(
 **3a — Service-to-service dependencies:**
 
 ```
-link_service_dependency(
-  inp={
-    from_service_id: "api-gateway",
-    to_service_id:   "login-service",
-    rel_type:        "CALLS_DOWNSTREAM",
-    protocol:        "REST",
-    timeout_ms:      5000,
-    criticality:     "high",
-    dry_run:         false
-  },
-  workspace_id: <workspace_id>
-)
+link_topology_nodes(inp={
+  from_id:     "api-gateway",
+  to_id:       "login-service",
+  rel_type:    "CALLS_DOWNSTREAM",
+  workspace_id: <workspace_id>,
+  protocol:    "REST",
+  timeout_ms:  5000,
+  criticality: "high",
+  dry_run:     false
+})
 ```
+
+Valid `rel_type` values for service→service: `CALLS_DOWNSTREAM`, `CALLS_UPSTREAM`
 
 **3b — Service-to-datasource links:**
 
 ```
-link_service_datasource(
-  inp={
-    service_id:     "login-service",
-    source_id:      "redis-session",
-    rel_type:       "READS_WRITES",
-    access_pattern: "cache-aside",
-    dry_run:        false
-  },
-  workspace_id: <workspace_id>
-)
+link_topology_nodes(inp={
+  from_id:       "login-service",
+  to_id:         "redis-session",
+  rel_type:      "READS_WRITES",
+  workspace_id:  <workspace_id>,
+  access_pattern: "cache-aside",
+  dry_run:       false
+})
 ```
 
-Relationship type options: `READS_FROM`, `WRITES_TO`, `READS_WRITES`
+Valid `rel_type` values for service→datasource: `READS_FROM`, `WRITES_TO`, `READS_WRITES`
 
 **3c — Service-to-message-queue links:**
 
 ```
-link_service_mq(
-  inp={
-    service_id: "login-service",
-    queue_id:   "login-events",
-    rel_type:   "PUBLISHES_TO",
-    event_type: "LoginSucceededEvent",
-    dry_run:    false
-  },
-  workspace_id: <workspace_id>
-)
+link_topology_nodes(inp={
+  from_id:     "login-service",
+  to_id:       "login-events",
+  rel_type:    "PUBLISHES_TO",
+  workspace_id: <workspace_id>,
+  event_type:  "LoginSucceededEvent",
+  dry_run:     false
+})
 ```
+
+Valid `rel_type` values for service→messagequeue: `PUBLISHES_TO`, `SUBSCRIBES_TO`
 
 **3d — Feature-to-service links:**
 
 ```
-link_feature_service(
-  inp={
-    feature_id: "user-login-flow",
-    service_id: "api-gateway",
-    step_order: 1,
-    role:       "entry",
-    dry_run:    false
-  },
-  workspace_id: <workspace_id>
-)
+link_topology_nodes(inp={
+  from_id:     "user-login-flow",
+  to_id:       "api-gateway",
+  rel_type:    "INVOLVES",
+  workspace_id: <workspace_id>,
+  step_order:  1,
+  role:        "entry",
+  dry_run:     false
+})
 
-link_feature_service(
-  inp={
-    feature_id: "user-login-flow",
-    service_id: "login-service",
-    step_order: 2,
-    role:       "authenticator",
-    dry_run:    false
-  },
-  workspace_id: <workspace_id>
-)
+link_topology_nodes(inp={
+  from_id:     "user-login-flow",
+  to_id:       "login-service",
+  rel_type:    "INVOLVES",
+  workspace_id: <workspace_id>,
+  step_order:  2,
+  role:        "authenticator",
+  dry_run:     false
+})
 ```
 
-**3e — Service-to-context links:**
+`INVOLVES` is the fixed `rel_type` for feature→service edges.
+
+**3e — Service-to-bounded-context links:**
 
 ```
-link_service_context(
-  inp={
-    service_id: "login-service",
-    context_id: "identity",
-    ownership:  "owner",
-    dry_run:    false
-  },
-  workspace_id: <workspace_id>
-)
+link_topology_nodes(inp={
+  from_id:     "login-service",
+  to_id:       "identity",
+  rel_type:    "MEMBER_OF_CONTEXT",
+  workspace_id: <workspace_id>,
+  ownership:   "owner",
+  dry_run:     false
+})
 ```
 
-> **Note on relationship naming:** The graph uses `MEMBER_OF_CONTEXT` for the
-> service→bounded-context edge (not `BELONGS_TO` as in the PDR).
-> This avoids collision with artifact→Project ownership edges. Use `link_service_context()` exclusively.
+`MEMBER_OF_CONTEXT` is the fixed `rel_type` for service→bounded-context edges.
+
+> **Note:** The graph uses `MEMBER_OF_CONTEXT` for service→bounded-context edges to avoid
+> collision with artifact→Project ownership edges. Do not use `BELONGS_TO`.
 
 ---
 
@@ -335,13 +336,13 @@ Report to user: counts of nodes registered, edges created, verification results.
 
 ## Relationship Type Reference
 
-| Link tool | rel_type values | Key edge properties |
-|---|---|---|
-| `link_service_dependency` | `CALLS_DOWNSTREAM`, `CALLS_UPSTREAM` | `protocol`, `timeout_ms`, `criticality` |
-| `link_service_datasource` | `READS_FROM`, `WRITES_TO`, `READS_WRITES` | `access_pattern` |
-| `link_service_mq` | `PUBLISHES_TO`, `SUBSCRIBES_TO` | `event_type` |
-| `link_feature_service` | `INVOLVES` (fixed) | `step_order`, `role` |
-| `link_service_context` | `MEMBER_OF_CONTEXT` (fixed) | `ownership` |
+| `from` node type | `to` node type | `rel_type` values | Key edge properties |
+|---|---|---|---|
+| Service | Service | `CALLS_DOWNSTREAM`, `CALLS_UPSTREAM` | `protocol`, `timeout_ms`, `criticality` |
+| Service | DataSource | `READS_FROM`, `WRITES_TO`, `READS_WRITES` | `access_pattern` |
+| Service | MessageQueue | `PUBLISHES_TO`, `SUBSCRIBES_TO` | `event_type` |
+| Feature | Service | `INVOLVES` (fixed) | `step_order`, `role` |
+| Service | BoundedContext | `MEMBER_OF_CONTEXT` (fixed) | `ownership` |
 
 All edge properties are optional. Omitting them on a re-link preserves existing values.
 
@@ -351,7 +352,7 @@ All edge properties are optional. Omitting them on a re-link preserves existing 
 
 | Error | Recovery |
 |---|---|
-| `dry_run_node_missing` for a service | Re-run Phase 2 for the missing service, then retry Phase 3 |
-| `batch_upsert` returns `failed > 0` | Check `errors` list, fix individual nodes, re-run batch or use individual `register_*` calls |
-| Governance token expired (TTL 600s) | Request a new token (`request_global_write_approval`) and retry the `batch_upsert` call only — all prior calls are idempotent |
-| Workspace not found | Use `register_service(workspace_id=...)` — it creates the Workspace node if absent |
+| `scope_state: "unresolved"` | Verify `workspace_id` with user; first `register_service` will create the Workspace node |
+| `dry_run_node_missing` | Re-run Phase 1 or 2 for the missing node, then retry Phase 3 |
+| `batch_upsert` returns `failed > 0` | Check `errors` list, fix individual nodes, re-run batch or use single-node calls |
+| Governance token expired (TTL 600s) | Request a new token and retry `batch_upsert` only — all prior writes are idempotent |

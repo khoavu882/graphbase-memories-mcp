@@ -76,6 +76,7 @@ nav:
     - Analysis: tools/analysis.md
     - Hygiene: tools/hygiene.md
     - Federation: tools/federation.md
+    - Topology: tools/topology.md
   - Concepts:
     - Memory Model: concepts/memory-model.md
     - Scope Resolution: concepts/scope-resolution.md

@@ -1,19 +1,11 @@
 {
   "tools": [
-    { "name": "register_service",                   "server": "graphbase-memories" },
-    { "name": "register_datasource",                "server": "graphbase-memories" },
-    { "name": "register_message_queue",             "server": "graphbase-memories" },
-    { "name": "register_feature",                   "server": "graphbase-memories" },
-    { "name": "register_bounded_context",           "server": "graphbase-memories" },
-    { "name": "link_service_dependency",            "server": "graphbase-memories" },
-    { "name": "link_service_datasource",            "server": "graphbase-memories" },
-    { "name": "link_service_mq",                    "server": "graphbase-memories" },
-    { "name": "link_feature_service",               "server": "graphbase-memories" },
-    { "name": "link_service_context",               "server": "graphbase-memories" },
+    { "name": "retrieve_context",                "server": "graphbase-memories" },
+    { "name": "register_service",                "server": "graphbase-memories" },
     { "name": "batch_upsert_shared_infrastructure", "server": "graphbase-memories" },
-    { "name": "get_service_dependencies",           "server": "graphbase-memories" },
-    { "name": "get_feature_workflow",               "server": "graphbase-memories" },
-    { "name": "request_global_write_approval",      "server": "graphbase-memories" },
-    { "name": "check_governance_policy",            "server": "graphbase-memories" }
+    { "name": "link_topology_nodes",             "server": "graphbase-memories" },
+    { "name": "get_service_dependencies",        "server": "graphbase-memories" },
+    { "name": "get_feature_workflow",            "server": "graphbase-memories" },
+    { "name": "request_global_write_approval",   "server": "graphbase-memories" }
   ]
 }

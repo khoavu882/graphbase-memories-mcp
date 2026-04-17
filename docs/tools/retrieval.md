@@ -1,6 +1,6 @@
 # Retrieval Tools
 
-Three tools for loading memory before an agent begins reasoning.
+Two tools for loading memory before an agent begins reasoning.
 
 ---
 
@@ -69,38 +69,6 @@ retrieve_context(
     topic="authentication"
 )
 ```
-
----
-
-## `get_scope_state`
-
-Resolve the scope state for a given `project_id` and optional focus. Call this before any read or write to understand what operations are permitted.
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `project_id` | `string \| null` | No | Project identifier |
-| `focus` | `string \| null` | No | Focus area name |
-
-### Returns
-
-```json
-{
-  "scope_state": "resolved",
-  "project_exists": true
-}
-```
-
-| `scope_state` | Meaning | Write permitted? |
-|---|---|---|
-| `resolved` | Project exists; focus (if given) exists | Yes |
-| `uncertain` | Project does not exist in graph yet | No — first `save_session` creates it |
-| `unresolved` | No `project_id` provided | No |
-
-!!! tip "When to call this"
-    Call `get_scope_state` at the start of every session before loading or saving memory.
-    It is cheap (one graph lookup) and prevents wasted write attempts with `blocked_scope` results.
 
 ---
 

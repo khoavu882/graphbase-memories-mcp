@@ -1,7 +1,5 @@
 {
   "tools": [
-    { "name": "run_hygiene", "server": "graphbase-memories" },
-    { "name": "memory_freshness", "server": "graphbase-memories" },
-    { "name": "get_save_status", "server": "graphbase-memories" }
+    { "name": "run_hygiene", "server": "graphbase-memories" }
   ]
 }

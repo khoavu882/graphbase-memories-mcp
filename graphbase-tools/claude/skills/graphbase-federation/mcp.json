@@ -1,0 +1,10 @@
+{
+  "tools": [
+    { "name": "register_federated_service", "server": "graphbase-memories" },
+    { "name": "list_active_services",       "server": "graphbase-memories" },
+    { "name": "search_cross_service",       "server": "graphbase-memories" },
+    { "name": "link_cross_service",         "server": "graphbase-memories" },
+    { "name": "propagate_impact",           "server": "graphbase-memories" },
+    { "name": "graph_health",               "server": "graphbase-memories" }
+  ]
+}

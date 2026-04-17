@@ -32,28 +32,32 @@ stateDiagram-v2
 
 ## Practical flow
 
+Scope state is surfaced inline in every `retrieve_context` response — there is no separate scope
+check tool. Read `scope_state` and `retrieval_status` from the bundle to determine what to do next.
+
 ### New project (first session)
 
 ```python
-# 1. Check state — project doesn't exist yet
-get_scope_state(project_id="my-new-project")
-# Returns: { scope_state: "uncertain", project_exists: false }
+# 1. Load context — scope_state tells you the project doesn't exist yet
+retrieve_context(project_id="my-new-project", scope="project")
+# Returns: { items: [], retrieval_status: "empty", scope_state: "uncertain", ... }
 
 # 2. Save a session — this creates the Project node
 save_session(session={...}, project_id="my-new-project")
 # Returns: { status: "saved" }
 
-# 3. Now scope is resolved
-get_scope_state(project_id="my-new-project")
-# Returns: { scope_state: "resolved", project_exists: true }
+# 3. Subsequent retrieval now resolves
+retrieve_context(project_id="my-new-project", scope="project")
+# Returns: { items: [...], retrieval_status: "succeeded", scope_state: "resolved", ... }
 ```
 
 ### Using focus areas
 
 ```python
-# 1. Check scope with a focus area
-get_scope_state(project_id="my-project", focus="auth-refactor")
-# Returns: { scope_state: "uncertain" }  ← FocusArea node doesn't exist yet
+# 1. Load with focus — scope_state reflects whether the FocusArea node exists yet
+retrieve_context(project_id="my-project", scope="focus", focus="auth-refactor")
+# Returns: { items: [], retrieval_status: "empty", scope_state: "uncertain", ... }
+# ← FocusArea node doesn't exist yet
 
 # 2. Save something with focus — this creates the FocusArea node
 save_context(
@@ -63,8 +67,8 @@ save_context(
 )
 
 # 3. Focus is now resolved
-get_scope_state(project_id="my-project", focus="auth-refactor")
-# Returns: { scope_state: "resolved", project_exists: true }
+retrieve_context(project_id="my-project", scope="focus", focus="auth-refactor")
+# Returns: { items: [...], scope_state: "resolved", ... }
 ```
 
 ---
@@ -85,8 +89,7 @@ Project node and return `blocked_scope` if one doesn't exist.
 
 | Tool | Allowed when `uncertain`? | Creates Project node? |
 |---|---|---|
-| `get_scope_state` | Yes (read-only) | No |
-| `retrieve_context` | Partial (project scope only) | No |
+| `retrieve_context` | Partial (project scope only; returns `scope_state: "uncertain"`) | No |
 | `save_session` | Yes | **Yes** |
 | `save_decision` | No → `blocked_scope` | No |
 | `save_pattern` | No → `blocked_scope` | No |

@@ -30,7 +30,7 @@ Edit the file with the absolute path to your installed binary:
 }
 ```
 
-Restart Claude Code. The 22 `graphbase-memories` tools will appear in the tool panel.
+Restart Claude Code. The 21 `graphbase-memories` tools will appear in the tool panel.
 
 !!! tip "Find your binary path"
     ```bash
@@ -73,22 +73,25 @@ pip install graphbase-memories
 
 ## Verify connection
 
-After connecting, call `get_scope_state` with no arguments to confirm the server is reachable:
+After connecting, call `retrieve_context` with a test project ID to confirm the server is reachable:
 
 ```
-get_scope_state()
+retrieve_context(project_id="test", scope="project")
 ```
 
 Expected response:
 ```json
 {
-  "scope_state": "unresolved",
-  "project_exists": false
+  "items": [],
+  "retrieval_status": "empty",
+  "scope_state": "uncertain",
+  "conflicts_found": false,
+  "hygiene_due": false
 }
 ```
 
-`unresolved` means no `project_id` was provided — that is correct and expected on the first call.
-See [Scope Resolution](concepts/scope-resolution.md) for how to move from `unresolved` to `resolved`.
+`empty` with `scope_state: "uncertain"` means the server is reachable and no project node exists yet — that is correct and expected on the first call.
+See [Scope Resolution](concepts/scope-resolution.md) for how to create a project and move to `resolved`.
 
 ---
 
@@ -119,8 +122,8 @@ Endpoints:
 | `GET /events` | SSE stream — emits `heartbeat` every 5 s with Neo4j connectivity |
 
 !!! note "Write tool confirmation"
-    Tools that mutate graph state (`propagate_impact`, `link_cross_service`, `register_service`,
-    `deregister_service`) require `{ "confirm": true }` in the POST body. Without it, the response
-    is `{ "status": "preview", ... }` — a dry-run showing what would change.
+    Tools that mutate graph state (`propagate_impact`, `link_cross_service`,
+    `register_federated_service`) require `{ "confirm": true }` in the POST body. Without it, the
+    response is `{ "status": "preview", ... }` — a dry-run showing what would change.
 
 See [Development Guide](development.md) for full architecture notes on the devtools server.

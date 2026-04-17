@@ -1,44 +1,76 @@
 ---
 name: graphbase-hygiene
 description: Keep the memory graph clean. Use when the graph is accumulating duplicates, when decisions are stale, or when pending saves are piling up. Run after major refactors.
-version: 1.0.0
+version: 2.0.0
 tools:
   - run_hygiene
-  - memory_freshness
-  - get_save_status
 ---
 
 # graphbase-hygiene — Memory Hygiene Skill
 
 ## What hygiene does
 
-The hygiene cycle runs four phases:
-1. **Duplicate detection** — finds nodes with identical or near-identical content
-2. **Outdated decisions** — flags decisions not updated in `freshness_stale_days`
-3. **Obsolete patterns** — flags patterns no longer referenced in session notes
-4. **Entity drift** — detects EntityFacts whose fact text diverges across duplicate nodes
+A single `run_hygiene` call covers all maintenance dimensions:
+
+1. **Duplicate detection** — nodes with identical or near-identical content
+2. **Outdated decisions** — decisions not updated in >180 days
+3. **Obsolete patterns** — patterns not referenced in session notes for >90 days
+4. **Entity drift** — EntityFacts whose content diverges across duplicate nodes
+5. **Freshness scan** — nodes ordered by age with `FreshnessLevel` labels (`current` / `recent` / `stale`)
+6. **Pending saves** — unresolved write failures from previous sessions
 
 ## When to run
 
 - After a major refactor (many files changed)
-- When `memory_freshness` reports `stale_count > 5`
+- When `HygieneReport.stale_items` has `freshness == "stale"` entries
 - Before starting a new planning session after a long break
-- When `run_hygiene` advisory appears in PostToolUse hook output
+- When the PostToolUse hook advisory fires after a git commit
 
-## Hygiene Workflow
+## Hygiene Workflows
+
+### Full scan
 
 ```
-1. memory_freshness(project_id="<project>", stale_after_days=30)
-   → FreshnessReport — how many stale nodes?
-
-2. run_hygiene(project_id="<project>", scope="project")
-   → HygieneReport — duplicates, outdated, obsolete, drift counts
-   → candidate_ids — node IDs to review
-
-3. For each candidate: review and either update or delete.
-
-4. (Optionally) run_hygiene(scope="global") for workspace-level hygiene.
+run_hygiene(project_id="<project>", scope="project")
+→ HygieneReport {
+    duplicates_found,
+    outdated_decisions,
+    obsolete_patterns,
+    entity_drift_count,
+    stale_items: [{ node_id, label, title, age_days, freshness, project_id }],
+    pending_artifact_ids,
+    oldest_pending_at,
+    candidate_ids: { "<category>": ["<node_id>", ...] },
+    checked_at,
+    next_step
+  }
 ```
+
+Review `candidate_ids` and manually update or delete stale nodes.
+`run_hygiene` never auto-mutates — all changes must be applied explicitly.
+
+### Pending-saves check (fast path)
+
+Use when you only want to know if there are unresolved writes without running a full scan:
+
+```
+run_hygiene(project_id="<project>", check_pending_only=True)
+→ HygieneReport {
+    pending_artifact_ids,
+    oldest_pending_at,
+    pending_only: True   ← confirms fast-path was used
+  }
+```
+
+`check_pending_only=True` does **not** update `last_hygiene_at` and skips all content scans.
+
+### Global hygiene
+
+```
+run_hygiene(scope="global")
+```
+
+Scans across all projects in the workspace. Useful after cross-service refactors.
 
 ## CLI Shortcut
 
@@ -46,13 +78,12 @@ The hygiene cycle runs four phases:
 graphbase hygiene --scope project --project-id <project>
 ```
 
-Prints `HygieneReport` as JSON. Useful in CI or scheduled scripts.
+Prints `HygieneReport` as JSON. Useful in CI or scheduled maintenance scripts.
 
-## Pending Saves
+## Freshness levels
 
-```
-get_save_status(project_id="<project>")
-```
-
-Returns `SaveStatusSummary` — if `status == "pending"`, call `end_session` to flush
-unresolved writes before running hygiene.
+| Level | Age | Action |
+|---|---|---|
+| `current` | ≤ 7 days | No action needed |
+| `recent` | 7–30 days | Monitor; may become stale |
+| `stale` | > 30 days | Review and update or delete |

@@ -63,7 +63,7 @@ graphbase --help
 
 ## Step 3 — Connect to your agent
 
-Copy `.mcp.json.example` to `.mcp.json` in your project root and edit it with the absolute path to your virtual environment binary. Restart your agent host — the 22 `graphbase-memories` tools will appear in the tool list.
+Copy `.mcp.json.example` to `.mcp.json` in your project root and edit it with the absolute path to your virtual environment binary. Restart your agent host — the 21 `graphbase-memories` tools will appear in the tool list.
 
 See [Connect to Your Agent](connect.md) for full configuration details, including global install and setup for Cursor, Cline, and other MCP hosts.
 
@@ -71,21 +71,24 @@ See [Connect to Your Agent](connect.md) for full configuration details, includin
 
 ## Verify it works
 
-In Claude Code, call the first tool to check scope state:
+In Claude Code, load context to confirm the server is reachable:
 
 ```
-get_scope_state(project_id="my-first-project")
+retrieve_context(project_id="my-first-project", scope="project")
 ```
 
 Expected response:
 ```json
 {
+  "items": [],
+  "retrieval_status": "empty",
   "scope_state": "uncertain",
-  "project_exists": false
+  "conflicts_found": false,
+  "hygiene_due": false
 }
 ```
 
-`uncertain` is correct — no project node exists in the graph yet. Save a session to create it:
+`empty` with `scope_state: "uncertain"` is correct — no project node exists in the graph yet. Save a session to create it:
 
 ```
 save_session(
