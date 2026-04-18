@@ -13,10 +13,10 @@ from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
 
 from graphbase_memories.config import settings
+from graphbase_memories.domain.enums import RetrievalStatus
+from graphbase_memories.domain.results import ContextBundle
 from graphbase_memories.engines import scope as scope_engine
 from graphbase_memories.engines.freshness import compute_freshness_str
-from graphbase_memories.mcp.schemas.enums import RetrievalStatus
-from graphbase_memories.mcp.schemas.results import ContextBundle
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +132,8 @@ async def _fetch_all(
     database: str,
 ) -> tuple[list[dict], list[str]]:
     """Priority merge: focus > project > global. Returns (items, truncated_scopes)."""
+    from graphbase_memories.graph.repositories import retrieval_repo
+
     items: list[dict] = []
     seen_ids: set[str] = set()
     truncated_scopes: list[str] = []
@@ -139,28 +141,30 @@ async def _fetch_all(
     async with driver.session(database=database) as session:
         # Focus-level items first (highest priority)
         if focus and scope in ("focus", "project"):
-            focus_items = await _query_focus(
+            focus_items = await retrieval_repo.query_focus(
                 session, project_id, focus, categories, settings.retrieval_focus_limit
             )
             if len(focus_items) == settings.retrieval_focus_limit:
                 truncated_scopes.append("focus")
-            items += focus_items
+            items += [_enrich(r) for r in focus_items]
 
         # Project-level items
         if scope in ("focus", "project"):
-            project_items = await _query_project(
+            project_items = await retrieval_repo.query_project(
                 session, project_id, categories, settings.retrieval_project_limit
             )
             if len(project_items) == settings.retrieval_project_limit:
                 truncated_scopes.append("project")
-            items += project_items
+            items += [_enrich(r) for r in project_items]
 
         # Global items last (lowest priority)
         if scope in ("focus", "project", "global"):
-            global_items = await _query_global(session, categories, settings.retrieval_global_limit)
+            global_items = await retrieval_repo.query_global(
+                session, categories, settings.retrieval_global_limit
+            )
             if len(global_items) == settings.retrieval_global_limit:
                 truncated_scopes.append("global")
-            items += global_items
+            items += [_enrich(r) for r in global_items]
 
     # Deduplicate by id, preserve priority order
     unique: list[dict] = []
@@ -172,74 +176,12 @@ async def _fetch_all(
     return unique, truncated_scopes
 
 
-async def _query_focus(
-    session, project_id: str, focus: str, categories: list[str] | None, limit: int
-) -> list[dict]:
-    label_filter = _label_filter(categories)
-    result = await session.run(
-        f"""
-        MATCH (n{label_filter})-[:HAS_FOCUS]->(f:FocusArea {{name: $focus, project_id: $pid}})
-        RETURN n {{.*}} AS node, labels(n)[0] AS label
-        ORDER BY n.created_at DESC LIMIT $limit
-        """,
-        focus=focus,
-        pid=project_id,
-        limit=limit,
-    )
-    return [_to_dict(r) async for r in result]
-
-
-async def _query_project(
-    session, project_id: str, categories: list[str] | None, limit: int
-) -> list[dict]:
-    label_filter = _label_filter(categories)
-    result = await session.run(
-        f"""
-        MATCH (n{label_filter})-[:BELONGS_TO]->(p:Project {{id: $pid}})
-        WHERE NOT (n:Decision AND EXISTS {{ MATCH (:Decision)-[:SUPERSEDES]->(n) }})
-        RETURN n {{.*}} AS node, labels(n)[0] AS label
-        ORDER BY n.created_at DESC LIMIT $limit
-        """,
-        pid=project_id,
-        limit=limit,
-    )
-    return [_to_dict(r) async for r in result]
-
-
-async def _query_global(session, categories: list[str] | None, limit: int) -> list[dict]:
-    label_filter = _label_filter(categories)
-    result = await session.run(
-        f"""
-        MATCH (n{label_filter})-[:BELONGS_TO]->(g:GlobalScope)
-        WHERE NOT (n:Decision AND EXISTS {{ MATCH (:Decision)-[:SUPERSEDES]->(n) }})
-        RETURN n {{.*}} AS node, labels(n)[0] AS label
-        ORDER BY n.created_at DESC LIMIT $limit
-        """,
-        limit=limit,
-    )
-    return [_to_dict(r) async for r in result]
-
-
-def _label_filter(categories: list[str] | None) -> str:
-    if not categories:
-        return ""
-    # Whitelist allowed labels to prevent injection
-    allowed = {"Session", "Decision", "Pattern", "Context", "EntityFact"}
-    safe = [c for c in categories if c in allowed]
-    if not safe:
-        return ""
-    return ":" + "|".join(safe)
-
-
-def _to_dict(record) -> dict:
-    node = dict(record["node"])
-    node["_label"] = record["label"]
-
-    ts_raw = node.get("updated_at") or node.get("created_at")
+def _enrich(record: dict) -> dict:
+    """Add freshness label to a raw record dict from retrieval_repo."""
+    ts_raw = record.get("updated_at") or record.get("created_at")
     if ts_raw is not None:
-        node["_freshness"] = compute_freshness_str(ts_raw)
-
-    return node
+        record["_freshness"] = compute_freshness_str(ts_raw)
+    return record
 
 
 def _has_conflicts(items: list[dict]) -> bool:

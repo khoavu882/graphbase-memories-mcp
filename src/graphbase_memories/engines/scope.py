@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from neo4j import AsyncDriver
 
-from graphbase_memories.mcp.schemas.enums import ScopeState
+from graphbase_memories.domain.enums import ScopeState
 
 
 async def validate(

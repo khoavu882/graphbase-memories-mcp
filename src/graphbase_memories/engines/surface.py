@@ -14,8 +14,8 @@ import logging
 
 from neo4j import AsyncDriver
 
+from graphbase_memories.domain.results import SurfaceMatch, SurfaceResult
 from graphbase_memories.engines.freshness import compute_freshness_str
-from graphbase_memories.mcp.schemas.results import SurfaceMatch, SurfaceResult
 
 logger = logging.getLogger(__name__)
 
@@ -26,23 +26,6 @@ _LABEL_FIELDS: dict[str, tuple[str, str]] = {
     "Context": ("topic", "content"),
     "EntityFact": ("entity_name", "fact"),
 }
-
-_SURFACE_BY_KEYWORD = """
-MATCH (n)
-WHERE (n:Decision OR n:Pattern OR n:Context OR n:EntityFact)
-  AND any(kw IN $keywords WHERE
-    toLower(n.title) CONTAINS kw OR
-    toLower(n.entity_name) CONTAINS kw OR
-    toLower(n.trigger) CONTAINS kw OR
-    toLower(n.topic) CONTAINS kw
-  )
-  AND coalesce(n.updated_at, n.created_at) < datetime($threshold_iso)
-RETURN
-  labels(n)[0] AS label,
-  coalesce(n.title, n.entity_name, n.trigger, n.topic) AS entity_name
-ORDER BY coalesce(n.updated_at, n.created_at) ASC
-LIMIT 20
-"""
 
 _OUTPUT_CHAR_CAP = 800
 
@@ -98,19 +81,20 @@ async def _execute_keyword(
     database: str,
 ) -> SurfaceResult:
     """Keyword staleness check for PostToolUse hook path."""
+    from graphbase_memories.graph.repositories.search_repo import keyword_surface_fetch
+
     threshold_iso = datetime.now(UTC).isoformat()
     safe_kw = [k.lower() for k in keywords if len(k) >= 3]
 
     if not safe_kw:
         return SurfaceResult(matches=[], query_used=",".join(keywords), total_found=0)
 
-    async with driver.session(database=database) as session:
-        result = await session.run(
-            _SURFACE_BY_KEYWORD,
-            keywords=safe_kw,
-            threshold_iso=threshold_iso,
-        )
-        rows = [dict(r) async for r in result]
+    rows = await keyword_surface_fetch(
+        keywords=safe_kw,
+        threshold_iso=threshold_iso,
+        driver=driver,
+        database=database,
+    )
 
     if not rows:
         return SurfaceResult(matches=[], query_used=",".join(keywords), total_found=0)

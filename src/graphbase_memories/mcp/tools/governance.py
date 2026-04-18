@@ -6,7 +6,7 @@ from fastmcp import Context
 from neo4j.exceptions import Neo4jError
 
 from graphbase_memories.config import settings
-from graphbase_memories.graph.repositories import token_repo
+from graphbase_memories.engines import governance as governance_engine
 from graphbase_memories.mcp.schemas.errors import ErrorCode, MCPError
 from graphbase_memories.mcp.schemas.results import GovernanceTokenResult
 from graphbase_memories.mcp.server import mcp
@@ -27,9 +27,8 @@ async def request_global_write_approval(
     """
     driver = ctx.lifespan_context["driver"]
     try:
-        token = await token_repo.create(
+        token = await governance_engine.create_token(
             content_preview=content_preview,
-            ttl_s=settings.governance_token_ttl_s,
             driver=driver,
             database=settings.neo4j_database,
         )

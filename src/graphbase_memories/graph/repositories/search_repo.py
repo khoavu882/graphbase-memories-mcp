@@ -85,3 +85,44 @@ async def bm25_fetch(
                 logger.warning("BM25 query failed for index %s — skipping", index_name)
 
     return all_items
+
+
+_SURFACE_BY_KEYWORD = """
+MATCH (n)
+WHERE (n:Decision OR n:Pattern OR n:Context OR n:EntityFact)
+  AND any(kw IN $keywords WHERE
+    toLower(n.title) CONTAINS kw OR
+    toLower(n.entity_name) CONTAINS kw OR
+    toLower(n.trigger) CONTAINS kw OR
+    toLower(n.topic) CONTAINS kw
+  )
+  AND coalesce(n.updated_at, n.created_at) < datetime($threshold_iso)
+RETURN
+  labels(n)[0] AS label,
+  coalesce(n.title, n.entity_name, n.trigger, n.topic) AS entity_name
+ORDER BY coalesce(n.updated_at, n.created_at) ASC
+LIMIT 20
+"""
+
+
+async def keyword_surface_fetch(
+    *,
+    keywords: list[str],
+    threshold_iso: str,
+    driver: AsyncDriver,
+    database: str,
+) -> list[dict]:
+    """Return stale nodes whose name fields contain any of the given keywords.
+
+    Used by SurfaceEngine's PostToolUse hook path to surface potentially stale
+    memories when the agent uses keywords that match existing node names.
+
+    Each returned dict contains: label (str), entity_name (str).
+    """
+    async with driver.session(database=database) as session:
+        result = await session.run(
+            _SURFACE_BY_KEYWORD,
+            keywords=keywords,
+            threshold_iso=threshold_iso,
+        )
+        return [dict(r) async for r in result]

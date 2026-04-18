@@ -5,8 +5,8 @@ Keyword-based routing — simple, deterministic, no LLM call needed.
 
 from __future__ import annotations
 
-from graphbase_memories.mcp.schemas.enums import AnalysisMode
-from graphbase_memories.mcp.schemas.results import AnalysisResult
+from graphbase_memories.domain.enums import AnalysisMode
+from graphbase_memories.domain.results import AnalysisResult
 
 _SEQUENTIAL_KEYWORDS = {
     "strategic",

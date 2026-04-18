@@ -13,15 +13,15 @@ from uuid import uuid4
 
 from neo4j import AsyncDriver
 
-from graphbase_memories.graph.repositories import federation_repo, impact_repo
-from graphbase_memories.mcp.schemas.errors import ErrorCode, MCPError
-from graphbase_memories.mcp.schemas.results import (
+from graphbase_memories.domain.results import (
     AffectedServiceItem,
     ConflictRecord,
     ImpactReport,
     WorkspaceHealthReport,
     WorkspaceServiceHealth,
 )
+from graphbase_memories.graph.repositories import federation_repo, impact_repo
+from graphbase_memories.mcp.schemas.errors import ErrorCode, MCPError
 
 RISK_BY_DEPTH: dict[int, str] = {1: "HIGH", 2: "MEDIUM", 3: "LOW"}
 RISK_ORDER: dict[str, int] = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
