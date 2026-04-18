@@ -17,7 +17,6 @@ def _register_tools() -> None:
     and prevents fragile module-level circular import ordering.
     """
     from graphbase_memories.mcp.tools import (  # noqa: F401
-        analysis,
         artifacts,
         cross_service,
         entity,

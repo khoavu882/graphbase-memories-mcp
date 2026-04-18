@@ -32,7 +32,6 @@ async def test_list_tools_includes_known_tools(driver):
     names = {t["name"] for t in result}
 
     expected = {
-        "route_analysis",
         "graph_health",
         "list_active_services",
         "search_cross_service",

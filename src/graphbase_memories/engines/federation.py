@@ -11,10 +11,8 @@ from __future__ import annotations
 
 from neo4j import AsyncDriver
 
-from graphbase_memories.graph.models import ProjectNode
-from graphbase_memories.graph.repositories import federation_repo
-from graphbase_memories.mcp.schemas.enums import CrossServiceLinkType, RetrievalStatus, SaveStatus
-from graphbase_memories.mcp.schemas.results import (
+from graphbase_memories.domain.enums import CrossServiceLinkType, RetrievalStatus, SaveStatus
+from graphbase_memories.domain.results import (
     CrossServiceBundle,
     CrossServiceItem,
     SaveResult,
@@ -22,6 +20,8 @@ from graphbase_memories.mcp.schemas.results import (
     ServiceListResult,
     ServiceRegistrationResult,
 )
+from graphbase_memories.graph.models import ProjectNode
+from graphbase_memories.graph.repositories import federation_repo
 
 
 def _to_service_info(p: ProjectNode) -> ServiceInfo:

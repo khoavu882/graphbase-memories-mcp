@@ -16,6 +16,16 @@ from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError, ServiceUnavailable
 
 from graphbase_memories.config import settings
+from graphbase_memories.domain.artifacts import (
+    ContextSchema,
+    DecisionSchema,
+    EntityFactSchema,
+    EntityRelation,
+    PatternSchema,
+    SessionSchema,
+)
+from graphbase_memories.domain.enums import DedupOutcome, SaveStatus
+from graphbase_memories.domain.results import BatchSaveResult, SaveResult
 from graphbase_memories.engines import dedup as dedup_engine
 from graphbase_memories.engines import scope as scope_engine
 from graphbase_memories.graph.repositories import (
@@ -26,16 +36,6 @@ from graphbase_memories.graph.repositories import (
     session_repo,
     token_repo,
 )
-from graphbase_memories.mcp.schemas.artifacts import (
-    ContextSchema,
-    DecisionSchema,
-    EntityFactSchema,
-    EntityRelation,
-    PatternSchema,
-    SessionSchema,
-)
-from graphbase_memories.mcp.schemas.enums import DedupOutcome, SaveStatus
-from graphbase_memories.mcp.schemas.results import BatchSaveResult, SaveResult
 
 logger = logging.getLogger(__name__)
 
@@ -314,13 +314,18 @@ async def save_batch(
     project_id: str,
     driver: AsyncDriver,
     database: str = "neo4j",
+    governance_token: str | None = None,
 ) -> BatchSaveResult:
-    """FR-41: batched save of session + related decisions and patterns."""
+    """FR-41: batched save of session + related decisions and patterns.
+
+    governance_token: required when any decision has scope=global (FR-55).
+    The same token is forwarded to each global-scope decision in the batch.
+    """
     session_result = await save_session(session_data, project_id, None, driver, database)
 
     decision_results = []
     for d in decisions:
-        r = await save_decision(d, project_id, None, None, driver, database)
+        r = await save_decision(d, project_id, None, governance_token, driver, database)
         decision_results.append(r)
         # Link artifact to session
         if r.artifact_id and session_result.artifact_id:
