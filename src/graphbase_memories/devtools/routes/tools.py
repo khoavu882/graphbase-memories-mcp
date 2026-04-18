@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
+from dataclasses import dataclass, field
 import time
 from typing import Any
 
@@ -15,14 +16,14 @@ from graphbase_memories.devtools.deps import DriverDep
 from graphbase_memories.engines import federation as federation_engine
 from graphbase_memories.engines import hygiene as hygiene_engine
 from graphbase_memories.engines import impact as impact_engine
-from graphbase_memories.engines.analysis import route as analysis_route
+from graphbase_memories.engines import surface as surface_engine
 from graphbase_memories.mcp.server import mcp
 
 router = APIRouter(prefix="/tools", tags=["tools"])
 
-# Tools that execute without a write confirmation gate (read-only or report-only)
+# Tools that execute without a write confirmation gate (read-only or report-only).
+# Kept as a set for O(1) lookup; derived from _TOOL_REGISTRY below.
 _READ_ONLY_TOOLS = {
-    "route_analysis",
     "retrieve_context",
     "graph_health",
     "list_active_services",
@@ -31,65 +32,49 @@ _READ_ONLY_TOOLS = {
     "memory_surface",
 }
 
-# Module classification for the registry panel
-_MODULE_MAP: dict[str, str] = {
-    "route_analysis": "analysis",
-    "save_decision": "artifacts",
-    "save_pattern": "artifacts",
-    "save_context": "artifacts",
-    "search_cross_service": "cross_service",
-    "link_cross_service": "cross_service",
-    "upsert_entity_with_deps": "entity",
-    "register_federated_service": "federation",
-    "list_active_services": "federation",
-    "request_global_write_approval": "governance",
-    "run_hygiene": "hygiene",
-    "propagate_impact": "impact",
-    "graph_health": "impact",
-    "retrieve_context": "retrieval",
-    "store_session_with_learnings": "session",
-    "memory_surface": "retrieval",
-    "register_service": "topology",
-    "link_topology_nodes": "topology",
-    "batch_upsert_shared_infrastructure": "topology",
-    "get_service_dependencies": "topology",
-    "get_feature_workflow": "topology",
-}
-
-
-# ---------------------------------------------------------------------------
-# Dispatch table: tool_name → (async_callable(params, driver), requires_confirm)
-# Each lambda maps the HTTP JSON params dict to the exact engine function call.
-# Verified against engine source signatures 2026-04-11.
-# ---------------------------------------------------------------------------
 DispatchFn = Callable[[dict, AsyncDriver], Coroutine[Any, Any, Any]]
 
-_TOOL_DISPATCH: dict[str, tuple[DispatchFn, bool]] = {
+
+@dataclass
+class ToolSpec:
+    """Single source of truth for a tool's module, HTTP dispatch, and confirmation requirement.
+
+    dispatch_fn=None signals the tool requires structured Pydantic input not
+    expressible as a flat JSON params dict — it will be marked http_invocable=False.
+    """
+
+    module: str
+    dispatch_fn: DispatchFn | None = field(default=None)
+    requires_confirm: bool = True
+
+
+# ---------------------------------------------------------------------------
+# Unified registry: replaces the former separate _MODULE_MAP + _TOOL_DISPATCH dicts.
+# Adding a new tool requires a single entry here; module and http_invocable are
+# derived from ToolSpec fields, eliminating the prior two-dict sync hazard.
+# ---------------------------------------------------------------------------
+_TOOL_REGISTRY: dict[str, ToolSpec] = {
     # ── READ-ONLY / REPORT-ONLY ────────────────────────────────────────────
-    "route_analysis": (
-        lambda p, _d: _sync_wrap(
-            analysis_route(
-                p["task_description"],
-                p.get("task_type_hint"),
-            )
+    "graph_health": ToolSpec(
+        module="impact",
+        dispatch_fn=lambda p, d: impact_engine.graph_health(
+            p["workspace_id"], d, settings.neo4j_database
         ),
-        False,
+        requires_confirm=False,
     ),
-    "graph_health": (
-        lambda p, d: impact_engine.graph_health(p["workspace_id"], d, settings.neo4j_database),
-        False,
-    ),
-    "list_active_services": (
-        lambda p, d: federation_engine.list_services(
+    "list_active_services": ToolSpec(
+        module="federation",
+        dispatch_fn=lambda p, d: federation_engine.list_services(
             p["workspace_id"],
             p.get("max_idle_minutes", settings.federation_active_window_minutes),
             d,
             settings.neo4j_database,
         ),
-        False,
+        requires_confirm=False,
     ),
-    "search_cross_service": (
-        lambda p, d: federation_engine.search_cross_service(
+    "search_cross_service": ToolSpec(
+        module="cross_service",
+        dispatch_fn=lambda p, d: federation_engine.search_cross_service(
             p["query"],
             p["workspace_id"],
             p.get("target_project_ids"),
@@ -98,20 +83,33 @@ _TOOL_DISPATCH: dict[str, tuple[DispatchFn, bool]] = {
             d,
             settings.neo4j_database,
         ),
-        False,
+        requires_confirm=False,
     ),
-    "run_hygiene": (
-        lambda p, d: hygiene_engine.run(
+    "run_hygiene": ToolSpec(
+        module="hygiene",
+        dispatch_fn=lambda p, d: hygiene_engine.run(
             project_id=p.get("project_id"),
             scope=p.get("scope", "global"),
             driver=d,
             database=settings.neo4j_database,
         ),
-        False,
+        requires_confirm=False,
+    ),
+    "memory_surface": ToolSpec(
+        module="retrieval",
+        dispatch_fn=lambda p, d: surface_engine.execute(
+            query=p["query"],
+            project_id=p.get("project_id"),
+            limit=p.get("limit", 5),
+            driver=d,
+            database=settings.neo4j_database,
+        ),
+        requires_confirm=False,
     ),
     # ── WRITE — require confirm=true ───────────────────────────────────────
-    "propagate_impact": (
-        lambda p, d: impact_engine.propagate_impact(
+    "propagate_impact": ToolSpec(
+        module="impact",
+        dispatch_fn=lambda p, d: impact_engine.propagate_impact(
             p["entity_id"],
             p["change_description"],
             p.get("impact_type", "breaking"),
@@ -119,10 +117,10 @@ _TOOL_DISPATCH: dict[str, tuple[DispatchFn, bool]] = {
             d,
             settings.neo4j_database,
         ),
-        True,
     ),
-    "link_cross_service": (
-        lambda p, d: federation_engine.create_cross_service_link(
+    "link_cross_service": ToolSpec(
+        module="cross_service",
+        dispatch_fn=lambda p, d: federation_engine.create_cross_service_link(
             p["source_entity_id"],
             p["target_entity_id"],
             p["link_type"],
@@ -132,10 +130,10 @@ _TOOL_DISPATCH: dict[str, tuple[DispatchFn, bool]] = {
             d,
             settings.neo4j_database,
         ),
-        True,
     ),
-    "register_federated_service": (
-        lambda p, d: federation_engine.register_service(
+    "register_federated_service": ToolSpec(
+        module="federation",
+        dispatch_fn=lambda p, d: federation_engine.register_service(
             p["service_id"],
             p["workspace_id"],
             p.get("display_name"),
@@ -144,9 +142,38 @@ _TOOL_DISPATCH: dict[str, tuple[DispatchFn, bool]] = {
             d,
             settings.neo4j_database,
         ),
-        True,
     ),
+    "deregister_service": ToolSpec(
+        module="federation",
+        dispatch_fn=lambda p, d: federation_engine.deregister_service(
+            p["service_id"],
+            d,
+            settings.neo4j_database,
+        ),
+    ),
+    # ── NOT HTTP-INVOCABLE: require structured Pydantic input ─────────────
+    # dispatch_fn=None → http_invocable=False in list/get responses.
+    "save_decision": ToolSpec(module="artifacts"),
+    "save_pattern": ToolSpec(module="artifacts"),
+    "save_context": ToolSpec(module="artifacts"),
+    "upsert_entity_with_deps": ToolSpec(module="entity"),
+    "request_global_write_approval": ToolSpec(module="governance"),
+    "store_session_with_learnings": ToolSpec(module="session"),
+    "retrieve_context": ToolSpec(module="retrieval", requires_confirm=False),
+    "register_service": ToolSpec(module="topology"),
+    "link_topology_nodes": ToolSpec(module="topology"),
+    "batch_upsert_shared_infrastructure": ToolSpec(module="topology"),
+    "get_service_dependencies": ToolSpec(module="topology", requires_confirm=False),
+    "get_feature_workflow": ToolSpec(module="topology", requires_confirm=False),
 }
+
+
+def _tool_meta(mt_name: str) -> tuple[str, bool, bool]:
+    """Return (module, requires_confirmation, http_invocable) for a tool name."""
+    spec = _TOOL_REGISTRY.get(mt_name)
+    if spec is None:
+        return ("unknown", True, False)
+    return (spec.module, spec.requires_confirm, spec.dispatch_fn is not None)
 
 
 async def _sync_wrap(result: Any) -> Any:
@@ -170,7 +197,7 @@ def _serialise(result: Any) -> Any:
 
 @router.get("")
 async def list_tools():
-    """Return all 20 registered MCP tools with input schemas and confirmation requirements."""
+    """Return all registered MCP tools with input schemas and confirmation requirements."""
     tools = await mcp.list_tools()
     return [
         {
@@ -183,12 +210,13 @@ async def list_tools():
                 if mt.inputSchema
                 else {}
             ),
-            "requires_confirmation": mt.name not in _READ_ONLY_TOOLS,
-            "module": _MODULE_MAP.get(mt.name, "unknown"),
-            "http_invocable": mt.name in _TOOL_DISPATCH,
+            "requires_confirmation": module_meta[1],
+            "module": module_meta[0],
+            "http_invocable": module_meta[2],
         }
         for t in tools
         for mt in [t.to_mcp_tool()]
+        for module_meta in [_tool_meta(mt.name)]
     ]
 
 
@@ -199,6 +227,7 @@ async def get_tool(name: str):
     for t in tools:
         mt = t.to_mcp_tool()
         if mt.name == name:
+            module, requires_confirmation, http_invocable = _tool_meta(mt.name)
             return {
                 "name": mt.name,
                 "description": mt.description or "",
@@ -209,9 +238,9 @@ async def get_tool(name: str):
                     if mt.inputSchema
                     else {}
                 ),
-                "requires_confirmation": mt.name not in _READ_ONLY_TOOLS,
-                "module": _MODULE_MAP.get(mt.name, "unknown"),
-                "http_invocable": mt.name in _TOOL_DISPATCH,
+                "requires_confirmation": requires_confirmation,
+                "module": module,
+                "http_invocable": http_invocable,
             }
     raise HTTPException(status_code=404, detail=f"Tool {name!r} not found")
 
@@ -228,21 +257,20 @@ async def invoke_tool(name: str, body: InvokeRequest, driver: DriverDep):
 
     Read-only tools execute immediately. Write tools require confirm=true;
     without it they return a dry-run preview describing what would be written.
-    Tools not in the dispatch table (complex Pydantic-input tools) return
-    not_supported — use the MCP stdio server for those.
+    Tools not in the dispatch table (complex Pydantic-input tools) return 501 —
+    use the MCP stdio server for those.
     """
-    if name not in _TOOL_DISPATCH:
-        return {
-            "status": "not_supported",
-            "message": (
+    spec = _TOOL_REGISTRY.get(name)
+    if spec is None or spec.dispatch_fn is None:
+        raise HTTPException(
+            status_code=501,
+            detail=(
                 f"Tool {name!r} requires structured Pydantic input not expressible "
                 "as a flat JSON params dict. Use the MCP stdio server instead."
             ),
-        }
+        )
 
-    fn, requires_confirm = _TOOL_DISPATCH[name]
-
-    if requires_confirm and not body.confirm:
+    if spec.requires_confirm and not body.confirm:
         return {
             "status": "preview",
             "message": (
@@ -254,7 +282,7 @@ async def invoke_tool(name: str, body: InvokeRequest, driver: DriverDep):
 
     t_start = time.monotonic()
     try:
-        result = await fn(body.params, driver)
+        result = await spec.dispatch_fn(body.params, driver)
     except KeyError as exc:
         raise HTTPException(
             status_code=422,

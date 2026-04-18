@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from graphbase_memories.config import settings
 from graphbase_memories.devtools.deps import DriverDep
@@ -18,12 +18,17 @@ async def list_memory(
     driver: DriverDep,
     project_id: str = Query(None),
     label: str = Query(
-        None, description="Node label: Session, Decision, Pattern, Context, EntityFact"
+        None, description="Node label filter — one of: Session, Decision, Pattern, Context, EntityFact"
     ),
     limit: int = Query(20, ge=1, le=100),
 ):
     """List recent memory nodes, optionally filtered by project and label."""
-    label_clause = f":{label}" if label in _ALLOWED_LABELS else ""
+    if label is not None and label not in _ALLOWED_LABELS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid label {label!r}. Must be one of: {sorted(_ALLOWED_LABELS)}",
+        )
+    label_clause = f":{label}" if label else ""
     project_clause = (
         "AND EXISTS { MATCH (n)-[:BELONGS_TO]->(:Project {id: $pid}) }" if project_id else ""
     )
@@ -124,11 +129,20 @@ class MemorySearchRequest(BaseModel):
     limit: int = 20
     since_days: int | None = None
 
+    @field_validator("label")
+    @classmethod
+    def validate_label(cls, v: str | None) -> str | None:
+        if v is not None and v not in _ALLOWED_LABELS:
+            raise ValueError(
+                f"Invalid label {v!r}. Must be one of: {sorted(_ALLOWED_LABELS)}"
+            )
+        return v
+
 
 @router.post("/memory/search")
 async def search_memory(body: MemorySearchRequest, driver: DriverDep):
     """Full-text search across memory nodes using CONTAINS on content fields."""
-    label_clause = f":{body.label}" if body.label in _ALLOWED_LABELS else ""
+    label_clause = f":{body.label}" if body.label else ""
     project_clause = (
         "AND EXISTS { MATCH (n)-[:BELONGS_TO]->(:Project {id: $pid}) }" if body.project_id else ""
     )

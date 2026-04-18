@@ -41,19 +41,29 @@ _REL_TYPES = [
 async def graph_stats(driver: DriverDep):
     """Return node counts by label and relationship counts by type."""
     now = datetime.now(UTC)
-    node_counts: dict[str, int] = {}
-    rel_counts: dict[str, int] = {}
+
+    # Build two UNION ALL queries instead of N individual round-trips (was 19).
+    # Note: when a label/rel-type has zero matches, Neo4j returns no row for that
+    # subquery (MATCH with a grouped RETURN emits nothing on empty input). We
+    # pre-initialize both dicts so zero-count entries are always present.
+    node_union = "\nUNION ALL\n".join(
+        f"MATCH (n:{lbl}) RETURN '{lbl}' AS name, count(n) AS cnt" for lbl in _NODE_LABELS
+    )
+    rel_union = "\nUNION ALL\n".join(
+        f"MATCH ()-[r:{rt}]->() RETURN '{rt}' AS name, count(r) AS cnt" for rt in _REL_TYPES
+    )
+
+    node_counts: dict[str, int] = {lbl: 0 for lbl in _NODE_LABELS}
+    rel_counts: dict[str, int] = {rt: 0 for rt in _REL_TYPES}
 
     async with driver.session(database=settings.neo4j_database) as session:
-        for lbl in _NODE_LABELS:
-            res = await session.run(f"MATCH (n:{lbl}) RETURN count(n) AS cnt")
-            rec = await res.single()
-            node_counts[lbl] = rec["cnt"] if rec else 0
+        node_result = await session.run(node_union)
+        async for rec in node_result:
+            node_counts[rec["name"]] = rec["cnt"]
 
-        for rt in _REL_TYPES:
-            res = await session.run(f"MATCH ()-[r:{rt}]->() RETURN count(r) AS cnt")
-            rec = await res.single()
-            rel_counts[rt] = rec["cnt"] if rec else 0
+        rel_result = await session.run(rel_union)
+        async for rec in rel_result:
+            rel_counts[rec["name"]] = rec["cnt"]
 
     return {
         "node_counts": node_counts,
