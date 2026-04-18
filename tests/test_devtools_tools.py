@@ -45,6 +45,18 @@ async def test_list_tools_includes_known_tools(driver):
     assert expected.issubset(names), f"Missing tools: {expected - names}"
 
 
+async def test_list_tools_no_unknown_module(driver):
+    """Every tool returned by the MCP registry has a known module (not 'unknown')."""
+    from graphbase_memories.devtools.routes.tools import list_tools
+
+    result = await list_tools()
+    unknown = [t["name"] for t in result if t["module"] == "unknown"]
+    assert unknown == [], (
+        f"Tools with module='unknown' are missing from _TOOL_REGISTRY: {unknown}. "
+        "Add an entry to _TOOL_REGISTRY in routes/tools.py."
+    )
+
+
 async def test_list_tools_read_only_not_require_confirmation(driver):
     """Read-only tools have requires_confirmation=False."""
     from graphbase_memories.devtools.routes.tools import _READ_ONLY_TOOLS, list_tools
@@ -67,7 +79,7 @@ async def test_list_tools_write_tools_require_confirmation(driver):
     write_tools = [
         "propagate_impact",
         "link_cross_service",
-        "register_service",
+        "register_federated_service",
         "deregister_service",
     ]
     for name in write_tools:
@@ -75,6 +87,19 @@ async def test_list_tools_write_tools_require_confirmation(driver):
             assert by_name[name]["requires_confirmation"] is True, (
                 f"{name} should require confirmation"
             )
+
+
+async def test_list_tools_memory_surface_is_http_invocable(driver):
+    """memory_surface is in _READ_ONLY_TOOLS and must also be http_invocable."""
+    from graphbase_memories.devtools.routes.tools import list_tools
+
+    result = await list_tools()
+    by_name = {t["name"]: t for t in result}
+
+    assert "memory_surface" in by_name, "memory_surface not in tool registry"
+    tool = by_name["memory_surface"]
+    assert tool["http_invocable"] is True, "memory_surface should be http_invocable"
+    assert tool["requires_confirmation"] is False, "memory_surface should be read-only"
 
 
 async def test_get_tool_returns_single_tool(driver):
@@ -114,14 +139,18 @@ async def test_invoke_tool_write_without_confirm_returns_preview(driver):
     assert "params_received" in result
 
 
-async def test_invoke_tool_not_dispatched_returns_not_supported(driver):
-    """POST /tools/save_decision/invoke returns status=not_supported."""
+async def test_invoke_tool_not_dispatched_returns_501(driver):
+    """POST /tools/save_decision/invoke returns HTTP 501 (not 200)."""
+    from fastapi import HTTPException
+
     from graphbase_memories.devtools.routes.tools import InvokeRequest, invoke_tool
 
     body = InvokeRequest(params={}, confirm=False)
-    result = await invoke_tool("save_decision", body, driver)
-
-    assert result["status"] == "not_supported"
+    try:
+        await invoke_tool("save_decision", body, driver)
+        raise AssertionError("Should have raised HTTPException 501")
+    except HTTPException as exc:
+        assert exc.status_code == 501
 
 
 async def test_invoke_read_tool_executes_immediately(driver):
