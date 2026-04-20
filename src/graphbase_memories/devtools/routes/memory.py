@@ -13,6 +13,7 @@ from graphbase_memories.devtools.deps import DevtoolsTokenDep, DriverDep
 router = APIRouter(tags=["memory"])
 
 _ALLOWED_LABELS = {"Session", "Decision", "Pattern", "Context", "EntityFact"}
+_ALLOWED_FORMATS = {"list", "timeline"}
 _ALLOWED_SORT_FIELDS = {
     "created_at": "n.created_at",
     "title": "coalesce(n.title, '')",
@@ -60,23 +61,68 @@ def _validate_sort(sort_by: str, sort_order: str) -> tuple[str, str]:
     return _ALLOWED_SORT_FIELDS[sort_by], sort_order.upper()
 
 
+def _validate_format(response_format: str) -> str:
+    if response_format not in _ALLOWED_FORMATS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid format {response_format!r}. Must be one of: {sorted(_ALLOWED_FORMATS)}",
+        )
+    return response_format
+
+
+def _timeline_date(created_at: str | None) -> str:
+    if not created_at:
+        return "unknown"
+    return created_at.split("T", 1)[0]
+
+
+def _build_timeline_groups(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    for item in items:
+        date_key = _timeline_date(item.get("created_at"))
+        if not groups or groups[-1]["date"] != date_key:
+            groups.append({"date": date_key, "count": 0, "items": []})
+        groups[-1]["items"].append(item)
+        groups[-1]["count"] += 1
+    return groups
+
+
+def _shape_memory_response(
+    items: list[dict[str, Any]],
+    total: int,
+    response_format: str,
+) -> dict[str, Any]:
+    if response_format == "timeline":
+        return {
+            "format": "timeline",
+            "items": items,
+            "groups": _build_timeline_groups(items),
+            "total": total,
+        }
+    return {"items": items, "total": total}
+
+
 @router.get("/memory")
 async def list_memory(
     driver: DriverDep,
     project_id: Annotated[str | None, Query()] = None,
     label: Annotated[
         str | None,
-        Query(description="Node label filter — one of: Session, Decision, Pattern, Context, EntityFact"),
+        Query(
+            description="Node label filter — one of: Session, Decision, Pattern, Context, EntityFact"
+        ),
     ] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
     sort_by: Annotated[str, Query()] = "created_at",
     sort_order: Annotated[str, Query()] = "desc",
     since_days: Annotated[int | None, Query(ge=0)] = None,
+    format: Annotated[str, Query()] = "list",
 ):
     """List recent memory nodes, optionally filtered by project and label."""
     label = _validate_label(label)
     order_expr, order_direction = _validate_sort(sort_by, sort_order)
+    response_format = _validate_format(format)
     label_clause = "AND $label IN labels(n)" if label else ""
     project_clause = (
         "AND EXISTS { MATCH (n)-[:BELONGS_TO]->(:Project {id: $pid}) }" if project_id else ""
@@ -126,7 +172,7 @@ async def list_memory(
             **params,
         )
         total_record = await total_result.single()
-    return {"items": nodes, "total": total_record["total"] if total_record else 0}
+    return _shape_memory_response(nodes, total_record["total"] if total_record else 0, response_format)
 
 
 @router.get("/memory/{node_id}/relationships")
@@ -236,9 +282,7 @@ async def search_memory(body: MemorySearchRequest, driver: DriverDep):
     order_expr, order_direction = _validate_sort(body.sort_by, body.sort_order)
     filter_labels = body.labels or ([body.label] if body.label else None)
     _validate_labels(filter_labels)
-    label_clause = (
-        "AND any(lbl IN labels(n) WHERE lbl IN $filter_labels)" if filter_labels else ""
-    )
+    label_clause = "AND any(lbl IN labels(n) WHERE lbl IN $filter_labels)" if filter_labels else ""
     project_clause = (
         "AND EXISTS { MATCH (n)-[:BELONGS_TO]->(:Project {id: $pid}) }" if body.project_id else ""
     )
@@ -321,7 +365,9 @@ def _validate_patch_fields(payload: dict[str, Any]) -> dict[str, Any]:
             detail=f"Invalid patch fields: {invalid}. Allowed: {sorted(_ALLOWED_PATCH_FIELDS)}",
         )
     if not payload:
-        raise HTTPException(status_code=422, detail="Patch body must contain at least one allowed field")
+        raise HTTPException(
+            status_code=422, detail="Patch body must contain at least one allowed field"
+        )
     return payload
 
 
@@ -364,7 +410,9 @@ async def delete_node(
     if not confirm:
         raise HTTPException(status_code=422, detail="confirm=true is required for deletion")
     async with driver.session(database=settings.neo4j_database) as session:
-        check_result = await session.run("MATCH (n {id: $id}) RETURN n.id AS id LIMIT 1", id=node_id)
+        check_result = await session.run(
+            "MATCH (n {id: $id}) RETURN n.id AS id LIMIT 1", id=node_id
+        )
         if await check_result.single() is None:
             raise HTTPException(status_code=404, detail=f"Node {node_id!r} not found")
         await session.run("MATCH (n {id: $id}) DETACH DELETE n", id=node_id)

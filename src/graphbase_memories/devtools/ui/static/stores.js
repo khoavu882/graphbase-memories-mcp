@@ -118,6 +118,40 @@
     }[label] || "badge badge--info";
   }
 
+  function normaliseNeo4jDateTime(value) {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    const datePart = value._DateTime__date;
+    const timePart = value._DateTime__time;
+    if (!datePart || !timePart) {
+      return null;
+    }
+    const year = datePart._Date__year;
+    const month = String(datePart._Date__month).padStart(2, "0");
+    const day = String(datePart._Date__day).padStart(2, "0");
+    const hour = String(timePart._Time__hour).padStart(2, "0");
+    const minute = String(timePart._Time__minute).padStart(2, "0");
+    const second = String(timePart._Time__second).padStart(2, "0");
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
+  }
+
+  function normaliseApiValue(value) {
+    if (Array.isArray(value)) {
+      return value.map((item) => normaliseApiValue(item));
+    }
+    const temporalValue = normaliseNeo4jDateTime(value);
+    if (temporalValue) {
+      return temporalValue;
+    }
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, nestedValue]) => [key, normaliseApiValue(nestedValue)])
+      );
+    }
+    return value;
+  }
+
   async function fetchJson(url, options = {}) {
     const response = await fetch(url, options);
     const contentType = response.headers.get("content-type") || "";
@@ -271,6 +305,7 @@
     getTheme,
     statusMeta,
     labelToBadgeClass,
+    normaliseApiValue,
     viewLabel(view) {
       return VIEW_LABELS[view] || view;
     },
@@ -393,10 +428,10 @@
         this.nodeId = nodeId;
         try {
           const payload = await fetchJson(`/memory/${encodeURIComponent(nodeId)}/relationships`);
-          this.nodeData = payload.node;
+          this.nodeData = normaliseApiValue(payload.node);
           this.relationships = {
-            incoming: payload.incoming || [],
-            outgoing: payload.outgoing || [],
+            incoming: normaliseApiValue(payload.incoming || []),
+            outgoing: normaliseApiValue(payload.outgoing || []),
           };
           this.syncFormFromNode();
           this.editMode = false;

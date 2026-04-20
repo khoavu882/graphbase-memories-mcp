@@ -5,23 +5,10 @@
     if (!value) {
       return "Unknown";
     }
-    let parsedValue = value;
-    if (typeof value === "object") {
-      const datePart = value._DateTime__date;
-      const timePart = value._DateTime__time;
-      if (datePart && timePart) {
-        const year = datePart._Date__year;
-        const month = String(datePart._Date__month).padStart(2, "0");
-        const day = String(datePart._Date__day).padStart(2, "0");
-        const hour = String(timePart._Time__hour).padStart(2, "0");
-        const minute = String(timePart._Time__minute).padStart(2, "0");
-        const second = String(timePart._Time__second).padStart(2, "0");
-        parsedValue = `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
-      }
-    }
+    const parsedValue = ui.normaliseApiValue(value);
     const date = new Date(parsedValue);
     if (Number.isNaN(date.getTime())) {
-      return value;
+      return String(parsedValue);
     }
     const diffMs = date.getTime() - Date.now();
     const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });

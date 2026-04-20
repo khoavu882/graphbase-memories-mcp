@@ -148,6 +148,73 @@ async def test_memory_pagination(driver, fresh_project):
             )
 
 
+async def test_memory_timeline_format_groups_by_day(driver, fresh_project):
+    """GET /memory?format=timeline returns day-grouped buckets."""
+    from graphbase_memories.devtools.routes.memory import list_memory
+
+    node_ids = [
+        "test-memory-timeline-001",
+        "test-memory-timeline-002",
+        "test-memory-timeline-003",
+    ]
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            UNWIND $rows AS row
+            CREATE (d:Decision {
+                id: row.id,
+                title: row.title,
+                summary: row.title,
+                created_at: datetime(row.created_at)
+            })
+            WITH d, row
+            MATCH (p:Project {id: $pid})
+            MERGE (d)-[:BELONGS_TO]->(p)
+            """,
+            rows=[
+                {
+                    "id": node_ids[0],
+                    "title": "timeline newest",
+                    "created_at": "2026-04-20T10:15:00Z",
+                },
+                {
+                    "id": node_ids[1],
+                    "title": "timeline same day",
+                    "created_at": "2026-04-20T08:00:00Z",
+                },
+                {
+                    "id": node_ids[2],
+                    "title": "timeline previous day",
+                    "created_at": "2026-04-19T12:30:00Z",
+                },
+            ],
+            pid=fresh_project,
+        )
+
+    try:
+        result = await list_memory(
+            driver,
+            project_id=fresh_project,
+            label="Decision",
+            limit=10,
+            sort_by="created_at",
+            sort_order="desc",
+            format="timeline",
+        )
+        assert result["format"] == "timeline"
+        assert result["total"] >= 3
+        assert [group["date"] for group in result["groups"][:2]] == ["2026-04-20", "2026-04-19"]
+        assert result["groups"][0]["count"] >= 2
+        assert [item["id"] for item in result["groups"][0]["items"][:2]] == node_ids[:2]
+        assert result["groups"][1]["items"][0]["id"] == node_ids[2]
+    finally:
+        async with driver.session(database=TEST_DB) as session:
+            await session.run(
+                "MATCH (d:Decision) WHERE d.id IN $ids DETACH DELETE d",
+                ids=node_ids,
+            )
+
+
 async def test_memory_node_not_found_raises_404(driver):
     """GET /memory/{node_id} for a nonexistent ID raises 404."""
     from fastapi import HTTPException
@@ -240,7 +307,9 @@ async def test_delete_memory_node(driver, fresh_project):
     assert response.json() == {"deleted": True, "id": node_id}
 
     async with driver.session(database=TEST_DB) as session:
-        result = await session.run("MATCH (d:Decision {id: $id}) RETURN count(d) AS cnt", id=node_id)
+        result = await session.run(
+            "MATCH (d:Decision {id: $id}) RETURN count(d) AS cnt", id=node_id
+        )
         record = await result.single()
         assert record["cnt"] == 0
 
