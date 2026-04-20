@@ -110,6 +110,16 @@ const urlParams = new URLSearchParams(window.location.search);
 const wsInput = document.getElementById('ws-input');
 wsInput.value = urlParams.get('workspace_id') || '';
 
+// Ensure the graph sidebar controls satisfy browser form-field checks.
+document.querySelectorAll('input:not([name])').forEach((input, index) => {
+  input.name =
+    input.dataset.label ||
+    input.dataset.edge ||
+    input.dataset.category ||
+    input.id ||
+    `graph-field-${index}`;
+});
+
 // ── Active filters ──────────────────────────────────────────────────────
 function activeNodeLabels() {
   return [...document.querySelectorAll('[data-filter="node"]')]
