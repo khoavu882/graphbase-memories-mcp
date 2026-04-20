@@ -24,7 +24,7 @@
   x-on:devtools:toggle-help.window="helpOpen = !helpOpen"
 >
   <div class="topbar">
-    <button class="btn btn--ghost btn--sm btn--icon" @click="$store.nav.toggleSidebar()">
+    <button class="btn btn--ghost btn--sm btn--icon" aria-label="Toggle sidebar" @click="$store.nav.toggleSidebar()">
       <span class="icon" x-html="window.DevtoolsUI.icon('menu')"></span>
     </button>
     <div class="topbar-title">
@@ -51,7 +51,7 @@
       <span class="icon" x-html="window.DevtoolsUI.icon(window.DevtoolsUI.getTheme() === 'dark' ? 'sun' : 'moon')"></span>
       <span x-text="window.DevtoolsUI.getTheme() === 'dark' ? 'Light' : 'Dark'"></span>
     </button>
-    <button class="btn btn--ghost btn--sm btn--icon" @click="helpOpen = !helpOpen">
+    <button class="btn btn--ghost btn--sm btn--icon" aria-label="Help" @click="helpOpen = !helpOpen">
       <span class="icon" x-html="window.DevtoolsUI.icon('help')"></span>
     </button>
   </div>
@@ -496,7 +496,7 @@
                       memory nodes and their relationships. Type <strong>DELETE</strong> to continue.
                     </p>
                   </div>
-                  <button class="btn btn--ghost btn--sm btn--icon" @click="closeBulkDeleteModal()">
+                  <button class="btn btn--ghost btn--sm btn--icon" aria-label="Close" @click="closeBulkDeleteModal()">
                     <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
                   </button>
                 </div>
@@ -893,10 +893,10 @@
         <h3 style="margin-top: 0.5rem;" x-text="$store.inspector.nodeData?.title || $store.inspector.nodeData?.entity_name || $store.inspector.nodeData?.id || 'Loading node'"></h3>
       </div>
       <div class="toolbar-actions">
-        <button class="btn btn--ghost btn--sm btn--icon" x-show="$store.inspector.history.length" @click="$store.inspector.back()">
+        <button class="btn btn--ghost btn--sm btn--icon" aria-label="Back" x-show="$store.inspector.history.length" @click="$store.inspector.back()">
           <span class="icon" x-html="window.DevtoolsUI.icon('chevron-right')"></span>
         </button>
-        <button class="btn btn--ghost btn--sm btn--icon" @click="$store.inspector.close()">
+        <button class="btn btn--ghost btn--sm btn--icon" aria-label="Close inspector" @click="$store.inspector.close()">
           <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
         </button>
       </div>
@@ -1101,7 +1101,7 @@
             relationships. Type the node ID to confirm.
           </p>
         </div>
-        <button class="btn btn--ghost btn--sm btn--icon" @click="$store.inspector.closeDeleteModal()">
+        <button class="btn btn--ghost btn--sm btn--icon" aria-label="Close" @click="$store.inspector.closeDeleteModal()">
           <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
         </button>
       </div>
@@ -1145,7 +1145,7 @@
           <h3 class="modal-title">Keyboard Shortcuts</h3>
           <p class="muted">Use quick navigation while the DevTools UI is focused.</p>
         </div>
-        <button class="btn btn--ghost btn--sm btn--icon" @click="helpOpen = false">
+        <button class="btn btn--ghost btn--sm btn--icon" aria-label="Close help" @click="helpOpen = false">
           <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
         </button>
       </div>
@@ -1169,7 +1169,7 @@
       <article class="toast" :class="`toast--${item.type}`">
         <span class="icon" x-html="window.DevtoolsUI.icon(item.type === 'success' ? 'check-circle' : item.type === 'warning' ? 'alert-triangle' : item.type === 'danger' ? 'x' : 'activity')"></span>
         <div style="flex: 1;" x-text="item.message"></div>
-        <button class="btn btn--ghost btn--sm btn--icon" @click="$store.toast.remove(item.id)">
+        <button class="btn btn--ghost btn--sm btn--icon" aria-label="Dismiss" @click="$store.toast.remove(item.id)">
           <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
         </button>
       </article>
