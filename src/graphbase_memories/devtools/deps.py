@@ -28,7 +28,9 @@ def get_devtools_token() -> str | None:
     return _DEVTOOLS_TOKEN
 
 
-def require_token(x_devtools_token: Annotated[str | None, Header(alias="X-Devtools-Token")] = None) -> str:
+def require_token(
+    x_devtools_token: Annotated[str | None, Header(alias="X-Devtools-Token")] = None,
+) -> str:
     """Validate the startup-generated devtools write token."""
     if not _DEVTOOLS_TOKEN or x_devtools_token != _DEVTOOLS_TOKEN:
         raise HTTPException(status_code=403, detail="Invalid or missing devtools token")

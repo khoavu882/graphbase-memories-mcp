@@ -172,7 +172,9 @@ async def list_memory(
             **params,
         )
         total_record = await total_result.single()
-    return _shape_memory_response(nodes, total_record["total"] if total_record else 0, response_format)
+    return _shape_memory_response(
+        nodes, total_record["total"] if total_record else 0, response_format
+    )
 
 
 @router.get("/memory/{node_id}/relationships")

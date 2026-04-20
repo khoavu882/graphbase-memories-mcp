@@ -74,7 +74,9 @@ async def scan(
                 label=record["label"],
                 title=record["title"],
                 age_days=age_days,
-                freshness=FreshnessLevel(freshness_str) if freshness_str != "unknown" else FreshnessLevel.stale,
+                freshness=FreshnessLevel(freshness_str)
+                if freshness_str != "unknown"
+                else FreshnessLevel.stale,
                 project_id=record["project_id"],
             )
         )

@@ -202,7 +202,9 @@ async def graph_health(
     # Absorb detect_conflicts when include_conflicts=True
     conflict_records: list[ConflictRecord] = []
     if include_conflicts and total_conflicts > 0:
-        conflict_records = await detect_conflicts(workspace_id, limit=100, driver=driver, database=database)
+        conflict_records = await detect_conflicts(
+            workspace_id, limit=100, driver=driver, database=database
+        )
 
     if total_conflicts > 0:
         health_next_step = (
