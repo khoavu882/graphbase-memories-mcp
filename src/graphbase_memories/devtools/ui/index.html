@@ -208,7 +208,14 @@
               <template x-if="!loading && !detailProject">
                 <div class="project-grid">
                   <template x-for="project in filteredProjects()" :key="project.id">
-                    <article class="card card--interactive" @click="openProject(project)">
+                    <article
+                      class="card card--interactive"
+                      role="button"
+                      tabindex="0"
+                      @click="openProject(project)"
+                      @keydown.enter.prevent="openProject(project)"
+                      @keydown.space.prevent="openProject(project)"
+                    >
                       <div class="card-header">
                         <div>
                           <h3 x-text="project.name || project.id"></h3>
@@ -290,7 +297,7 @@
                   <article class="card">
                     <div class="card-header">
                       <h3>Project Memory</h3>
-                      <span class="muted" x-text="`${detailItems.length} items loaded`"></span>
+                      <span class="muted" x-text="detailStatusLabel()"></span>
                     </div>
                     <div class="card-body stack">
                       <template x-if="detailLoading">
@@ -301,7 +308,14 @@
                       </template>
                       <div class="results-list" x-show="!detailLoading && detailItems.length > 0">
                         <template x-for="item in pagedDetailItems()" :key="item.id">
-                          <article class="result-card" @click="$store.inspector.open(item.id)">
+                          <article
+                            class="result-card"
+                            role="button"
+                            tabindex="0"
+                            @click="$store.inspector.open(item.id)"
+                            @keydown.enter.prevent="$store.inspector.open(item.id)"
+                            @keydown.space.prevent="$store.inspector.open(item.id)"
+                          >
                             <div class="result-meta">
                               <span :class="labelClass(item._label)" x-text="item._label"></span>
                               <span class="muted" x-text="relativeTime(item.created_at)"></span>
@@ -416,8 +430,12 @@
                   <template x-for="(item, index) in visibleResults()" :key="item.id">
                     <article
                       class="result-card"
+                      role="button"
+                      tabindex="0"
                       :class="[$store.inspector.nodeId === item.id && 'result-card--selected', isSelected(index) && 'result-card--selected']"
                       @click="selectNode(item.id)"
+                      @keydown.enter.prevent="selectNode(item.id)"
+                      @keydown.space.prevent="selectNode(item.id)"
                     >
                       <div class="memory-card-select" @click.stop>
                         <label class="memory-check-toggle">
@@ -951,7 +969,12 @@
                 <span class="icon" x-html="window.DevtoolsUI.icon('trash')"></span>
                 Delete
               </button>
-              <button class="btn btn--primary btn--sm" @click="viewInGraph()">
+              <button
+                class="btn btn--primary btn--sm"
+                @click="viewInGraph()"
+                :disabled="!canViewInGraph()"
+                :title="viewInGraphTitle()"
+              >
                 <span class="icon" x-html="window.DevtoolsUI.icon('external-link')"></span>
                 View in Graph
               </button>
@@ -1013,7 +1036,14 @@
                 <p class="muted">No outgoing relationships.</p>
               </template>
               <template x-for="relation in relationItems('outgoing')" :key="`${relation.type}:${relation.to_id}`">
-                <article class="result-card" @click="$store.inspector.open(relation.to_id)">
+                <article
+                  class="result-card"
+                  role="button"
+                  tabindex="0"
+                  @click="$store.inspector.open(relation.to_id)"
+                  @keydown.enter.prevent="$store.inspector.open(relation.to_id)"
+                  @keydown.space.prevent="$store.inspector.open(relation.to_id)"
+                >
                   <div class="result-meta">
                     <span class="badge badge--info" x-text="relation.type"></span>
                     <span :class="labelClass(relation.to_label)" x-text="relation.to_label"></span>
@@ -1032,7 +1062,14 @@
                 <p class="muted">No incoming relationships.</p>
               </template>
               <template x-for="relation in relationItems('incoming')" :key="`${relation.type}:${relation.from_id}`">
-                <article class="result-card" @click="$store.inspector.open(relation.from_id)">
+                <article
+                  class="result-card"
+                  role="button"
+                  tabindex="0"
+                  @click="$store.inspector.open(relation.from_id)"
+                  @keydown.enter.prevent="$store.inspector.open(relation.from_id)"
+                  @keydown.space.prevent="$store.inspector.open(relation.from_id)"
+                >
                   <div class="result-meta">
                     <span class="badge badge--info" x-text="relation.type"></span>
                     <span :class="labelClass(relation.from_label)" x-text="relation.from_label"></span>

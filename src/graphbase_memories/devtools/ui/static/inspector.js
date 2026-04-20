@@ -7,6 +7,16 @@
     { key: "fact", label: "Fact", multiline: true },
   ];
   const EDITABLE_FIELD_KEYS = new Set(EDITABLE_FIELDS.map((field) => field.key));
+  const GRAPH_ADDRESSABLE_LABELS = new Set([
+    "Workspace",
+    "Project",
+    "EntityFact",
+    "Service",
+    "DataSource",
+    "MessageQueue",
+    "Feature",
+    "BoundedContext",
+  ]);
 
   function serialiseValue(value) {
     if (value === null || value === undefined) {
@@ -101,7 +111,21 @@
         window.URL.revokeObjectURL(objectUrl);
         Alpine.store("toast").add("success", "JSON downloaded");
       },
+      canViewInGraph() {
+        const label = Alpine.store("inspector").nodeData?._label;
+        return GRAPH_ADDRESSABLE_LABELS.has(label);
+      },
+      viewInGraphTitle() {
+        if (this.canViewInGraph()) {
+          return "Open this node in the graph view";
+        }
+        return "This node type is not rendered in the graph overview";
+      },
       viewInGraph() {
+        if (!this.canViewInGraph()) {
+          Alpine.store("toast").add("info", "This node type is not rendered in the graph overview");
+          return;
+        }
         const inspector = Alpine.store("inspector");
         const data = inspector.nodeData || {};
         const projectAnchor = inspector.relationships?.outgoing?.find(

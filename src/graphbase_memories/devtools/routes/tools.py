@@ -5,14 +5,14 @@ from __future__ import annotations
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 import time
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from neo4j import AsyncDriver
 from pydantic import BaseModel
 
 from graphbase_memories.config import settings
-from graphbase_memories.devtools.deps import DriverDep
+from graphbase_memories.devtools.deps import DriverDep, validate_devtools_token
 from graphbase_memories.engines import federation as federation_engine
 from graphbase_memories.engines import hygiene as hygiene_engine
 from graphbase_memories.engines import impact as impact_engine
@@ -251,7 +251,12 @@ class InvokeRequest(BaseModel):
 
 
 @router.post("/{name}/invoke")
-async def invoke_tool(name: str, body: InvokeRequest, driver: DriverDep):
+async def invoke_tool(
+    name: str,
+    body: InvokeRequest,
+    driver: DriverDep,
+    x_devtools_token: Annotated[str | None, Header(alias="X-Devtools-Token")] = None,
+):
     """
     Invoke an MCP tool via the engine layer.
 
@@ -269,6 +274,9 @@ async def invoke_tool(name: str, body: InvokeRequest, driver: DriverDep):
                 "as a flat JSON params dict. Use the MCP stdio server instead."
             ),
         )
+
+    if spec.requires_confirm:
+        validate_devtools_token(x_devtools_token)
 
     if spec.requires_confirm and not body.confirm:
         return {

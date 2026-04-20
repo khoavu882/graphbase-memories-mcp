@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException
 
 from graphbase_memories.config import settings
-from graphbase_memories.devtools.deps import DriverDep
+from graphbase_memories.devtools.deps import DevtoolsTokenDep, DriverDep
 from graphbase_memories.engines import impact as impact_engine
 
 router = APIRouter(tags=["health"])
@@ -110,7 +110,11 @@ async def workspace_conflicts(workspace_id: str, driver: DriverDep, limit: int =
 
 
 @router.post("/graph/repair/orphaned-entities/{workspace_id}")
-async def repair_orphaned_entities(workspace_id: str, driver: DriverDep):
+async def repair_orphaned_entities(
+    workspace_id: str,
+    driver: DriverDep,
+    _: DevtoolsTokenDep,
+):
     """
     Repair EntityFact nodes that are not linked to any Project.
 

@@ -453,3 +453,17 @@ async def test_write_requires_token(driver, fresh_project):
     finally:
         async with driver.session(database=TEST_DB) as session:
             await session.run("MATCH (d:Decision {id: $id}) DETACH DELETE d", id=node_id)
+
+
+async def test_repair_orphans_requires_token(driver, fresh_workspace):
+    """POST /graph/repair/orphaned-entities/{workspace_id} rejects requests without a token."""
+    from graphbase_memories.devtools.deps import set_devtools_token
+    from graphbase_memories.devtools.server import app
+
+    app.state.driver = driver
+    set_devtools_token("expected-token")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(f"/graph/repair/orphaned-entities/{fresh_workspace}")
+
+    assert response.status_code == 403

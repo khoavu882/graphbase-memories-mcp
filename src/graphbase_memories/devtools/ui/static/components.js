@@ -84,6 +84,7 @@
       detailItems: [],
       detailPage: 1,
       detailPageSize: 10,
+      detailTotalCount: 0,
       init() {
         if (this.initialised) {
           return;
@@ -95,10 +96,11 @@
             return;
           }
           if (projectId) {
-            await this.loadProjectDetail(projectId);
+            await this.loadProjectDetail(projectId, 1);
           } else {
             this.detailProject = null;
             this.detailItems = [];
+            this.detailTotalCount = 0;
           }
         });
       },
@@ -116,16 +118,21 @@
           this.loading = false;
         }
       },
-      async loadProjectDetail(projectId) {
+      async loadProjectDetail(projectId, page = this.detailPage || 1) {
         this.detailLoading = true;
         try {
+          const safePage = Math.max(1, page);
+          const offset = (safePage - 1) * this.detailPageSize;
           const [project, items] = await Promise.all([
             ui.fetchJson(`/projects/${encodeURIComponent(projectId)}`),
-            ui.fetchJson(`/memory?project_id=${encodeURIComponent(projectId)}&limit=100`),
+            ui.fetchJson(
+              `/memory?project_id=${encodeURIComponent(projectId)}&limit=${this.detailPageSize}&offset=${offset}&sort_by=created_at&sort_order=desc`
+            ),
           ]);
           this.detailProject = project;
           this.detailItems = normaliseListResponse(items);
-          this.detailPage = 1;
+          this.detailTotalCount = items.total || 0;
+          this.detailPage = safePage;
         } catch (error) {
           Alpine.store("toast").add("danger", error.message || "Failed to load project detail");
         } finally {
@@ -159,17 +166,30 @@
         return projectState(project);
       },
       pagedDetailItems() {
-        const start = (this.detailPage - 1) * this.detailPageSize;
-        return this.detailItems.slice(start, start + this.detailPageSize);
+        return this.detailItems;
       },
       detailPageCount() {
-        return Math.max(1, Math.ceil(this.detailItems.length / this.detailPageSize));
+        return Math.max(1, Math.ceil(this.detailTotalCount / this.detailPageSize));
       },
-      nextDetailPage() {
-        this.detailPage = Math.min(this.detailPage + 1, this.detailPageCount());
+      async nextDetailPage() {
+        if (!this.detailProject || this.detailPage >= this.detailPageCount()) {
+          return;
+        }
+        await this.loadProjectDetail(this.detailProject.id, this.detailPage + 1);
       },
-      prevDetailPage() {
-        this.detailPage = Math.max(1, this.detailPage - 1);
+      async prevDetailPage() {
+        if (!this.detailProject || this.detailPage <= 1) {
+          return;
+        }
+        await this.loadProjectDetail(this.detailProject.id, this.detailPage - 1);
+      },
+      detailStatusLabel() {
+        if (this.detailTotalCount === 0) {
+          return "0 items";
+        }
+        const start = (this.detailPage - 1) * this.detailPageSize + 1;
+        const end = Math.min(start + this.detailItems.length - 1, this.detailTotalCount);
+        return `Showing ${start}-${end} of ${this.detailTotalCount}`;
       },
       openMemorySearch() {
         Alpine.store("nav").navigate("memory");
@@ -576,7 +596,10 @@
           const startedAt = performance.now();
           const response = await ui.fetchJson(`/tools/${this.selected.name}/invoke`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...Alpine.store("auth").headers(),
+            },
             body: JSON.stringify({
               params: this.coerceParams(),
               confirm,
@@ -592,7 +615,10 @@
             });
           }
         } catch (error) {
-          Alpine.store("toast").add("danger", error.message || "Tool invocation failed");
+          const message = ui.isInvalidTokenMessage(error.message)
+            ? "Invalid token. Paste the startup token from console."
+            : error.message || "Tool invocation failed";
+          Alpine.store("toast").add("danger", message);
         } finally {
           this.invoking = false;
         }
@@ -709,12 +735,18 @@
         try {
           this.repairResult = await ui.fetchJson(
             `/graph/repair/orphaned-entities/${encodeURIComponent(workspaceId)}`,
-            { method: "POST" }
+            {
+              method: "POST",
+              headers: Alpine.store("auth").headers(),
+            }
           );
           await this.loadWorkspaceHealth({ preserveRepairResult: true });
           Alpine.store("toast").add("success", this.repairResult.message || "Repair completed");
         } catch (error) {
-          Alpine.store("toast").add("danger", error.message || "Repair failed");
+          const message = ui.isInvalidTokenMessage(error.message)
+            ? "Invalid token. Paste the startup token from console."
+            : error.message || "Repair failed";
+          Alpine.store("toast").add("danger", message);
         } finally {
           this.repairing = false;
         }
