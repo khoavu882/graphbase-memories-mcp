@@ -2,7 +2,6 @@
 
 from graphbase_memories.domain.results import (  # noqa: F401
     AffectedServiceItem,
-    AnalysisResult,
     BatchSaveResult,
     ConflictRecord,
     ContextBundle,

@@ -43,12 +43,6 @@ class DedupOutcome(StrEnum):
     manual_review = "manual_review"
 
 
-class AnalysisMode(StrEnum):
-    sequential = "sequential"
-    debate = "debate"
-    socratic = "socratic"
-
-
 class CrossServiceLinkType(StrEnum):
     DEPENDS_ON = "DEPENDS_ON"
     SHARES_CONCEPT = "SHARES_CONCEPT"

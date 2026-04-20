@@ -7,7 +7,6 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from graphbase_memories.domain.enums import (
-    AnalysisMode,
     DedupOutcome,
     FreshnessLevel,
     RetrievalStatus,
@@ -41,14 +40,6 @@ class ContextBundle(BaseModel):
     hygiene_due: bool = False
     truncated_scopes: list[str] = []  # scopes where result count hit the configured limit
     next_step: str | None = None
-
-
-class AnalysisResult(BaseModel):
-    """M-1: actionable routing result with suggested_steps."""
-
-    mode: AnalysisMode
-    rationale: str
-    suggested_steps: list[str]
 
 
 class GovernanceTokenResult(BaseModel):

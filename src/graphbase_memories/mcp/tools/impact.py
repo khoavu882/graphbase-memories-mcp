@@ -6,7 +6,7 @@ from fastmcp import Context
 
 from graphbase_memories.config import settings
 from graphbase_memories.engines import impact as impact_engine
-from graphbase_memories.mcp.schemas.errors import MCPError
+from graphbase_memories.mcp.schemas.errors import ErrorCode, MCPError
 from graphbase_memories.mcp.schemas.results import ImpactReport, WorkspaceHealthReport
 from graphbase_memories.mcp.server import mcp
 
@@ -26,14 +26,22 @@ async def propagate_impact(
     Returns MCPError with code=ENTITY_NOT_FOUND if entity_id does not exist in the graph.
     """
     driver = ctx.lifespan_context["driver"]
-    return await impact_engine.propagate_impact(
-        entity_id,
-        change_description,
-        impact_type,
-        min(max_depth, settings.impact_max_depth),
-        driver,
-        settings.neo4j_database,
-    )
+    try:
+        return await impact_engine.propagate_impact(
+            entity_id,
+            change_description,
+            impact_type,
+            min(max_depth, settings.impact_max_depth),
+            driver,
+            settings.neo4j_database,
+        )
+    except LookupError as exc:
+        return MCPError(
+            code=ErrorCode.ENTITY_NOT_FOUND,
+            message=str(exc),
+            context={"entity_id": entity_id},
+            next_step="Call upsert_entity_with_deps() to create the entity first.",
+        )
 
 
 @mcp.tool()

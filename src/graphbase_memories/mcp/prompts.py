@@ -9,8 +9,67 @@ from __future__ import annotations
 from fastmcp import Context
 from fastmcp.prompts import Message
 
-from graphbase_memories.engines.analysis import route as analysis_route
 from graphbase_memories.mcp.server import mcp
+
+# ── analysis_routing internals ────────────────────────────────────────────────
+
+_SEQUENTIAL_KEYWORDS = {
+    "strategic", "strategy", "multi-factor", "planning", "roadmap",
+    "prioritize", "milestone", "initiative", "phase",
+}
+_DEBATE_KEYWORDS = {
+    "trade-off", "tradeoff", "compare", "versus", "vs", "debate",
+    "alternatives", "option", "choose", "decision between",
+}
+_SOCRATIC_KEYWORDS = {
+    "unclear", "requirements", "discovery", "explore", "what do you mean",
+    "clarify", "understand", "not sure", "ambiguous",
+}
+_SUGGESTED_STEPS: dict[str, list[str]] = {
+    "sequential": [
+        "1. Define the problem statement and success criteria.",
+        "2. Gather relevant context from memory (retrieve_context).",
+        "3. Break the problem into sequential steps or phases.",
+        "4. Analyze each step for dependencies and risks.",
+        "5. Synthesize conclusions and save durable decisions.",
+    ],
+    "debate": [
+        "1. Enumerate the competing options or trade-offs.",
+        "2. Retrieve prior decisions on similar trade-offs.",
+        "3. Evaluate each option against criteria (cost, risk, fit).",
+        "4. State the recommended option with rationale.",
+        "5. Save the final decision with confidence score.",
+    ],
+    "socratic": [
+        "1. Identify what is unclear or ambiguous in the request.",
+        "2. Ask targeted clarifying questions (one at a time).",
+        "3. Confirm understanding before proceeding.",
+        "4. Restate requirements in your own words for validation.",
+        "5. Proceed with analysis only after requirements are resolved.",
+    ],
+}
+
+
+def _route_analysis(task_description: str, task_type_hint: str | None) -> tuple[str, str]:
+    """Return (mode, rationale) for a task description."""
+    text = (task_description + " " + (task_type_hint or "")).lower()
+    if task_type_hint:
+        hint = task_type_hint.lower()
+        if any(k in hint for k in _SEQUENTIAL_KEYWORDS):
+            return "sequential", "task_type_hint matched sequential keywords"
+        if any(k in hint for k in _DEBATE_KEYWORDS):
+            return "debate", "task_type_hint matched debate keywords"
+        if any(k in hint for k in _SOCRATIC_KEYWORDS):
+            return "socratic", "task_type_hint matched socratic keywords"
+    debate_score = sum(1 for k in _DEBATE_KEYWORDS if k in text)
+    socratic_score = sum(1 for k in _SOCRATIC_KEYWORDS if k in text)
+    sequential_score = sum(1 for k in _SEQUENTIAL_KEYWORDS if k in text)
+    if debate_score > max(sequential_score, socratic_score):
+        return "debate", "task description suggests trade-off evaluation"
+    if socratic_score > max(sequential_score, debate_score):
+        return "socratic", "task description suggests requirements discovery"
+    return "sequential", "default: structured multi-step analysis"
+
 
 # ── analysis_routing ──────────────────────────────────────────────────────────
 
@@ -20,21 +79,20 @@ def analysis_routing(
     task_description: str,
     task_type_hint: str | None = None,
 ) -> list[Message]:
-    """
-    Route a task to the appropriate analysis mode (sequential/debate/socratic).
+    """Route a task to the appropriate analysis mode (sequential/debate/socratic).
+
     Returns guidance messages describing which mode to enter and suggested steps.
-    Replaces the deprecated route_analysis tool.
     """
-    result = analysis_route(task_description, task_type_hint)
+    mode, rationale = _route_analysis(task_description, task_type_hint)
     return [
         Message(
             role="user",
             content=(
                 f"Analysis routing for: {task_description}\n\n"
-                f"Recommended mode: {result.mode}\n"
-                f"Rationale: {result.rationale}\n\n"
+                f"Recommended mode: {mode}\n"
+                f"Rationale: {rationale}\n\n"
                 "Suggested steps:\n"
-                + "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(result.suggested_steps))
+                + "\n".join(f"  {s}" for s in _SUGGESTED_STEPS[mode])
             ),
         )
     ]
