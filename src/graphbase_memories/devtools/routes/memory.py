@@ -20,7 +20,6 @@ _ALLOWED_SORT_FIELDS = {
     "entity_name": "coalesce(n.entity_name, '')",
 }
 _ALLOWED_PATCH_FIELDS = {"title", "content", "summary", "fact"}
-_STRUCTURAL_FIELDS = {"id", "_label", "created_at"}
 
 
 def _validate_label(label: str | None) -> str | None:
@@ -374,13 +373,10 @@ class MemoryBulkDeleteRequest(BaseModel):
 
 
 def _validate_patch_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    # Unknown fields (including structural ones like id, _label, created_at) are stripped
+    # by Pydantic before this function is called, so only invalid allowed-looking keys
+    # and empty-payload need to be handled here.
     invalid = sorted(set(payload) - _ALLOWED_PATCH_FIELDS)
-    structural = sorted(set(payload) & _STRUCTURAL_FIELDS)
-    if structural:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Cannot modify structural fields: {structural}",
-        )
     if invalid:
         raise HTTPException(
             status_code=422,

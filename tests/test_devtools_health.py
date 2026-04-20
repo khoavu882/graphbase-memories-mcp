@@ -467,3 +467,77 @@ async def test_repair_orphans_requires_token(driver, fresh_workspace):
         response = await client.post(f"/graph/repair/orphaned-entities/{fresh_workspace}")
 
     assert response.status_code == 403
+
+
+async def test_delete_memory_node_without_confirm_returns_422(driver, fresh_project):
+    """DELETE /memory/{node_id} without confirm=true returns 422."""
+    from graphbase_memories.devtools.deps import set_devtools_token
+    from graphbase_memories.devtools.server import app
+
+    node_id = "test-memory-delete-no-confirm"
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            CREATE (d:Decision {id: $id, title: 'guarded', created_at: datetime()})
+            WITH d
+            MATCH (p:Project {id: $pid})
+            MERGE (d)-[:BELONGS_TO]->(p)
+            """,
+            id=node_id,
+            pid=fresh_project,
+        )
+
+    app.state.driver = driver
+    set_devtools_token("test-devtools-token")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.delete(
+            f"/memory/{node_id}",
+            headers={"X-Devtools-Token": "test-devtools-token"},
+        )
+
+    try:
+        assert response.status_code == 422
+        assert "confirm" in response.json()["detail"].lower()
+    finally:
+        async with driver.session(database=TEST_DB) as session:
+            await session.run("MATCH (d:Decision {id: $id}) DETACH DELETE d", id=node_id)
+
+
+async def test_patch_memory_structural_field_returns_422(driver, fresh_project):
+    """PATCH /memory/{node_id} with a structural field (id, _label, created_at) returns 422."""
+    from graphbase_memories.devtools.deps import set_devtools_token
+    from graphbase_memories.devtools.server import app
+
+    node_id = "test-memory-patch-structural"
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            CREATE (d:Decision {id: $id, title: 'original', created_at: datetime()})
+            WITH d
+            MATCH (p:Project {id: $pid})
+            MERGE (d)-[:BELONGS_TO]->(p)
+            """,
+            id=node_id,
+            pid=fresh_project,
+        )
+
+    app.state.driver = driver
+    set_devtools_token("test-devtools-token")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(
+            f"/memory/{node_id}",
+            json={"id": "new-id-attempt"},
+            headers={"X-Devtools-Token": "test-devtools-token"},
+        )
+
+    try:
+        # Pydantic strips unknown fields; sending only structural fields produces an empty
+        # update dict → 422 "at least one allowed field". The net effect is the same:
+        # structural/unknown fields cannot reach the database.
+        assert response.status_code == 422
+        assert "allowed field" in response.json()["detail"].lower()
+    finally:
+        async with driver.session(database=TEST_DB) as session:
+            await session.run("MATCH (d:Decision {id: $id}) DETACH DELETE d", id=node_id)

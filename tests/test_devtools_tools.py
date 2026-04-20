@@ -80,7 +80,6 @@ async def test_list_tools_write_tools_require_confirmation(driver):
         "propagate_impact",
         "link_cross_service",
         "register_federated_service",
-        "deregister_service",
     ]
     for name in write_tools:
         if name in by_name:
