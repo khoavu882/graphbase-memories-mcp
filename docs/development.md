@@ -176,7 +176,7 @@ Current UI layout:
 - `/ui/graph.html` loads the standalone graph canvas for workspace and project topology inspection.
 - The header `Write Token` field stores the startup token in browser `localStorage` under `gb-devtools-token`.
 - The Memory view supports infinite scroll, date/title sorting, project and label filters, keyboard navigation, and a live Inspector Drawer.
-- The Inspector Drawer supports inline edit, delete, JSON copy/download, and deep-links into the graph canvas.
+- The Inspector Drawer supports inline edit, delete, JSON copy/download, and deep-links into the graph canvas for graph-rendered node types.
 - The Operations view consolidates health, hygiene, conflict, and orphan-repair workflows that were previously split across separate tabs.
 
 Architecture notes:
@@ -184,8 +184,8 @@ Architecture notes:
 - Connection pool capped at 2 (MCP server uses 8; Neo4j Community Edition allows 10 total).
 - All route handlers call engine functions directly with the devtools driver — no FastMCP Context needed.
 - The server generates a random write token at startup and prints it to stdout once connectivity succeeds.
-- Memory writes (`PATCH /memory/{node_id}` and `DELETE /memory/{node_id}?confirm=true`) require the `X-Devtools-Token` header to match the startup token.
-- Write tools (`propagate_impact`, `link_cross_service`, `register_federated_service`) require `confirm: true` in the invoke body; without it, the response is `{"status": "preview", ...}`.
+- Devtools write routes require the `X-Devtools-Token` header to match the startup token, including memory CRUD, bulk delete, orphan repair, and write-capable tool invocation.
+- Write tools (`propagate_impact`, `link_cross_service`, `register_federated_service`) also require `confirm: true` in the invoke body; without it, the response is `{"status": "preview", ...}`.
 - The SSE `/events` endpoint emits a `heartbeat` event every 5 seconds with Neo4j connectivity status.
 
 ---

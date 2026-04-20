@@ -121,7 +121,7 @@ Endpoints:
 | `DELETE /memory/<node-id>?confirm=true` | Delete a node after explicit confirmation |
 | `POST /memory/bulk-delete` | Delete multiple nodes with JSON body: `ids`, `confirm` |
 | `GET /tools` | List all registered MCP tools |
-| `POST /tools/<name>/invoke` | Invoke a tool directly (add `confirm: true` for write tools) |
+| `POST /tools/<name>/invoke` | Invoke a tool directly (write tools also require `confirm: true` and `X-Devtools-Token`) |
 | `GET /graph/overview` | Workspace and project graph overview for the UI canvas |
 | `GET /graph/stats` | Node and relationship counts across the graph |
 | `GET /graph/stats/workspace/<workspace_id>` | Workspace health metrics across all services |
@@ -136,9 +136,10 @@ Endpoints:
     `register_federated_service`) require `{ "confirm": true }` in the POST body. Without it, the
     response is `{ "status": "preview", ... }` — a dry-run showing what would change.
 
-!!! note "Memory write token"
-    Direct memory edits and deletes require the startup-generated write token in the
-    `X-Devtools-Token` header. The browser UI exposes the same value in the header `Write Token`
-    field and stores it locally as `gb-devtools-token`.
+!!! note "Devtools write token"
+    Destructive or write-capable devtools routes require the startup-generated write token in the
+    `X-Devtools-Token` header. This includes memory CRUD, bulk delete, orphan repair, and
+    write-capable `/tools/<name>/invoke` calls. The browser UI exposes the same value in the
+    header `Write Token` field and stores it locally as `gb-devtools-token`.
 
 See [Development Guide](development.md) for full architecture notes on the devtools server.

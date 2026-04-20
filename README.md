@@ -167,7 +167,7 @@ Key UX changes in the current dashboard:
 - Projects view: connection status, quick actions, project drill-down
 - Memory view: infinite-scroll search with label/project/since-days filters, sort/order, keyboard navigation (`j`/`k`, `Enter`, `Ctrl+K`, `/`)
 - Inspector Drawer: relationship navigation, inline edit/delete for memory nodes, JSON copy/download
-- Graph deep-linking: Memory → Graph focus and Graph → Memory full-detail jump
+- Graph deep-linking: graph-rendered nodes can jump Memory → Graph, and Graph → Memory opens full detail
 - Graph export: download the currently visible subgraph as JSON or CSV from the graph canvas
 - Operations view: merged graph health + hygiene, workspace orphan detection and repair
 - Header write token field: paste the startup token once and the UI stores it in `localStorage` as `gb-devtools-token`
@@ -185,7 +185,7 @@ GET  /projects                        Projects with node counts + staleness
 GET  /projects/{id}                   Single project detail
 GET  /tools                           MCP tool registry (live)
 GET  /tools/{name}                    Tool schema + metadata
-POST /tools/{name}/invoke             Engine-direct invoke with write-confirmation gate
+POST /tools/{name}/invoke             Engine-direct invoke with write-confirmation + startup-token gate for write tools
 GET  /graph/overview                  Force-directed graph: Workspace→Project topology with staleness + federation edges
 GET  /graph/stats                     Per-label node + relationship counts
 GET  /graph/stats/workspace/{id}      Workspace health
@@ -198,11 +198,11 @@ GET  /                                → redirect to /ui
 
 Write tools (`propagate_impact`, `link_cross_service`, `register_federated_service`) require `"confirm": true` in the POST body when invoked via `/tools/{name}/invoke`; without it the response is `{"status": "preview", ...}`.
 
-Direct memory writes are gated separately:
+Direct devtools writes are gated by the startup token:
 
 - `graphbase devtools` prints a startup-only write token to stdout
-- `PATCH /memory/{id}`, `DELETE /memory/{id}`, and `POST /memory/bulk-delete` require `X-Devtools-Token: <token>`
-- The browser UI exposes a `Write Token` field in the header and uses that token for Inspector edit/delete actions
+- `PATCH /memory/{id}`, `DELETE /memory/{id}`, `POST /memory/bulk-delete`, write-capable `POST /tools/{name}/invoke`, and `POST /graph/repair/orphaned-entities/{workspace_id}` require `X-Devtools-Token: <token>`
+- The browser UI exposes a `Write Token` field in the header and uses that token for Inspector edits/deletes, tool invocation, and orphan repair
 
 ---
 
