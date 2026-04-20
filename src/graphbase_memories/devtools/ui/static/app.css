@@ -811,6 +811,11 @@ pre {
   color: var(--text-muted);
 }
 
+.memory-scroll-sentinel {
+  height: 1px;
+  width: 100%;
+}
+
 .toast-container {
   position: fixed;
   right: var(--space-5);

@@ -165,7 +165,7 @@ The devtools server (`graphbase devtools`) exposes an HTTP API and a browser das
 Key UX changes in the current dashboard:
 
 - Projects view: connection status, quick actions, project drill-down
-- Memory view: paginated search with label/project/since-days filters, sort/order, keyboard navigation (`j`/`k`, `Enter`, `Ctrl+K`, `/`)
+- Memory view: infinite-scroll search with label/project/since-days filters, sort/order, keyboard navigation (`j`/`k`, `Enter`, `Ctrl+K`, `/`)
 - Inspector Drawer: relationship navigation, inline edit/delete for memory nodes, JSON copy/download
 - Graph deep-linking: Memory → Graph focus and Graph → Memory full-detail jump
 - Graph export: download the currently visible subgraph as JSON or CSV from the graph canvas

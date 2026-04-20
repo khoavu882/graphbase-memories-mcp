@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="static/tokens.css">
   <link rel="stylesheet" href="static/app.css">
   <script defer src="static/alpine-focus.min.js"></script>
+  <script defer src="static/alpine-intersect.min.js"></script>
   <script defer src="static/stores.js"></script>
   <script defer src="static/components.js"></script>
   <script defer src="static/inspector.js"></script>
@@ -445,12 +446,19 @@
                 </template>
 
                 <div class="pagination">
-                  <div class="pagination-meta" x-text="`Page ${page} of ${pageCount()} · ${totalCount} total`"></div>
+                  <div class="pagination-meta" x-text="statusLabel()"></div>
                   <div class="toolbar-actions">
-                    <button class="btn btn--ghost btn--sm" @click="prevPage()" :disabled="page <= 1">Prev</button>
-                    <button class="btn btn--ghost btn--sm" @click="nextPage()" :disabled="!hasMore()">Next</button>
+                    <button class="btn btn--ghost btn--sm" @click="loadMore()" :disabled="!canLoadMore()">
+                      <span x-text="loadingMore ? 'Loading…' : hasMore() ? 'Load More' : 'All Loaded'"></span>
+                    </button>
                   </div>
                 </div>
+                <div
+                  class="memory-scroll-sentinel"
+                  x-show="canLoadMore()"
+                  x-intersect.margin.240px="loadMore()"
+                  aria-hidden="true"
+                ></div>
               </div>
             </article>
 

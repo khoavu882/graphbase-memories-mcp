@@ -175,7 +175,7 @@ Current UI layout:
 - `/ui` loads the main dashboard with sidebar navigation for Projects, Memory, Tools, and Operations.
 - `/ui/graph.html` loads the standalone graph canvas for workspace and project topology inspection.
 - The header `Write Token` field stores the startup token in browser `localStorage` under `gb-devtools-token`.
-- The Memory view supports pagination, date/title sorting, project and label filters, keyboard navigation, and a live Inspector Drawer.
+- The Memory view supports infinite scroll, date/title sorting, project and label filters, keyboard navigation, and a live Inspector Drawer.
 - The Inspector Drawer supports inline edit, delete, JSON copy/download, and deep-links into the graph canvas.
 - The Operations view consolidates health, hygiene, conflict, and orphan-repair workflows that were previously split across separate tabs.
 

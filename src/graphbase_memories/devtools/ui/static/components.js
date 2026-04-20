@@ -199,6 +199,7 @@
       totalCount: 0,
       selectedIds: [],
       loading: false,
+      loadingMore: false,
       error: "",
       bulkDeleteModalOpen: false,
       bulkDeleteConfirmValue: "",
@@ -213,7 +214,7 @@
         }
         this.initialised = true;
         this.loadProjects();
-        this.search();
+        this.search({ reset: true });
         Alpine.store("nav").selectedIndex = -1;
         ["query", "label", "projectId", "sinceDays", "sortBy", "sortOrder"].forEach((key) => {
           this.$watch(key, () => this.queueSearch());
@@ -267,17 +268,17 @@
         }
       },
       queueSearch() {
-        this.page = 1;
         this.clearSelection();
         Alpine.store("nav").selectedIndex = -1;
         window.clearTimeout(this._debounceHandle);
-        this._debounceHandle = window.setTimeout(() => this.search(), 500);
+        this._debounceHandle = window.setTimeout(() => this.search({ reset: true }), 500);
       },
-      async search(allowRepage = true) {
-        this.loading = true;
+      async fetchPage(page, { append = false, allowRepage = true } = {}) {
+        this.loading = !append;
+        this.loadingMore = append;
         this.error = "";
         try {
-          const offset = (this.page - 1) * this.pageSize;
+          const offset = (page - 1) * this.pageSize;
           let payload;
           if (this.query.trim()) {
             payload = await ui.fetchJson("/memory/search", {
@@ -315,22 +316,36 @@
           const results = normaliseListResponse(payload);
           const totalCount = payload.total || 0;
           const maxPage = Math.max(1, Math.ceil(totalCount / this.pageSize));
-          if (allowRepage && !results.length && totalCount > 0 && this.page > maxPage) {
+          if (allowRepage && !results.length && totalCount > 0 && page > maxPage) {
             this.page = maxPage;
-            await this.search(false);
+            await this.fetchPage(maxPage, { append: false, allowRepage: false });
             return;
           }
-          this.results = results;
+          this.page = page;
+          this.results = append ? [...this.results, ...results] : results;
           this.totalCount = totalCount;
-          Alpine.store("nav").selectedIndex = this.results.length ? 0 : -1;
+          if (!append || Alpine.store("nav").selectedIndex < 0) {
+            Alpine.store("nav").selectedIndex = this.results.length ? 0 : -1;
+          }
         } catch (error) {
-          this.results = [];
-          this.totalCount = 0;
-          Alpine.store("nav").selectedIndex = -1;
+          if (!append) {
+            this.results = [];
+            this.totalCount = 0;
+            Alpine.store("nav").selectedIndex = -1;
+          }
           this.error = error.message || "Failed to load memory";
         } finally {
           this.loading = false;
+          this.loadingMore = false;
         }
+      },
+      async search({ reset = false } = {}) {
+        if (reset) {
+          this.page = 1;
+          await this.fetchPage(1, { append: false });
+          return;
+        }
+        await this.fetchPage(this.page, { append: false });
       },
       pageCount() {
         return Math.max(1, Math.ceil(this.totalCount / this.pageSize));
@@ -340,6 +355,24 @@
       },
       hasMore() {
         return this.page < this.pageCount();
+      },
+      canLoadMore() {
+        return !this.loading && !this.loadingMore && this.hasMore();
+      },
+      async loadMore() {
+        if (!this.canLoadMore()) {
+          return;
+        }
+        await this.fetchPage(this.page + 1, { append: true });
+      },
+      statusLabel() {
+        const loaded = this.results.length;
+        if (!loaded) {
+          return `${this.totalCount} total`;
+        }
+        return this.hasMore()
+          ? `Showing ${loaded} of ${this.totalCount} · scroll to load more`
+          : `Showing all ${this.totalCount} results`;
       },
       selectedCount() {
         return this.selectedIds.length;
@@ -438,14 +471,6 @@
         } finally {
           this.bulkDeleting = false;
         }
-      },
-      nextPage() {
-        this.page = Math.min(this.page + 1, this.pageCount());
-        this.search();
-      },
-      prevPage() {
-        this.page = Math.max(1, this.page - 1);
-        this.search();
       },
       selectNode(nodeId) {
         Alpine.store("inspector").open(nodeId);
