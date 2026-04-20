@@ -205,6 +205,9 @@ const TOPO_NODE_LABELS = new Set(
     .map(([key]) => key)
 );
 
+const CLUSTER_THRESHOLD = 500;
+const CLUSTER_SAMPLE_LIMIT = 6;
+
 class GraphOverviewApp {
   static THEME_KEY = "graphbase-theme";
 
@@ -220,6 +223,9 @@ class GraphOverviewApp {
     this.physicsOn = false;
     this.workspaceDebounce = null;
     this.clickTimer = null;
+    this.clusterState = { totalNodes: 0, active: false, expanded: false, skippedReason: null };
+    this.clusterMeta = new Map();
+    this.openClusterIds = [];
     this.nodeDataset = new vis.DataSet();
     this.edgeDataset = new vis.DataSet();
     this.refs = this.cacheRefs();
@@ -240,6 +246,10 @@ class GraphOverviewApp {
       physicsButton: this.document.getElementById("btn-physics"),
       exportJsonButton: this.document.getElementById("btn-export-json"),
       exportCsvButton: this.document.getElementById("btn-export-csv"),
+      clusterStatus: this.document.getElementById("cluster-status"),
+      clusterSummary: this.document.getElementById("cluster-summary"),
+      clusterExpandButton: this.document.getElementById("btn-expand-clusters"),
+      clusterResetButton: this.document.getElementById("btn-reset-clusters"),
       themeButton: this.document.getElementById("btn-theme"),
       loadingOverlay: this.document.getElementById("loading"),
       loadingHint: this.document.getElementById("loading-hint"),
@@ -329,6 +339,8 @@ class GraphOverviewApp {
     this.refs.physicsButton.addEventListener("click", () => this.togglePhysics());
     this.refs.exportJsonButton.addEventListener("click", () => this.exportVisibleJson());
     this.refs.exportCsvButton.addEventListener("click", () => this.exportVisibleCsv());
+    this.refs.clusterExpandButton?.addEventListener("click", () => this.expandAllClusters());
+    this.refs.clusterResetButton?.addEventListener("click", () => this.reclusterVisible());
     this.refs.filterInputs.forEach((input) => {
       input.addEventListener("change", () => this.applyFilters());
     });
@@ -505,7 +517,27 @@ class GraphOverviewApp {
     );
   }
 
+  clusterGroupFor(node) {
+    if (node.label === "EntityFact") {
+      const category = node.category || "EntityFact";
+      return {
+        key: `entity:${category}`,
+        label: category === "EntityFact" ? "Other" : category,
+        registryKey: category,
+      };
+    }
+    if (TOPO_NODE_LABELS.has(node.label)) {
+      return {
+        key: `topology:${node.label}`,
+        label: node.label,
+        registryKey: node.label,
+      };
+    }
+    return null;
+  }
+
   toVisNode(node) {
+    const clusterGroup = this.clusterGroupFor(node);
     if (node.label === "EntityFact") {
       const key = node.category || "EntityFact";
       const registry = NODE_TYPE_REGISTRY[key] || NODE_TYPE_REGISTRY.EntityFact;
@@ -518,6 +550,7 @@ class GraphOverviewApp {
         size: registry.size,
         font: { size: 10, color: "#e2e8f0" },
         borderWidth: 1.5,
+        _clusterGroupKey: clusterGroup?.key || null,
         _raw: node,
       };
     }
@@ -532,6 +565,7 @@ class GraphOverviewApp {
         size: registry.size,
         font: { size: 10, color: "#e2e8f0" },
         borderWidth: 1.5,
+        _clusterGroupKey: clusterGroup?.key || null,
         _raw: node,
       };
     }
@@ -546,6 +580,7 @@ class GraphOverviewApp {
       shape: registry.shape,
       font: { size: 12, color: "#e2e8f0" },
       borderWidth: 2,
+      _clusterGroupKey: clusterGroup?.key || null,
       _raw: node,
     };
   }
@@ -574,10 +609,15 @@ class GraphOverviewApp {
     }
 
     const visible = this.currentVisibleGraphData();
+    this.closeDetailPanel();
+    this.clusterMeta.clear();
+    this.openClusterIds = [];
     this.nodeDataset.clear();
     this.edgeDataset.clear();
     this.nodeDataset.add(visible.nodes.map((node) => this.toVisNode(node)));
     this.edgeDataset.add(visible.edges.map((edge, index) => this.toVisEdge(edge, index)));
+    this.initNetwork(visible.nodes.length, { forceReset: true });
+    this.applyLargeGraphClustering(visible);
   }
 
   updateSummary(summary) {
@@ -677,7 +717,95 @@ class GraphOverviewApp {
     );
   }
 
+  renderClusterMetaSection(meta) {
+    const sampleMembers = meta.sampleMembers
+      .map(
+        (member) => `
+          <div class="dp-count-row">
+            <span>${member.display}</span>
+            <span>${member.label}</span>
+          </div>
+        `
+      )
+      .join("");
+    const remainder =
+      meta.memberCount > meta.sampleMembers.length
+        ? `<div class="dp-field"><span class="dp-label">More Members</span><span class="dp-value">${(meta.memberCount - meta.sampleMembers.length).toLocaleString()} additional nodes inside this cluster.</span></div>`
+        : "";
+    return `
+      <h3>Cluster</h3>
+      <div class="dp-field">
+        <span class="dp-label">Grouping</span>
+        <span class="dp-value">${meta.groupLabel}</span>
+      </div>
+      <div class="dp-field">
+        <span class="dp-label">Contained Nodes</span>
+        <span class="dp-value">${meta.memberCount.toLocaleString()}</span>
+      </div>
+      <div class="dp-field">
+        <span class="dp-label">Sample Members</span>
+        ${sampleMembers || '<span class="dp-value">No members available.</span>'}
+      </div>
+      ${remainder}
+    `;
+  }
+
+  isClusterNode(nodeId) {
+    return Boolean(this.network && typeof this.network.isCluster === "function" && this.network.isCluster(nodeId));
+  }
+
+  openClusterPanel(clusterId) {
+    const meta = this.clusterMeta.get(clusterId);
+    if (!meta) {
+      return;
+    }
+
+    this.refs.detailId.textContent = clusterId;
+    this.refs.detailDisplay.textContent = meta.display;
+    this.refs.detailTypeBadge.textContent = "Cluster";
+    this.refs.detailTypeBadge.className = "inspect-badge badge-cluster";
+    this.refs.detailFullDetail.textContent = "Expand Cluster";
+    this.refs.detailFullDetail.onclick = () => this.expandCluster(clusterId);
+    this.refs.detailFullDetail.disabled = false;
+
+    this.refs.detailCopy.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(meta.memberIds.join("\n"));
+      } catch {}
+      this.refs.detailCopy.textContent = "Copied!";
+      window.setTimeout(() => {
+        this.refs.detailCopy.textContent = "Copy";
+      }, 1500);
+    };
+
+    this.refs.detailMeta.innerHTML = this.renderClusterMetaSection(meta);
+    this.refs.detailEdgesWrap.style.display = "none";
+
+    if (meta.sampleMembers.length > 0) {
+      this.refs.detailNeighborsWrap.style.display = "";
+      this.refs.detailNeighborChips.innerHTML = meta.sampleMembers
+        .map(
+          (member) =>
+            `<button class="neighbor-chip" data-cluster="${clusterId}" data-nid="${member.id}" title="${member.id}">${member.display}</button>`
+        )
+        .join("");
+      this.refs.detailNeighborChips.querySelectorAll(".neighbor-chip").forEach((button) => {
+        button.addEventListener("click", () => {
+          this.expandCluster(button.dataset.cluster, button.dataset.nid);
+        });
+      });
+    } else {
+      this.refs.detailNeighborsWrap.style.display = "none";
+    }
+
+    this.refs.detailPanel.classList.add("open");
+  }
+
   openDetailPanel(nodeId) {
+    if (this.isClusterNode(nodeId)) {
+      this.openClusterPanel(nodeId);
+      return;
+    }
     const item = this.rawData?.nodes.find((node) => node.id === nodeId);
     if (!item) {
       return;
@@ -685,6 +813,8 @@ class GraphOverviewApp {
 
     this.refs.detailId.textContent = item.id;
     this.refs.detailDisplay.textContent = item.display;
+    this.refs.detailFullDetail.textContent = "View Full Detail";
+    this.refs.detailFullDetail.disabled = false;
     this.refs.detailFullDetail.onclick = () => {
       this.openMemoryDetail(item.id);
     };
@@ -814,6 +944,219 @@ class GraphOverviewApp {
     this.applyFilters();
   }
 
+  buildClusterBuckets(nodes) {
+    const buckets = new Map();
+    for (const node of nodes) {
+      const clusterGroup = this.clusterGroupFor(node);
+      if (!clusterGroup) {
+        continue;
+      }
+      if (!buckets.has(clusterGroup.key)) {
+        buckets.set(clusterGroup.key, { ...clusterGroup, nodes: [] });
+      }
+      buckets.get(clusterGroup.key).nodes.push(node);
+    }
+    return [...buckets.values()].filter((bucket) => bucket.nodes.length >= 2);
+  }
+
+  clusterNodeProperties(bucket, clusterId) {
+    const registry = NODE_TYPE_REGISTRY[bucket.registryKey] || NODE_TYPE_REGISTRY.EntityFact;
+    return {
+      id: clusterId,
+      label: `${bucket.label} ×${bucket.nodes.length}`,
+      title: `${bucket.nodes.length} ${bucket.label} nodes`,
+      shape: "database",
+      size: Math.min(18 + Math.round(bucket.nodes.length / 12), 42),
+      borderWidth: 2,
+      font: { size: 12, color: "#e2e8f0", face: "inherit" },
+      color: registry.color,
+    };
+  }
+
+  setClusterState(nextState) {
+    this.clusterState = {
+      totalNodes: 0,
+      active: false,
+      expanded: false,
+      skippedReason: null,
+      clusterCount: 0,
+      clusteredNodes: 0,
+      ...nextState,
+    };
+    this.updateClusterUi();
+  }
+
+  updateClusterUi() {
+    if (!this.refs.clusterStatus || !this.refs.clusterSummary) {
+      return;
+    }
+
+    const state = this.clusterState;
+    if (state.active) {
+      this.refs.clusterStatus.hidden = false;
+      this.refs.clusterSummary.textContent =
+        `Clustering active: ${state.totalNodes.toLocaleString()} visible nodes condensed into ${state.clusterCount.toLocaleString()} groups. Double-click a cluster to expand it.`;
+      this.refs.clusterExpandButton.hidden = false;
+      this.refs.clusterExpandButton.disabled = false;
+      this.refs.clusterResetButton.hidden = false;
+      this.refs.clusterResetButton.disabled = false;
+      return;
+    }
+
+    if (state.expanded) {
+      this.refs.clusterStatus.hidden = false;
+      this.refs.clusterSummary.textContent =
+        "Clusters expanded. Use Re-cluster to condense the visible graph again.";
+      this.refs.clusterExpandButton.hidden = true;
+      this.refs.clusterResetButton.hidden = false;
+      this.refs.clusterResetButton.disabled = false;
+      return;
+    }
+
+    if (state.skippedReason === "focus") {
+      this.refs.clusterStatus.hidden = false;
+      this.refs.clusterSummary.textContent =
+        "Large graph detected. Clustering is paused so the requested node can stay directly inspectable.";
+      this.refs.clusterExpandButton.hidden = true;
+      this.refs.clusterResetButton.hidden = false;
+      this.refs.clusterResetButton.disabled = false;
+      return;
+    }
+
+    this.refs.clusterStatus.hidden = true;
+    this.refs.clusterExpandButton.hidden = true;
+    this.refs.clusterResetButton.hidden = true;
+  }
+
+  applyLargeGraphClustering(visible) {
+    const totalNodes = visible.nodes.length;
+    if (!this.network || totalNodes <= CLUSTER_THRESHOLD) {
+      this.setClusterState({ totalNodes });
+      return;
+    }
+
+    if (this.pendingFocusId) {
+      this.setClusterState({ totalNodes, skippedReason: "focus" });
+      return;
+    }
+
+    const buckets = this.buildClusterBuckets(visible.nodes);
+    if (buckets.length === 0) {
+      this.setClusterState({ totalNodes });
+      return;
+    }
+
+    let clusterCount = 0;
+    let clusteredNodes = 0;
+
+    for (const bucket of buckets) {
+      const clusterId = `cluster:${bucket.key}`;
+      const meta = {
+        id: clusterId,
+        display: `${bucket.label} Cluster`,
+        groupLabel: bucket.label,
+        memberCount: bucket.nodes.length,
+        memberIds: bucket.nodes.map((node) => node.id),
+        sampleMembers: bucket.nodes.slice(0, CLUSTER_SAMPLE_LIMIT).map((node) => ({
+          id: node.id,
+          display: node.display,
+          label: node.category || node.label,
+        })),
+      };
+      this.clusterMeta.set(clusterId, meta);
+      this.network.cluster({
+        joinCondition: (nodeOptions) => nodeOptions._clusterGroupKey === bucket.key,
+        processProperties: (clusterOptions, childNodes) => ({
+          ...clusterOptions,
+          label: `${bucket.label} ×${childNodes.length}`,
+          title: `${childNodes.length} ${bucket.label} nodes`,
+          mass: Math.max(childNodes.length, 2),
+          value: childNodes.length,
+        }),
+        clusterNodeProperties: this.clusterNodeProperties(bucket, clusterId),
+      });
+      if (this.isClusterNode(clusterId)) {
+        this.openClusterIds.push(clusterId);
+        clusterCount += 1;
+        clusteredNodes += bucket.nodes.length;
+      }
+    }
+
+    this.setClusterState({
+      totalNodes,
+      active: clusterCount > 0,
+      clusterCount,
+      clusteredNodes,
+    });
+  }
+
+  selectAndInspectNode(nodeId) {
+    if (!this.network) {
+      return;
+    }
+    window.setTimeout(() => {
+      this.network.selectNodes([nodeId]);
+      this.network.focus(nodeId, {
+        scale: 1.2,
+        animation: { duration: 350, easingFunction: "easeInOutQuad" },
+      });
+      this.openDetailPanel(nodeId);
+    }, 60);
+  }
+
+  expandCluster(clusterId, nodeId = null) {
+    if (!this.isClusterNode(clusterId)) {
+      if (nodeId) {
+        this.selectAndInspectNode(nodeId);
+      }
+      return;
+    }
+
+    this.network.openCluster(clusterId);
+    this.openClusterIds = this.openClusterIds.filter((id) => id !== clusterId);
+
+    if (this.openClusterIds.some((id) => this.isClusterNode(id))) {
+      this.setClusterState({
+        ...this.clusterState,
+        active: true,
+        expanded: false,
+        clusterCount: this.openClusterIds.filter((id) => this.isClusterNode(id)).length,
+      });
+    } else {
+      this.setClusterState({
+        totalNodes: this.clusterState.totalNodes,
+        expanded: true,
+      });
+    }
+
+    if (nodeId) {
+      this.selectAndInspectNode(nodeId);
+    } else {
+      this.closeDetailPanel();
+    }
+  }
+
+  expandAllClusters() {
+    if (!this.network) {
+      return;
+    }
+    for (const clusterId of this.openClusterIds) {
+      if (this.isClusterNode(clusterId)) {
+        this.network.openCluster(clusterId);
+      }
+    }
+    this.openClusterIds = [];
+    this.closeDetailPanel();
+    this.setClusterState({
+      totalNodes: this.clusterState.totalNodes,
+      expanded: true,
+    });
+  }
+
+  reclusterVisible() {
+    this.applyFilters();
+  }
+
   networkOptions(nodeCount) {
     const isLarge = nodeCount > 200;
     return {
@@ -835,8 +1178,12 @@ class GraphOverviewApp {
     };
   }
 
-  initNetwork(nodeCount) {
+  initNetwork(nodeCount, { forceReset = false } = {}) {
     const options = this.networkOptions(nodeCount);
+    if (forceReset && this.network) {
+      this.network.destroy();
+      this.network = null;
+    }
     if (!this.network) {
       this.network = new vis.Network(
         this.refs.graph,
@@ -858,7 +1205,13 @@ class GraphOverviewApp {
         return;
       }
       const nodeId = params.nodes[0];
-      this.clickTimer = window.setTimeout(() => this.openDetailPanel(nodeId), 75);
+      this.clickTimer = window.setTimeout(() => {
+        if (this.isClusterNode(nodeId)) {
+          this.openClusterPanel(nodeId);
+          return;
+        }
+        this.openDetailPanel(nodeId);
+      }, 75);
     });
 
     this.network.on("doubleClick", (params) => {
@@ -867,6 +1220,10 @@ class GraphOverviewApp {
         return;
       }
       const nodeId = params.nodes[0];
+      if (this.isClusterNode(nodeId)) {
+        this.expandCluster(nodeId);
+        return;
+      }
       if (this.focusNodeId === nodeId) {
         this.exitFocus();
       } else {
@@ -940,7 +1297,6 @@ class GraphOverviewApp {
       this.rawData = await response.json();
       this.updateSummary(this.rawData.summary);
       this.applyFilters();
-      this.initNetwork(this.nodeDataset.length);
       this.applyPendingFocus();
       this.refs.loadingOverlay.style.display = "none";
     } catch (error) {
@@ -987,6 +1343,10 @@ class GraphOverviewApp {
       }
       const selected = this.network?.getSelectedNodes() || [];
       if (selected.length > 0) {
+        if (this.isClusterNode(selected[0])) {
+          this.expandCluster(selected[0]);
+          return;
+        }
         this.activateFocus(selected[0]);
       }
     }

@@ -100,6 +100,7 @@
     .badge-stale        { background: #78350f; color: #fde68a; }
     .badge-fresh        { background: #166534; color: #86efac; }
     .badge-category     { background: #1c1917; color: #d4d4aa; border: 1px solid #44403c; }
+    .badge-cluster      { background: #0f172a; color: #e2e8f0; border: 1px solid #334155; }
 
     /* ── Canvas controls (top-right floating buttons) ──────────────────── */
     .canvas-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 6;
@@ -109,6 +110,34 @@
                 transition: background 0.15s, color 0.15s; }
     .ctrl-btn:hover { background: var(--bg-raised); color: var(--text-primary); }
     .ctrl-btn.physics-on { border-color: #22c55e; color: #4ade80; }
+
+    .cluster-status {
+      position: absolute;
+      left: 12px;
+      top: 48px;
+      z-index: 7;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      max-width: min(720px, calc(100% - 360px));
+      padding: 8px 10px;
+      background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+      backdrop-filter: blur(10px);
+    }
+    .cluster-status[hidden] { display: none; }
+    .cluster-copy {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .cluster-title { font-size: 11px; font-weight: 700; color: var(--text-bright); text-transform: uppercase; letter-spacing: 0.05em; }
+    .cluster-summary { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+    .cluster-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
     /* ── Topology-only sections ─────────────────────────────────────────── */
     .topo-section { display: none; }
@@ -449,6 +478,17 @@
         <button class="ctrl-btn" id="btn-physics" title="Toggle force-directed physics">⚡ Physics</button>
         <button class="ctrl-btn" id="btn-export-json" title="Download the currently visible subgraph as JSON">Export JSON</button>
         <button class="ctrl-btn" id="btn-export-csv" title="Download the currently visible subgraph as CSV">Export CSV</button>
+      </div>
+
+      <div class="cluster-status" id="cluster-status" hidden>
+        <div class="cluster-copy">
+          <span class="cluster-title">Large Graph Clustering</span>
+          <span class="cluster-summary" id="cluster-summary"></span>
+        </div>
+        <div class="cluster-actions">
+          <button class="ctrl-btn" id="btn-expand-clusters" type="button" hidden>Expand All</button>
+          <button class="ctrl-btn" id="btn-reset-clusters" type="button" hidden>Re-cluster</button>
+        </div>
       </div>
 
       <!-- Focus mode indicator -->
