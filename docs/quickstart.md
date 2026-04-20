@@ -146,6 +146,7 @@ After starting `graphbase devtools`, open `http://localhost:8765`:
 - `/` redirects to `/ui`
 - The main dashboard uses a sidebar for Projects, Memory, Tools, and Operations
 - `/ui/graph.html` is the standalone graph canvas with deep-link support
+- The graph canvas can export the current visible subgraph as JSON or CSV
 
 For write actions in the UI:
 

@@ -8,6 +8,11 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="static/tokens.css">
   <script src="/ui/static/vis-network.min.js"></script>
+  <script>
+    if (new URLSearchParams(window.location.search).get("embedded") === "1") {
+      document.documentElement.classList.add("graph-embedded");
+    }
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: var(--font-sans); background: var(--bg-base); color: var(--text-primary);
@@ -97,7 +102,8 @@
     .badge-category     { background: #1c1917; color: #d4d4aa; border: 1px solid #44403c; }
 
     /* ── Canvas controls (top-right floating buttons) ──────────────────── */
-    .canvas-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 6; }
+    .canvas-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 6;
+                       flex-wrap: wrap; justify-content: flex-end; max-width: min(520px, calc(100% - 24px)); }
     .ctrl-btn { padding: 5px 10px; background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-secondary);
                 border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500;
                 transition: background 0.15s, color 0.15s; }
@@ -183,6 +189,10 @@
                        color: #fff; font-size: 11px; font-weight: 600;
                        display: none; pointer-events: none; }
     .focus-indicator.visible { display: block; }
+
+    html.graph-embedded body { height: 100%; }
+    html.graph-embedded header { display: none; }
+    html.graph-embedded .body { min-height: 100vh; }
   </style>
 </head>
 <body>
@@ -437,6 +447,8 @@
       <div class="canvas-controls">
         <button class="ctrl-btn" id="btn-fit" title="Fit all nodes into view">⊡ Fit</button>
         <button class="ctrl-btn" id="btn-physics" title="Toggle force-directed physics">⚡ Physics</button>
+        <button class="ctrl-btn" id="btn-export-json" title="Download the currently visible subgraph as JSON">Export JSON</button>
+        <button class="ctrl-btn" id="btn-export-csv" title="Download the currently visible subgraph as CSV">Export CSV</button>
       </div>
 
       <!-- Focus mode indicator -->

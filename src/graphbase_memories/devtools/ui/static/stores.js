@@ -5,6 +5,7 @@
   const VIEW_LABELS = {
     projects: "Projects",
     memory: "Memory",
+    graph: "Graph",
     tools: "Tools",
     operations: "Operations",
   };
@@ -83,6 +84,43 @@
     } else if (window.location.hash !== hash) {
       window.location.hash = hash;
     }
+  }
+
+  function buildGraphSubView(values = {}) {
+    const params = new URLSearchParams();
+    Object.entries(values).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && String(value).trim() !== "") {
+        params.set(key, String(value).trim());
+      }
+    });
+    return params.toString() || null;
+  }
+
+  function parseGraphSubView(subView) {
+    return new URLSearchParams(subView || "");
+  }
+
+  function buildGraphUrl(subView, options = {}) {
+    const params = parseGraphSubView(subView);
+    if (options.embedded) {
+      params.set("embedded", "1");
+    } else {
+      params.delete("embedded");
+    }
+    return params.toString() ? `/ui/graph.html?${params.toString()}` : "/ui/graph.html";
+  }
+
+  function graphContextLabel(subView) {
+    const params = parseGraphSubView(subView);
+    const focus = params.get("focus");
+    const workspace = params.get("workspace") || params.get("workspace_id");
+    if (focus) {
+      return `Graph > ${focus}`;
+    }
+    if (workspace) {
+      return `Graph > ${workspace}`;
+    }
+    return VIEW_LABELS.graph;
   }
 
   function getTheme() {
@@ -209,10 +247,6 @@
       if (event.key >= "1" && event.key <= "5") {
         event.preventDefault();
         const view = ["projects", "memory", "graph", "tools", "operations"][Number(event.key) - 1];
-        if (view === "graph") {
-          window.location.href = "/ui/graph.html";
-          return;
-        }
         nav.navigate(view);
         return;
       }
@@ -272,6 +306,8 @@
         await inspector.open(route.subView, { pushHistory: false, syncHash: false });
       } else if (route.view === "memory" && !route.subView && inspector.isOpen) {
         inspector.close({ syncHash: false });
+      } else if (route.view !== "memory" && inspector.isOpen) {
+        inspector.close({ syncHash: false });
       }
     };
     window.addEventListener("hashchange", applyRoute);
@@ -300,6 +336,9 @@
     buildHash,
     parseHash,
     setHash,
+    buildGraphSubView,
+    parseGraphSubView,
+    buildGraphUrl,
     applyTheme,
     toggleTheme,
     getTheme,
@@ -309,6 +348,7 @@
     viewLabel(view) {
       return VIEW_LABELS[view] || view;
     },
+    graphContextLabel,
   };
 
   document.addEventListener("alpine:init", () => {
@@ -318,14 +358,14 @@
       sidebarCollapsed: window.innerWidth < 820,
       selectedIndex: -1,
       navigate(view, subView = null, options = {}) {
-        if (view === "graph") {
-          window.location.href = "/ui/graph.html";
-          return;
-        }
         this.view = view || DEFAULT_VIEW;
         this.subView = subView;
         if (this.view !== "memory") {
           this.selectedIndex = -1;
+          const inspector = window.Alpine?.store("inspector");
+          if (inspector?.isOpen) {
+            inspector.close({ syncHash: false });
+          }
         }
         if (!options.skipHash) {
           setHash(this.view, this.subView, options.replaceHash);
@@ -338,10 +378,34 @@
         this.selectedIndex = index;
       },
       contextLabel() {
+        if (this.view === "graph") {
+          return window.DevtoolsUI.graphContextLabel(this.subView);
+        }
         if (!this.subView) {
           return window.DevtoolsUI.viewLabel(this.view);
         }
         return `${window.DevtoolsUI.viewLabel(this.view)} > ${this.subView}`;
+      },
+    });
+
+    Alpine.store("graph", {
+      reloadKey: 0,
+      embedUrl(subView = null) {
+        const baseUrl = buildGraphUrl(subView, { embedded: true });
+        if (!this.reloadKey) {
+          return baseUrl;
+        }
+        const separator = baseUrl.includes("?") ? "&" : "?";
+        return `${baseUrl}${separator}reload=${this.reloadKey}`;
+      },
+      standaloneUrl(subView = null) {
+        return buildGraphUrl(subView);
+      },
+      navigate(values = {}) {
+        Alpine.store("nav").navigate("graph", buildGraphSubView(values));
+      },
+      reload() {
+        this.reloadKey = Date.now();
       },
     });
 

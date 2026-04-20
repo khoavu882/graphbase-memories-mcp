@@ -107,16 +107,12 @@
         const projectAnchor = inspector.relationships?.outgoing?.find(
           (relation) => relation.type === "BELONGS_TO"
         )?.to_id;
-        const params = new URLSearchParams();
-        if (inspector.nodeId) {
-          params.set("focus", inspector.nodeId);
-        }
-        if (data.workspace_id || projectAnchor) {
-          params.set("workspace", data.workspace_id || projectAnchor);
-        }
-        window.location.href = params.toString()
-          ? `/ui/graph.html?${params.toString()}`
-          : "/ui/graph.html";
+        const subView = ui.buildGraphSubView({
+          focus: inspector.nodeId,
+          workspace: data.workspace_id || projectAnchor,
+        });
+        inspector.close({ syncHash: false });
+        Alpine.store("nav").navigate("graph", subView);
       },
     }));
   });

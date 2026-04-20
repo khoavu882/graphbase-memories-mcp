@@ -168,6 +168,7 @@ Key UX changes in the current dashboard:
 - Memory view: paginated search with label/project/since-days filters, sort/order, keyboard navigation (`j`/`k`, `Enter`, `Ctrl+K`, `/`)
 - Inspector Drawer: relationship navigation, inline edit/delete for memory nodes, JSON copy/download
 - Graph deep-linking: Memory → Graph focus and Graph → Memory full-detail jump
+- Graph export: download the currently visible subgraph as JSON or CSV from the graph canvas
 - Operations view: merged graph health + hygiene, workspace orphan detection and repair
 - Header write token field: paste the startup token once and the UI stores it in `localStorage` as `gb-devtools-token`
 

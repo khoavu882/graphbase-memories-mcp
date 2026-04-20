@@ -178,7 +178,7 @@
         Alpine.store("nav").navigate("operations");
       },
       openGraph() {
-        window.location.href = "/ui/graph.html";
+        Alpine.store("nav").navigate("graph");
       },
       relativeTime,
       labelClass: ui.labelToBadgeClass,

@@ -77,10 +77,14 @@
           <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('search')"></span>
           <span class="sidebar-label">Memory</span>
         </button>
-        <a class="sidebar-item hidden-link" href="/ui/graph.html">
+        <button
+          class="sidebar-item"
+          :class="$store.nav.view === 'graph' && 'sidebar-item--active'"
+          @click="$store.nav.navigate('graph')"
+        >
           <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('share-2')"></span>
           <span class="sidebar-label">Graph</span>
-        </a>
+        </button>
         <button
           class="sidebar-item"
           :class="$store.nav.view === 'tools' && 'sidebar-item--active'"
@@ -722,6 +726,39 @@
               </article>
             </div>
           </section>
+
+          <section x-show="$store.nav.view === 'graph'" x-cloak>
+            <article class="card graph-embed-card">
+              <div class="card-header">
+                <div>
+                  <h3>Graph Canvas</h3>
+                  <p class="muted">Embedded overview with the existing graph filters, focus mode, and export tools.</p>
+                </div>
+                <div class="toolbar-actions">
+                  <button class="btn btn--ghost btn--sm" @click="$store.graph.reload()">
+                    <span class="icon" x-html="window.DevtoolsUI.icon('refresh')"></span>
+                    Reload
+                  </button>
+                  <a
+                    class="btn btn--ghost btn--sm"
+                    :href="$store.graph.standaloneUrl($store.nav.subView)"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <span class="icon" x-html="window.DevtoolsUI.icon('external-link')"></span>
+                    Open Standalone
+                  </a>
+                </div>
+              </div>
+              <div class="graph-embed-shell">
+                <iframe
+                  class="graph-embed-frame"
+                  :src="$store.graph.embedUrl($store.nav.subView)"
+                  title="Embedded graph overview"
+                ></iframe>
+              </div>
+            </article>
+          </section>
         </div>
       </main>
     </div>
@@ -988,7 +1025,7 @@
       <div class="card-body stack">
         <article class="result-card"><strong>1</strong><p class="muted">Projects view</p></article>
         <article class="result-card"><strong>2</strong><p class="muted">Memory view</p></article>
-        <article class="result-card"><strong>3</strong><p class="muted">Graph page</p></article>
+        <article class="result-card"><strong>3</strong><p class="muted">Graph view</p></article>
         <article class="result-card"><strong>4</strong><p class="muted">Tools view</p></article>
         <article class="result-card"><strong>5</strong><p class="muted">Operations view</p></article>
         <article class="result-card"><strong>Escape</strong><p class="muted">Close the Inspector Drawer</p></article>
