@@ -380,6 +380,29 @@
                   <p class="badge badge--danger" x-text="error"></p>
                 </template>
 
+                <div class="memory-bulk-toolbar">
+                  <label class="memory-check-toggle">
+                    <input
+                      type="checkbox"
+                      name="memory-select-visible"
+                      :checked="allVisibleSelected()"
+                      :disabled="visibleResults().length === 0"
+                      @change="toggleVisibleSelection()"
+                    >
+                    <span x-text="allVisibleSelected() ? 'Clear visible' : 'Select visible'"></span>
+                  </label>
+                  <span class="badge badge--info" x-text="selectedCount() ? `${selectedCount()} selected` : 'No selection'"></span>
+                  <div class="toolbar-actions">
+                    <button class="btn btn--ghost btn--sm" @click="clearSelection()" :disabled="selectedCount() === 0">
+                      Clear
+                    </button>
+                    <button class="btn btn--danger btn--sm" @click="openBulkDeleteModal()" :disabled="selectedCount() === 0">
+                      <span class="icon" x-html="window.DevtoolsUI.icon('trash')"></span>
+                      Delete Selected
+                    </button>
+                  </div>
+                </div>
+
                 <template x-if="loading">
                   <div class="results-list">
                     <template x-for="index in 4" :key="index">
@@ -395,6 +418,17 @@
                       :class="[$store.inspector.nodeId === item.id && 'result-card--selected', isSelected(index) && 'result-card--selected']"
                       @click="selectNode(item.id)"
                     >
+                      <div class="memory-card-select" @click.stop>
+                        <label class="memory-check-toggle">
+                          <input
+                            type="checkbox"
+                            :name="`memory-select-${item.id}`"
+                            :checked="isChecked(item.id)"
+                            @change="toggleSelection(item.id)"
+                          >
+                          <span>Select</span>
+                        </label>
+                      </div>
                       <div class="result-meta">
                         <span :class="labelClass(item._label)" x-text="item._label"></span>
                         <span class="muted" x-text="relativeTime(item.created_at)"></span>
@@ -419,6 +453,54 @@
                 </div>
               </div>
             </article>
+
+            <div
+              class="modal-backdrop modal-backdrop--elevated"
+              x-show="bulkDeleteModalOpen"
+              x-cloak
+              @click="closeBulkDeleteModal()"
+            >
+              <div class="modal" @click.stop x-trap.inert.noscroll="bulkDeleteModalOpen">
+                <div class="card-header">
+                  <div>
+                    <h3 class="modal-title">Confirm Bulk Delete</h3>
+                    <p class="muted">
+                      This will permanently remove
+                      <strong x-text="selectedCount()"></strong>
+                      memory nodes and their relationships. Type <strong>DELETE</strong> to continue.
+                    </p>
+                  </div>
+                  <button class="btn btn--ghost btn--sm btn--icon" @click="closeBulkDeleteModal()">
+                    <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
+                  </button>
+                </div>
+                <div class="card-body stack">
+                  <div class="field">
+                    <span class="field-label">Selected Nodes</span>
+                    <pre class="schema-block" x-text="selectionPreview()"></pre>
+                  </div>
+                  <label class="field">
+                    <span class="field-label">Type DELETE To Confirm</span>
+                    <input
+                      class="input mono"
+                      name="bulk-delete-confirm"
+                      x-model="bulkDeleteConfirmValue"
+                      placeholder="DELETE"
+                    >
+                  </label>
+                  <div class="modal-actions">
+                    <button class="btn btn--ghost" @click="closeBulkDeleteModal()">Cancel</button>
+                    <button
+                      class="btn btn--danger"
+                      @click="bulkDeleteSelected()"
+                      :disabled="!canBulkDelete() || bulkDeleting"
+                    >
+                      <span x-text="bulkDeleting ? 'Deleting…' : 'Confirm Bulk Delete'"></span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </section>
 
           <section x-show="$store.nav.view === 'tools'" x-cloak x-data="toolsView">

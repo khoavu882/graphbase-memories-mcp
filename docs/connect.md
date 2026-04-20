@@ -119,6 +119,7 @@ Endpoints:
 | `POST /memory/search` | Search memory nodes with JSON body: `query`, `project_id`, `label`, `labels`, `limit`, `offset`, `sort_by`, `sort_order`, `since_days` |
 | `PATCH /memory/<node-id>` | Update editable node fields (`title`, `content`, `summary`, `fact`) |
 | `DELETE /memory/<node-id>?confirm=true` | Delete a node after explicit confirmation |
+| `POST /memory/bulk-delete` | Delete multiple nodes with JSON body: `ids`, `confirm` |
 | `GET /tools` | List all registered MCP tools |
 | `POST /tools/<name>/invoke` | Invoke a tool directly (add `confirm: true` for write tools) |
 | `GET /graph/overview` | Workspace and project graph overview for the UI canvas |

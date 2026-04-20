@@ -345,6 +345,7 @@
     statusMeta,
     labelToBadgeClass,
     normaliseApiValue,
+    isInvalidTokenMessage,
     viewLabel(view) {
       return VIEW_LABELS[view] || view;
     },

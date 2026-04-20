@@ -197,8 +197,12 @@
       page: 1,
       pageSize: 12,
       totalCount: 0,
+      selectedIds: [],
       loading: false,
       error: "",
+      bulkDeleteModalOpen: false,
+      bulkDeleteConfirmValue: "",
+      bulkDeleting: false,
       _debounceHandle: null,
       _navHandler: null,
       _updateHandler: null,
@@ -241,6 +245,7 @@
             return;
           }
           this.results = this.results.filter((item) => item.id !== nodeId);
+          this.selectedIds = this.selectedIds.filter((id) => id !== nodeId);
           this.totalCount = Math.max(0, this.totalCount - 1);
           if (!this.results.length) {
             Alpine.store("nav").selectedIndex = -1;
@@ -263,11 +268,12 @@
       },
       queueSearch() {
         this.page = 1;
+        this.clearSelection();
         Alpine.store("nav").selectedIndex = -1;
         window.clearTimeout(this._debounceHandle);
         this._debounceHandle = window.setTimeout(() => this.search(), 500);
       },
-      async search() {
+      async search(allowRepage = true) {
         this.loading = true;
         this.error = "";
         try {
@@ -306,8 +312,16 @@
             }
             payload = await ui.fetchJson(`/memory?${params.toString()}`);
           }
-          this.results = normaliseListResponse(payload);
-          this.totalCount = payload.total || 0;
+          const results = normaliseListResponse(payload);
+          const totalCount = payload.total || 0;
+          const maxPage = Math.max(1, Math.ceil(totalCount / this.pageSize));
+          if (allowRepage && !results.length && totalCount > 0 && this.page > maxPage) {
+            this.page = maxPage;
+            await this.search(false);
+            return;
+          }
+          this.results = results;
+          this.totalCount = totalCount;
           Alpine.store("nav").selectedIndex = this.results.length ? 0 : -1;
         } catch (error) {
           this.results = [];
@@ -326,6 +340,104 @@
       },
       hasMore() {
         return this.page < this.pageCount();
+      },
+      selectedCount() {
+        return this.selectedIds.length;
+      },
+      clearSelection() {
+        this.selectedIds = [];
+      },
+      isChecked(nodeId) {
+        return this.selectedIds.includes(nodeId);
+      },
+      toggleSelection(nodeId) {
+        if (this.isChecked(nodeId)) {
+          this.selectedIds = this.selectedIds.filter((id) => id !== nodeId);
+          return;
+        }
+        this.selectedIds = [...this.selectedIds, nodeId];
+      },
+      visibleIds() {
+        return this.visibleResults().map((item) => item.id);
+      },
+      allVisibleSelected() {
+        const visibleIds = this.visibleIds();
+        return visibleIds.length > 0 && visibleIds.every((id) => this.selectedIds.includes(id));
+      },
+      toggleVisibleSelection() {
+        const visibleIds = this.visibleIds();
+        if (!visibleIds.length) {
+          return;
+        }
+        if (this.allVisibleSelected()) {
+          this.selectedIds = this.selectedIds.filter((id) => !visibleIds.includes(id));
+          return;
+        }
+        const selected = new Set(this.selectedIds);
+        visibleIds.forEach((id) => selected.add(id));
+        this.selectedIds = [...selected];
+      },
+      selectionPreview() {
+        const preview = this.selectedIds.slice(0, 5).join("\n");
+        return this.selectedIds.length > 5 ? `${preview}\n...` : preview;
+      },
+      openBulkDeleteModal() {
+        if (!this.selectedIds.length) {
+          Alpine.store("toast").add("warning", "Select at least one memory node");
+          return;
+        }
+        this.bulkDeleteConfirmValue = "";
+        this.bulkDeleteModalOpen = true;
+      },
+      closeBulkDeleteModal() {
+        this.bulkDeleteModalOpen = false;
+        this.bulkDeleteConfirmValue = "";
+      },
+      canBulkDelete() {
+        return this.selectedIds.length > 0 && this.bulkDeleteConfirmValue === "DELETE";
+      },
+      async bulkDeleteSelected() {
+        if (!this.canBulkDelete()) {
+          Alpine.store("toast").add("warning", "Type DELETE to confirm bulk deletion");
+          return;
+        }
+        this.bulkDeleting = true;
+        const selectedIds = [...this.selectedIds];
+        try {
+          const payload = await ui.fetchJson("/memory/bulk-delete", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...Alpine.store("auth").headers(),
+            },
+            body: JSON.stringify({ ids: selectedIds, confirm: true }),
+          });
+          for (const nodeId of payload.deleted || []) {
+            document.dispatchEvent(
+              new CustomEvent("devtools:memory-removed", {
+                detail: { nodeId },
+              })
+            );
+          }
+          if ((payload.deleted || []).includes(Alpine.store("inspector").nodeId)) {
+            Alpine.store("inspector").close();
+          }
+          this.selectedIds = this.selectedIds.filter((id) => !(payload.deleted || []).includes(id));
+          this.closeBulkDeleteModal();
+          await this.search();
+          const missingCount = payload.missing?.length || 0;
+          const message = missingCount
+            ? `Deleted ${payload.deleted_count} nodes (${missingCount} already missing)`
+            : `Deleted ${payload.deleted_count} nodes`;
+          Alpine.store("toast").add("success", message);
+        } catch (error) {
+          const message = ui.isInvalidTokenMessage(error.message)
+            ? "Invalid token. Paste the startup token from console."
+            : error.message || "Failed to delete selected nodes";
+          Alpine.store("toast").add("danger", message);
+        } finally {
+          this.bulkDeleting = false;
+        }
       },
       nextPage() {
         this.page = Math.min(this.page + 1, this.pageCount());

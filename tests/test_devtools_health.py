@@ -314,6 +314,99 @@ async def test_delete_memory_node(driver, fresh_project):
         assert record["cnt"] == 0
 
 
+async def test_bulk_delete_memory_nodes(driver, fresh_project):
+    """POST /memory/bulk-delete deletes many nodes and reports missing ids."""
+    from graphbase_memories.devtools.deps import set_devtools_token
+    from graphbase_memories.devtools.server import app
+
+    node_ids = [
+        "test-memory-bulk-delete-001",
+        "test-memory-bulk-delete-002",
+    ]
+    missing_id = "test-memory-bulk-delete-missing"
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            UNWIND $ids AS id
+            CREATE (d:Decision {
+                id: id,
+                title: 'delete me',
+                created_at: datetime()
+            })
+            WITH d
+            MATCH (p:Project {id: $pid})
+            MERGE (d)-[:BELONGS_TO]->(p)
+            """,
+            ids=node_ids,
+            pid=fresh_project,
+        )
+
+    app.state.driver = driver
+    set_devtools_token("test-devtools-token")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/memory/bulk-delete",
+            json={"ids": [node_ids[0], missing_id, node_ids[1]], "confirm": True},
+            headers={"X-Devtools-Token": "test-devtools-token"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "deleted": node_ids,
+        "missing": [missing_id],
+        "deleted_count": 2,
+    }
+
+    async with driver.session(database=TEST_DB) as session:
+        result = await session.run(
+            "MATCH (d:Decision) WHERE d.id IN $ids RETURN count(d) AS cnt",
+            ids=node_ids,
+        )
+        record = await result.single()
+        assert record["cnt"] == 0
+
+
+async def test_bulk_delete_requires_confirm(driver, fresh_project):
+    """POST /memory/bulk-delete rejects destructive calls without confirm=true."""
+    from graphbase_memories.devtools.deps import set_devtools_token
+    from graphbase_memories.devtools.server import app
+
+    node_id = "test-memory-bulk-confirm-node"
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            CREATE (d:Decision {
+                id: $id,
+                title: 'guarded',
+                created_at: datetime()
+            })
+            WITH d
+            MATCH (p:Project {id: $pid})
+            MERGE (d)-[:BELONGS_TO]->(p)
+            """,
+            id=node_id,
+            pid=fresh_project,
+        )
+
+    app.state.driver = driver
+    set_devtools_token("test-devtools-token")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/memory/bulk-delete",
+            json={"ids": [node_id], "confirm": False},
+            headers={"X-Devtools-Token": "test-devtools-token"},
+        )
+
+    try:
+        assert response.status_code == 422
+        assert response.json()["detail"] == "confirm=true is required for bulk deletion"
+    finally:
+        async with driver.session(database=TEST_DB) as session:
+            await session.run("MATCH (d:Decision {id: $id}) DETACH DELETE d", id=node_id)
+
+
 async def test_write_requires_token(driver, fresh_project):
     """PATCH and DELETE reject requests without the startup token."""
     from graphbase_memories.devtools.deps import set_devtools_token
@@ -348,10 +441,15 @@ async def test_write_requires_token(driver, fresh_project):
             f"/memory/{node_id}",
             params={"confirm": "true"},
         )
+        bulk_delete_response = await client.post(
+            "/memory/bulk-delete",
+            json={"ids": [node_id], "confirm": True},
+        )
 
     try:
         assert patch_response.status_code == 403
         assert delete_response.status_code == 403
+        assert bulk_delete_response.status_code == 403
     finally:
         async with driver.session(database=TEST_DB) as session:
             await session.run("MATCH (d:Decision {id: $id}) DETACH DELETE d", id=node_id)

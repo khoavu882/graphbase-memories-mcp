@@ -353,6 +353,26 @@ class MemoryPatchRequest(BaseModel):
         return self.model_dump(exclude_unset=True)
 
 
+class MemoryBulkDeleteRequest(BaseModel):
+    ids: list[str]
+    confirm: bool = False
+
+    @field_validator("ids")
+    @classmethod
+    def validate_ids(cls, value: list[str]) -> list[str]:
+        cleaned = []
+        seen: set[str] = set()
+        for raw_id in value:
+            node_id = raw_id.strip()
+            if not node_id or node_id in seen:
+                continue
+            seen.add(node_id)
+            cleaned.append(node_id)
+        if not cleaned:
+            raise ValueError("ids must contain at least one node id")
+        return cleaned
+
+
 def _validate_patch_fields(payload: dict[str, Any]) -> dict[str, Any]:
     invalid = sorted(set(payload) - _ALLOWED_PATCH_FIELDS)
     structural = sorted(set(payload) & _STRUCTURAL_FIELDS)
@@ -419,3 +439,38 @@ async def delete_node(
             raise HTTPException(status_code=404, detail=f"Node {node_id!r} not found")
         await session.run("MATCH (n {id: $id}) DETACH DELETE n", id=node_id)
     return {"deleted": True, "id": node_id}
+
+
+@router.post("/memory/bulk-delete")
+async def bulk_delete_nodes(
+    body: MemoryBulkDeleteRequest,
+    driver: DriverDep,
+    _: DevtoolsTokenDep,
+):
+    """Delete multiple memory nodes in one request."""
+    if not body.confirm:
+        raise HTTPException(status_code=422, detail="confirm=true is required for bulk deletion")
+
+    input_order = {node_id: index for index, node_id in enumerate(body.ids)}
+    async with driver.session(database=settings.neo4j_database) as session:
+        result = await session.run(
+            "MATCH (n) WHERE n.id IN $ids RETURN n.id AS id",
+            ids=body.ids,
+        )
+        found_ids = sorted(
+            [record["id"] async for record in result],
+            key=lambda node_id: input_order[node_id],
+        )
+        if found_ids:
+            await session.run(
+                "MATCH (n) WHERE n.id IN $ids DETACH DELETE n",
+                ids=found_ids,
+            )
+
+    found_set = set(found_ids)
+    missing_ids = [node_id for node_id in body.ids if node_id not in found_set]
+    return {
+        "deleted": found_ids,
+        "missing": missing_ids,
+        "deleted_count": len(found_ids),
+    }

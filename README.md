@@ -179,6 +179,7 @@ GET  /memory/{id}/relationships       Relationship inspector
 GET  /memory/{id}                     Node detail
 PATCH /memory/{id}                    Update title/content/summary/fact (requires X-Devtools-Token)
 DELETE /memory/{id}?confirm=true      Delete node (requires X-Devtools-Token)
+POST /memory/bulk-delete              Delete multiple nodes (requires X-Devtools-Token)
 POST /memory/search                   CONTAINS full-text search
 GET  /projects                        Projects with node counts + staleness
 GET  /projects/{id}                   Single project detail
@@ -200,7 +201,7 @@ Write tools (`propagate_impact`, `link_cross_service`, `register_federated_servi
 Direct memory writes are gated separately:
 
 - `graphbase devtools` prints a startup-only write token to stdout
-- `PATCH /memory/{id}` and `DELETE /memory/{id}` require `X-Devtools-Token: <token>`
+- `PATCH /memory/{id}`, `DELETE /memory/{id}`, and `POST /memory/bulk-delete` require `X-Devtools-Token: <token>`
 - The browser UI exposes a `Write Token` field in the header and uses that token for Inspector edit/delete actions
 
 ---
