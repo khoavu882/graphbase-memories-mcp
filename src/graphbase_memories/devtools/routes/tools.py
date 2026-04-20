@@ -143,14 +143,6 @@ _TOOL_REGISTRY: dict[str, ToolSpec] = {
             settings.neo4j_database,
         ),
     ),
-    "deregister_service": ToolSpec(
-        module="federation",
-        dispatch_fn=lambda p, d: federation_engine.deregister_service(
-            p["service_id"],
-            d,
-            settings.neo4j_database,
-        ),
-    ),
     # ── NOT HTTP-INVOCABLE: require structured Pydantic input ─────────────
     # dispatch_fn=None → http_invocable=False in list/get responses.
     "save_decision": ToolSpec(module="artifacts"),
