@@ -129,6 +129,7 @@ graphbase serve
 
 # Start the HTTP devtools inspection server (human browsing)
 graphbase devtools --port 8765
+# Console prints: DevTools write token: <token>
 
 # Run the memory hygiene cycle and print report as JSON
 graphbase hygiene --project-id <uuid>
@@ -137,3 +138,24 @@ graphbase hygiene --scope global
 # Surface relevant memories for a keyword or symbol
 graphbase surface "dedup hash" --project-id my-project
 ```
+
+## Devtools UI quick tour
+
+After starting `graphbase devtools`, open `http://localhost:8765`:
+
+- `/` redirects to `/ui`
+- The main dashboard uses a sidebar for Projects, Memory, Tools, and Operations
+- `/ui/graph.html` is the standalone graph canvas with deep-link support
+
+For write actions in the UI:
+
+- Copy the startup token printed by the server
+- Paste it into the `Write Token` field in the header
+- The UI stores it in `localStorage` and uses it for Inspector edit/delete actions
+
+The main interactive flows are:
+
+- Projects: browse projects and drill into project-scoped memory
+- Memory: paginated search with filters, sort, and keyboard shortcuts
+- Inspector: navigate relationships, edit/delete memory nodes, copy/download per-node JSON
+- Operations: inspect workspace health, run hygiene, and repair orphaned `EntityFact` nodes

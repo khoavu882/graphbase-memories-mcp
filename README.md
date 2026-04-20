@@ -146,6 +146,7 @@ graphbase serve
 
 # Start the HTTP devtools inspection server (human browsing)
 graphbase devtools --port 8765
+# Console prints: DevTools write token: <token>
 
 # Run the memory hygiene cycle and print the report as JSON
 graphbase hygiene --project-id <uuid>
@@ -159,13 +160,24 @@ graphbase surface "jwt rotation" --project-id auth-service
 
 ## Devtools Server
 
-The devtools server (`graphbase devtools`) exposes an HTTP API and a browser dashboard for inspecting graph memory without an agent. Open `http://localhost:8765` after starting — it redirects to the Alpine.js single-page dashboard (`/ui`) with 5 tabs: Projects, Tools, Health, Memory, and Hygiene, plus a standalone Graph canvas page (`/ui/graph.html`) showing the Workspace→Project topology.
+The devtools server (`graphbase devtools`) exposes an HTTP API and a browser dashboard for inspecting graph memory without an agent. Open `http://localhost:8765` after starting — it redirects to the Alpine.js dashboard (`/ui`) with sidebar views for Projects, Memory, Tools, Operations, and a standalone Graph canvas page (`/ui/graph.html`).
+
+Key UX changes in the current dashboard:
+
+- Projects view: connection status, quick actions, project drill-down
+- Memory view: paginated search with label/project/since-days filters, sort/order, keyboard navigation (`j`/`k`, `Enter`, `Ctrl+K`, `/`)
+- Inspector Drawer: relationship navigation, inline edit/delete for memory nodes, JSON copy/download
+- Graph deep-linking: Memory → Graph focus and Graph → Memory full-detail jump
+- Operations view: merged graph health + hygiene, workspace orphan detection and repair
+- Header write token field: paste the startup token once and the UI stores it in `localStorage` as `gb-devtools-token`
 
 ```
 GET  /events                          SSE heartbeat (real-time connectivity status)
-GET  /memory                          List nodes
+GET  /memory                          List nodes or grouped timeline (`format=timeline`)
 GET  /memory/{id}/relationships       Relationship inspector
 GET  /memory/{id}                     Node detail
+PATCH /memory/{id}                    Update title/content/summary/fact (requires X-Devtools-Token)
+DELETE /memory/{id}?confirm=true      Delete node (requires X-Devtools-Token)
 POST /memory/search                   CONTAINS full-text search
 GET  /projects                        Projects with node counts + staleness
 GET  /projects/{id}                   Single project detail
@@ -183,6 +195,12 @@ GET  /                                → redirect to /ui
 ```
 
 Write tools (`propagate_impact`, `link_cross_service`, `register_federated_service`) require `"confirm": true` in the POST body when invoked via `/tools/{name}/invoke`; without it the response is `{"status": "preview", ...}`.
+
+Direct memory writes are gated separately:
+
+- `graphbase devtools` prints a startup-only write token to stdout
+- `PATCH /memory/{id}` and `DELETE /memory/{id}` require `X-Devtools-Token: <token>`
+- The browser UI exposes a `Write Token` field in the header and uses that token for Inspector edit/delete actions
 
 ---
 

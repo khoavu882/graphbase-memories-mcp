@@ -103,17 +103,22 @@ For human inspection of memory (not agent use), start the HTTP server:
 
 ```bash
 graphbase devtools --port 8765
+# Console prints: DevTools write token: <token>
 ```
+
+Open `http://localhost:8765` to load the Alpine.js dashboard at `/ui`. The main UI includes sidebar views for Projects, Memory, Tools, and Operations, plus a separate graph canvas at `/ui/graph.html`.
 
 Endpoints:
 
 | Endpoint | Description |
 |---|---|
 | `GET /projects` | List all registered projects with staleness and node counts |
-| `GET /memory?project_id=<id>` | List all memory nodes for a project |
+| `GET /memory?project_id=<id>&label=<label>&limit=20&offset=0&sort_by=created_at&sort_order=desc&since_days=<n>&format=list|timeline` | List memory nodes with server-side pagination, filtering, sorting, or grouped timeline buckets |
 | `GET /memory/<node-id>` | Fetch a single node by ID |
 | `GET /memory/<node-id>/relationships` | Fetch all graph edges for a node |
-| `POST /memory/search` | Search memory nodes with JSON body: `query`, `project_id`, `label`, `limit`, `since_days` |
+| `POST /memory/search` | Search memory nodes with JSON body: `query`, `project_id`, `label`, `labels`, `limit`, `offset`, `sort_by`, `sort_order`, `since_days` |
+| `PATCH /memory/<node-id>` | Update editable node fields (`title`, `content`, `summary`, `fact`) |
+| `DELETE /memory/<node-id>?confirm=true` | Delete a node after explicit confirmation |
 | `GET /tools` | List all registered MCP tools |
 | `POST /tools/<name>/invoke` | Invoke a tool directly (add `confirm: true` for write tools) |
 | `GET /graph/overview` | Workspace and project graph overview for the UI canvas |
@@ -129,5 +134,10 @@ Endpoints:
     Tools that mutate graph state (`propagate_impact`, `link_cross_service`,
     `register_federated_service`) require `{ "confirm": true }` in the POST body. Without it, the
     response is `{ "status": "preview", ... }` — a dry-run showing what would change.
+
+!!! note "Memory write token"
+    Direct memory edits and deletes require the startup-generated write token in the
+    `X-Devtools-Token` header. The browser UI exposes the same value in the header `Write Token`
+    field and stores it locally as `gb-devtools-token`.
 
 See [Development Guide](development.md) for full architecture notes on the devtools server.

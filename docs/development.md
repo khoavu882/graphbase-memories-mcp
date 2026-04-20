@@ -166,13 +166,25 @@ The devtools server provides a human-readable HTTP interface for inspecting grap
 
 ```bash
 graphbase devtools --port 8765
+# Console prints: DevTools write token: <token>
 # Open http://localhost:8765 — redirects to /ui (Alpine.js dashboard)
 ```
+
+Current UI layout:
+
+- `/ui` loads the main dashboard with sidebar navigation for Projects, Memory, Tools, and Operations.
+- `/ui/graph.html` loads the standalone graph canvas for workspace and project topology inspection.
+- The header `Write Token` field stores the startup token in browser `localStorage` under `gb-devtools-token`.
+- The Memory view supports pagination, date/title sorting, project and label filters, keyboard navigation, and a live Inspector Drawer.
+- The Inspector Drawer supports inline edit, delete, JSON copy/download, and deep-links into the graph canvas.
+- The Operations view consolidates health, hygiene, conflict, and orphan-repair workflows that were previously split across separate tabs.
 
 Architecture notes:
 
 - Connection pool capped at 2 (MCP server uses 8; Neo4j Community Edition allows 10 total).
 - All route handlers call engine functions directly with the devtools driver — no FastMCP Context needed.
+- The server generates a random write token at startup and prints it to stdout once connectivity succeeds.
+- Memory writes (`PATCH /memory/{node_id}` and `DELETE /memory/{node_id}?confirm=true`) require the `X-Devtools-Token` header to match the startup token.
 - Write tools (`propagate_impact`, `link_cross_service`, `register_federated_service`) require `confirm: true` in the invoke body; without it, the response is `{"status": "preview", ...}`.
 - The SSE `/events` endpoint emits a `heartbeat` event every 5 seconds with Neo4j connectivity status.
 
