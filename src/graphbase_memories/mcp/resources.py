@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 _SCHEMA_YAML = """
 # graphbase — Graph Schema Reference
-# Use this to construct Cypher queries in route_analysis tool.
+# Use this to construct Cypher queries for graph traversal and analysis.
 #
 # NOTE: Services are stored as :Project nodes with workspace metadata.
 # A Project that has called register_service() has workspace_id, status,

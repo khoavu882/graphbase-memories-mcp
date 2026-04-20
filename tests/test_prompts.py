@@ -48,7 +48,7 @@ async def test_impact_before_edit_prompt_structure():
     text = _text(msg)
     assert "ent-abc-123" in text
     assert "rename authentication provider" in text
-    assert "route_analysis" in text
+    assert "traverse up to 2 hops" in text
     assert "governance_token" in text
     assert "propagate_impact_event" in text
 
