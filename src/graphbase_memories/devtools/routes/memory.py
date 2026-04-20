@@ -2,53 +2,131 @@
 
 from __future__ import annotations
 
+from typing import Annotated, Any
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
 from graphbase_memories.config import settings
-from graphbase_memories.devtools.deps import DriverDep
+from graphbase_memories.devtools.deps import DevtoolsTokenDep, DriverDep
 
 router = APIRouter(tags=["memory"])
 
 _ALLOWED_LABELS = {"Session", "Decision", "Pattern", "Context", "EntityFact"}
+_ALLOWED_SORT_FIELDS = {
+    "created_at": "n.created_at",
+    "title": "coalesce(n.title, '')",
+    "entity_name": "coalesce(n.entity_name, '')",
+}
+_ALLOWED_PATCH_FIELDS = {"title", "content", "summary", "fact"}
+_STRUCTURAL_FIELDS = {"id", "_label", "created_at"}
 
 
-@router.get("/memory")
-async def list_memory(
-    driver: DriverDep,
-    project_id: str = Query(None),
-    label: str = Query(
-        None, description="Node label filter — one of: Session, Decision, Pattern, Context, EntityFact"
-    ),
-    limit: int = Query(20, ge=1, le=100),
-):
-    """List recent memory nodes, optionally filtered by project and label."""
+def _validate_label(label: str | None) -> str | None:
     if label is not None and label not in _ALLOWED_LABELS:
         raise HTTPException(
             status_code=422,
             detail=f"Invalid label {label!r}. Must be one of: {sorted(_ALLOWED_LABELS)}",
         )
-    label_clause = f":{label}" if label else ""
+    return label
+
+
+def _validate_labels(labels: list[str] | None) -> list[str] | None:
+    if labels is None:
+        return None
+    invalid = sorted(set(labels) - _ALLOWED_LABELS)
+    if invalid:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid labels {invalid!r}. Must be drawn from: {sorted(_ALLOWED_LABELS)}",
+        )
+    return labels
+
+
+def _invalid_labels(labels: list[str] | None) -> list[str]:
+    if labels is None:
+        return []
+    return sorted(set(labels) - _ALLOWED_LABELS)
+
+
+def _validate_sort(sort_by: str, sort_order: str) -> tuple[str, str]:
+    if sort_by not in _ALLOWED_SORT_FIELDS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid sort_by {sort_by!r}. Must be one of: {sorted(_ALLOWED_SORT_FIELDS)}",
+        )
+    if sort_order not in {"asc", "desc"}:
+        raise HTTPException(status_code=422, detail="sort_order must be 'asc' or 'desc'")
+    return _ALLOWED_SORT_FIELDS[sort_by], sort_order.upper()
+
+
+@router.get("/memory")
+async def list_memory(
+    driver: DriverDep,
+    project_id: Annotated[str | None, Query()] = None,
+    label: Annotated[
+        str | None,
+        Query(description="Node label filter — one of: Session, Decision, Pattern, Context, EntityFact"),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    sort_by: Annotated[str, Query()] = "created_at",
+    sort_order: Annotated[str, Query()] = "desc",
+    since_days: Annotated[int | None, Query(ge=0)] = None,
+):
+    """List recent memory nodes, optionally filtered by project and label."""
+    label = _validate_label(label)
+    order_expr, order_direction = _validate_sort(sort_by, sort_order)
+    label_clause = "AND $label IN labels(n)" if label else ""
     project_clause = (
         "AND EXISTS { MATCH (n)-[:BELONGS_TO]->(:Project {id: $pid}) }" if project_id else ""
     )
+    since_clause = (
+        "AND n.created_at > datetime() - duration({days: $since_days})"
+        if since_days is not None
+        else ""
+    )
+    base_where = f"""
+        WHERE any(lbl IN labels(n) WHERE lbl IN $allowed_labels)
+        {label_clause}
+        {project_clause}
+        {since_clause}
+    """
     async with driver.session(database=settings.neo4j_database) as session:
+        params = {
+            "allowed_labels": sorted(_ALLOWED_LABELS),
+            "label": label,
+            "pid": project_id,
+            "limit": limit,
+            "offset": offset,
+            "since_days": since_days,
+        }
         result = await session.run(
             f"""
-            MATCH (n{label_clause})
-            WHERE 1=1 {project_clause}
+            MATCH (n)
+            {base_where}
             RETURN n {{.*, created_at: toString(n.created_at)}} AS node, labels(n)[0] AS label
-            ORDER BY n.created_at DESC LIMIT $limit
+            ORDER BY {order_expr} {order_direction}
+            SKIP $offset
+            LIMIT $limit
             """,
-            pid=project_id,
-            limit=limit,
+            **params,
         )
         nodes = []
         async for r in result:
             item = dict(r["node"])
             item["_label"] = r["label"]
             nodes.append(item)
-    return nodes
+        total_result = await session.run(
+            f"""
+            MATCH (n)
+            {base_where}
+            RETURN count(n) AS total
+            """,
+            **params,
+        )
+        total_record = await total_result.single()
+    return {"items": nodes, "total": total_record["total"] if total_record else 0}
 
 
 @router.get("/memory/{node_id}/relationships")
@@ -126,15 +204,28 @@ class MemorySearchRequest(BaseModel):
     query: str
     project_id: str | None = None
     label: str | None = None
+    labels: list[str] | None = None
     limit: int = 20
     since_days: int | None = None
+    offset: int = 0
+    sort_by: str = "created_at"
+    sort_order: str = "desc"
 
     @field_validator("label")
     @classmethod
     def validate_label(cls, v: str | None) -> str | None:
-        if v is not None and v not in _ALLOWED_LABELS:
+        invalid = _invalid_labels([v] if v is not None else None)
+        if invalid:
+            raise ValueError(f"Invalid label {v!r}. Must be one of: {sorted(_ALLOWED_LABELS)}")
+        return v
+
+    @field_validator("labels")
+    @classmethod
+    def validate_labels(cls, v: list[str] | None) -> list[str] | None:
+        invalid = _invalid_labels(v)
+        if invalid:
             raise ValueError(
-                f"Invalid label {v!r}. Must be one of: {sorted(_ALLOWED_LABELS)}"
+                f"Invalid labels {invalid!r}. Must be drawn from: {sorted(_ALLOWED_LABELS)}"
             )
         return v
 
@@ -142,38 +233,139 @@ class MemorySearchRequest(BaseModel):
 @router.post("/memory/search")
 async def search_memory(body: MemorySearchRequest, driver: DriverDep):
     """Full-text search across memory nodes using CONTAINS on content fields."""
-    label_clause = f":{body.label}" if body.label else ""
+    order_expr, order_direction = _validate_sort(body.sort_by, body.sort_order)
+    filter_labels = body.labels or ([body.label] if body.label else None)
+    _validate_labels(filter_labels)
+    label_clause = (
+        "AND any(lbl IN labels(n) WHERE lbl IN $filter_labels)" if filter_labels else ""
+    )
     project_clause = (
         "AND EXISTS { MATCH (n)-[:BELONGS_TO]->(:Project {id: $pid}) }" if body.project_id else ""
     )
     since_clause = (
         "AND n.created_at > datetime() - duration({days: $since_days})" if body.since_days else ""
     )
+    text_predicate = """
+        (
+            n.content CONTAINS $search_text
+            OR n.title CONTAINS $search_text
+            OR n.summary CONTAINS $search_text
+            OR n.entity_name CONTAINS $search_text
+            OR n.fact CONTAINS $search_text
+        )
+    """
     async with driver.session(database=settings.neo4j_database) as session:
+        params = {
+            "search_text": body.query,
+            "filter_labels": filter_labels,
+            "pid": body.project_id,
+            "since_days": body.since_days,
+            "limit": body.limit,
+            "offset": body.offset,
+        }
         result = await session.run(
             f"""
-            MATCH (n{label_clause})
-            WHERE (
-                n.content CONTAINS $search_text
-                OR n.title CONTAINS $search_text
-                OR n.summary CONTAINS $search_text
-                OR n.entity_name CONTAINS $search_text
-                OR n.fact CONTAINS $search_text
-            )
+            MATCH (n)
+            WHERE {text_predicate}
             {project_clause}
+            {label_clause}
             {since_clause}
             RETURN n {{.*, created_at: toString(n.created_at)}} AS node, labels(n)[0] AS label
-            ORDER BY n.created_at DESC
+            ORDER BY {order_expr} {order_direction}
+            SKIP $offset
             LIMIT $limit
             """,
-            search_text=body.query,
-            pid=body.project_id,
-            since_days=body.since_days,
-            limit=body.limit,
+            **params,
         )
         nodes = []
         async for r in result:
             item = dict(r["node"])
             item["_label"] = r["label"]
             nodes.append(item)
-    return nodes
+        total_result = await session.run(
+            f"""
+            MATCH (n)
+            WHERE {text_predicate}
+            {project_clause}
+            {label_clause}
+            {since_clause}
+            RETURN count(n) AS total
+            """,
+            **params,
+        )
+        total_record = await total_result.single()
+    return {"items": nodes, "total": total_record["total"] if total_record else 0}
+
+
+class MemoryPatchRequest(BaseModel):
+    title: str | None = None
+    content: str | None = None
+    summary: str | None = None
+    fact: str | None = None
+
+    def updates(self) -> dict[str, str | None]:
+        return self.model_dump(exclude_unset=True)
+
+
+def _validate_patch_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    invalid = sorted(set(payload) - _ALLOWED_PATCH_FIELDS)
+    structural = sorted(set(payload) & _STRUCTURAL_FIELDS)
+    if structural:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot modify structural fields: {structural}",
+        )
+    if invalid:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid patch fields: {invalid}. Allowed: {sorted(_ALLOWED_PATCH_FIELDS)}",
+        )
+    if not payload:
+        raise HTTPException(status_code=422, detail="Patch body must contain at least one allowed field")
+    return payload
+
+
+@router.patch("/memory/{node_id}")
+async def patch_node(
+    node_id: str,
+    body: MemoryPatchRequest,
+    driver: DriverDep,
+    _: DevtoolsTokenDep,
+):
+    """Patch selected memory fields on a node."""
+    updates = _validate_patch_fields(body.updates())
+    async with driver.session(database=settings.neo4j_database) as session:
+        result = await session.run(
+            """
+            MATCH (n {id: $id})
+            SET n += $updates
+            RETURN n {.*, created_at: toString(n.created_at)} AS node, labels(n)[0] AS label
+            LIMIT 1
+            """,
+            id=node_id,
+            updates=updates,
+        )
+        record = await result.single()
+        if not record:
+            raise HTTPException(status_code=404, detail=f"Node {node_id!r} not found")
+        item = dict(record["node"])
+        item["_label"] = record["label"]
+        return item
+
+
+@router.delete("/memory/{node_id}")
+async def delete_node(
+    node_id: str,
+    driver: DriverDep,
+    _: DevtoolsTokenDep,
+    confirm: bool = Query(False),
+):
+    """Delete a memory node after explicit confirmation."""
+    if not confirm:
+        raise HTTPException(status_code=422, detail="confirm=true is required for deletion")
+    async with driver.session(database=settings.neo4j_database) as session:
+        check_result = await session.run("MATCH (n {id: $id}) RETURN n.id AS id LIMIT 1", id=node_id)
+        if await check_result.single() is None:
+            raise HTTPException(status_code=404, detail=f"Node {node_id!r} not found")
+        await session.run("MATCH (n {id: $id}) DETACH DELETE n", id=node_id)
+    return {"deleted": True, "id": node_id}

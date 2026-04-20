@@ -214,6 +214,8 @@
       error: "",
       _debounceHandle: null,
       _navHandler: null,
+      _updateHandler: null,
+      _removeHandler: null,
       init() {
         if (this.initialised) {
           return;
@@ -239,6 +241,31 @@
           }
         };
         document.addEventListener("devtools:memory-nav", this._navHandler);
+        this._updateHandler = (event) => {
+          const node = event.detail?.node;
+          if (!node?.id) {
+            return;
+          }
+          this.results = this.results.map((item) => (item.id === node.id ? { ...item, ...node } : item));
+        };
+        this._removeHandler = (event) => {
+          const nodeId = event.detail?.nodeId;
+          if (!nodeId) {
+            return;
+          }
+          this.results = this.results.filter((item) => item.id !== nodeId);
+          this.totalCount = Math.max(0, this.totalCount - 1);
+          if (!this.results.length) {
+            Alpine.store("nav").selectedIndex = -1;
+            return;
+          }
+          Alpine.store("nav").selectedIndex = Math.min(
+            Alpine.store("nav").selectedIndex,
+            this.results.length - 1
+          );
+        };
+        document.addEventListener("devtools:memory-updated", this._updateHandler);
+        document.addEventListener("devtools:memory-removed", this._removeHandler);
       },
       async loadProjects() {
         try {
@@ -492,6 +519,7 @@
       workspaceId: "",
       workspaceReport: null,
       loadingWorkspace: false,
+      repairing: false,
       runProjectId: "",
       runScope: "global",
       checkPendingOnly: false,
@@ -517,13 +545,15 @@
           Alpine.store("toast").add("danger", error.message || "Failed to load operations");
         }
       },
-      async loadWorkspaceHealth() {
+      async loadWorkspaceHealth(options = {}) {
         if (!this.workspaceId.trim()) {
           Alpine.store("toast").add("warning", "Workspace ID is required");
           return;
         }
         this.loadingWorkspace = true;
-        this.repairResult = null;
+        if (!options.preserveRepairResult) {
+          this.repairResult = null;
+        }
         try {
           this.workspaceReport = await ui.fetchJson(
             `/graph/stats/workspace/${encodeURIComponent(this.workspaceId.trim())}`
@@ -534,19 +564,35 @@
           this.loadingWorkspace = false;
         }
       },
+      currentWorkspaceId() {
+        return (this.workspaceReport?.workspace_id || this.workspaceId || "").trim();
+      },
+      hasOrphans() {
+        return (this.workspaceReport?.orphaned_entity_count || 0) > 0;
+      },
       async repairOrphans() {
-        if (!this.workspaceId.trim()) {
+        const workspaceId = this.currentWorkspaceId();
+        if (!workspaceId) {
           Alpine.store("toast").add("warning", "Load a workspace before repairing");
           return;
         }
+        if (!this.hasOrphans()) {
+          Alpine.store("toast").add("info", "No orphaned entities detected");
+          return;
+        }
+        this.repairing = true;
+        this.repairResult = null;
         try {
           this.repairResult = await ui.fetchJson(
-            `/graph/repair/orphaned-entities/${encodeURIComponent(this.workspaceId.trim())}`,
+            `/graph/repair/orphaned-entities/${encodeURIComponent(workspaceId)}`,
             { method: "POST" }
           );
+          await this.loadWorkspaceHealth({ preserveRepairResult: true });
           Alpine.store("toast").add("success", this.repairResult.message || "Repair completed");
         } catch (error) {
           Alpine.store("toast").add("danger", error.message || "Repair failed");
+        } finally {
+          this.repairing = false;
         }
       },
       async runHygiene() {

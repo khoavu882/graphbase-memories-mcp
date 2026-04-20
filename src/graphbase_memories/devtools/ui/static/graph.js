@@ -102,13 +102,15 @@ const EDGE_COLORS = {
 let rawData    = null;
 let network    = null;
 let topoMode   = false;
+let pendingFocusId = null;
 const nodeDataset = new vis.DataSet();
 const edgeDataset = new vis.DataSet();
 
 // ── URL params ──────────────────────────────────────────────────────────
 const urlParams = new URLSearchParams(window.location.search);
 const wsInput = document.getElementById('ws-input');
-wsInput.value = urlParams.get('workspace_id') || '';
+pendingFocusId = urlParams.get('focus');
+wsInput.value = urlParams.get('workspace') || urlParams.get('workspace_id') || '';
 
 // Ensure the graph sidebar controls satisfy browser form-field checks.
 document.querySelectorAll('input:not([name])').forEach((input, index) => {
@@ -256,6 +258,7 @@ const _dpEdgeList   = document.getElementById('dp-edge-list');
 const _dpNeighWrap  = document.getElementById('dp-section-neighbors');
 const _dpNeighChips = document.getElementById('dp-neighbor-chips');
 const _dpCopy       = document.getElementById('dp-copy');
+const _dpFullDetail = document.getElementById('dp-full-detail');
 
 function buildEdgeSummary(nodeId) {
   const counts = {};
@@ -319,6 +322,11 @@ function openDetailPanel(nodeId) {
 
   _dpId.textContent      = item.id;
   _dpDisplay.textContent = item.display;
+  if (_dpFullDetail) {
+    _dpFullDetail.onclick = () => {
+      window.location.href = `/ui/index.html#memory/${encodeURIComponent(item.id)}`;
+    };
+  }
 
   // Type badge — use category for EntityFact nodes
   const badgeLabel = (item.label === 'EntityFact' && item.category) ? item.category : item.label;
@@ -495,6 +503,19 @@ function initNetwork(nodeCount) {
   }
 }
 
+function applyPendingFocus() {
+  if (!pendingFocusId || !network) return;
+  const node = nodeDataset.get(pendingFocusId);
+  if (!node) return;
+  network.selectNodes([pendingFocusId]);
+  network.focus(pendingFocusId, {
+    scale: 1.2,
+    animation: { duration: 400, easingFunction: 'easeInOutQuad' },
+  });
+  openDetailPanel(pendingFocusId);
+  pendingFocusId = null;
+}
+
 // ── Fetch & render ──────────────────────────────────────────────────────
 async function load() {
   focusNodeId = null;                                         // sync focus reset before any await
@@ -523,6 +544,7 @@ async function load() {
     updateSummary(rawData.summary);
     applyFilters();
     initNetwork(nodeDataset.length);
+    applyPendingFocus();
 
     document.getElementById('loading').style.display = 'none';
   } catch (err) {
@@ -608,7 +630,7 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Boot ────────────────────────────────────────────────────────────────
-if (urlParams.get('topology') === 'true') {
+if (urlParams.get('topology') === 'true' || pendingFocusId) {
   topoMode = true;
   document.getElementById('btn-collapsed').classList.remove('active');
   document.getElementById('btn-topology').classList.add('active');

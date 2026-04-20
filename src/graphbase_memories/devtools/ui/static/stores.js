@@ -1,5 +1,6 @@
 (function () {
   const THEME_KEY = "graphbase-theme";
+  const AUTH_TOKEN_KEY = "gb-devtools-token";
   const DEFAULT_VIEW = "projects";
   const VIEW_LABELS = {
     projects: "Projects",
@@ -151,6 +152,10 @@
     window.setTimeout(() => {
       document.querySelector('input[name="memory-query"]')?.focus();
     }, 30);
+  }
+
+  function isInvalidTokenMessage(message) {
+    return /devtools token/i.test(message || "");
   }
 
   function initKeyboardShortcuts() {
@@ -305,6 +310,21 @@
       },
     });
 
+    Alpine.store("auth", {
+      token: window.localStorage.getItem(AUTH_TOKEN_KEY) || "",
+      setToken(token) {
+        this.token = token.trim();
+        window.localStorage.setItem(AUTH_TOKEN_KEY, this.token);
+      },
+      clear() {
+        this.token = "";
+        window.localStorage.removeItem(AUTH_TOKEN_KEY);
+      },
+      headers() {
+        return this.token ? { "X-Devtools-Token": this.token } : {};
+      },
+    });
+
     Alpine.store("neo4j", {
       status: "connecting",
       toolCount: 0,
@@ -339,7 +359,27 @@
       nodeData: null,
       relationships: { incoming: [], outgoing: [] },
       loading: false,
+      saving: false,
+      deleting: false,
+      editMode: false,
+      deleteModalOpen: false,
+      deleteConfirmValue: "",
+      form: {
+        title: "",
+        content: "",
+        summary: "",
+        fact: "",
+      },
       history: [],
+      syncFormFromNode() {
+        const data = this.nodeData || {};
+        this.form = {
+          title: data.title || "",
+          content: data.content || "",
+          summary: data.summary || "",
+          fact: data.fact || "",
+        };
+      },
       async open(nodeId, options = {}) {
         if (!nodeId) {
           return;
@@ -358,6 +398,10 @@
             incoming: payload.incoming || [],
             outgoing: payload.outgoing || [],
           };
+          this.syncFormFromNode();
+          this.editMode = false;
+          this.deleteModalOpen = false;
+          this.deleteConfirmValue = "";
           if (syncHash && Alpine.store("nav").view === "memory") {
             Alpine.store("nav").subView = nodeId;
             setHash("memory", nodeId, true);
@@ -375,6 +419,17 @@
         this.nodeId = null;
         this.nodeData = null;
         this.relationships = { incoming: [], outgoing: [] };
+        this.saving = false;
+        this.deleting = false;
+        this.editMode = false;
+        this.deleteModalOpen = false;
+        this.deleteConfirmValue = "";
+        this.form = {
+          title: "",
+          content: "",
+          summary: "",
+          fact: "",
+        };
         if (syncHash && Alpine.store("nav").view === "memory") {
           Alpine.store("nav").subView = null;
           setHash("memory", null, true);
@@ -384,6 +439,100 @@
         const previous = this.history.pop();
         if (previous) {
           return this.open(previous, { pushHistory: false });
+        }
+      },
+      beginEdit() {
+        this.syncFormFromNode();
+        this.editMode = true;
+      },
+      cancelEdit() {
+        this.syncFormFromNode();
+        this.editMode = false;
+      },
+      relationshipCount() {
+        return (this.relationships.incoming?.length || 0) + (this.relationships.outgoing?.length || 0);
+      },
+      openDeleteModal() {
+        this.deleteConfirmValue = "";
+        this.deleteModalOpen = true;
+      },
+      closeDeleteModal() {
+        this.deleteModalOpen = false;
+        this.deleteConfirmValue = "";
+      },
+      canDelete() {
+        return Boolean(this.nodeId) && this.deleteConfirmValue === this.nodeId;
+      },
+      async saveEdits() {
+        if (!this.nodeId) {
+          return;
+        }
+        const payload = {};
+        for (const field of ["title", "content", "summary", "fact"]) {
+          const currentValue = this.nodeData?.[field] || "";
+          const nextValue = this.form[field] || "";
+          if (nextValue !== currentValue) {
+            payload[field] = nextValue;
+          }
+        }
+        if (Object.keys(payload).length === 0) {
+          Alpine.store("toast").add("warning", "No editable changes detected");
+          return;
+        }
+        this.saving = true;
+        try {
+          const updated = await fetchJson(`/memory/${encodeURIComponent(this.nodeId)}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              ...Alpine.store("auth").headers(),
+            },
+            body: JSON.stringify(payload),
+          });
+          document.dispatchEvent(
+            new CustomEvent("devtools:memory-updated", {
+              detail: { node: updated },
+            })
+          );
+          this.editMode = false;
+          Alpine.store("toast").add("success", "Memory node updated");
+          await this.open(this.nodeId, { pushHistory: false });
+        } catch (error) {
+          const message = isInvalidTokenMessage(error.message)
+            ? "Invalid token. Paste the startup token from console."
+            : error.message || "Failed to update memory node";
+          Alpine.store("toast").add("danger", message);
+        } finally {
+          this.saving = false;
+        }
+      },
+      async deleteNode() {
+        if (!this.canDelete()) {
+          Alpine.store("toast").add("warning", "Type the node ID to confirm deletion");
+          return;
+        }
+        this.deleting = true;
+        const deletedId = this.nodeId;
+        try {
+          await fetchJson(`/memory/${encodeURIComponent(deletedId)}?confirm=true`, {
+            method: "DELETE",
+            headers: Alpine.store("auth").headers(),
+          });
+          document.dispatchEvent(
+            new CustomEvent("devtools:memory-removed", {
+              detail: { nodeId: deletedId },
+            })
+          );
+          this.closeDeleteModal();
+          this.close();
+          Alpine.store("toast").add("success", `Deleted ${deletedId}`);
+        } catch (error) {
+          const message = isInvalidTokenMessage(error.message)
+            ? "Invalid token. Paste the startup token from console."
+            : error.message || "Failed to delete memory node";
+          Alpine.store("toast").add("danger", message);
+        } finally {
+          this.deleting = false;
         }
       },
     });

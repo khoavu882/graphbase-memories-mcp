@@ -33,6 +33,19 @@
     <div class="topbar-spacer"></div>
     <span :class="$store.neo4j.badgeClass()" x-text="$store.neo4j.statusLabel()"></span>
     <span class="muted" x-text="`${$store.neo4j.toolCount} tools`"></span>
+    <label class="field topbar-field">
+      <span class="field-label">Write Token</span>
+      <input
+        class="input input--compact mono"
+        name="devtools-token"
+        placeholder="Paste startup token"
+        :value="$store.auth.token"
+        @input="$store.auth.setToken($event.target.value)"
+      >
+    </label>
+    <button class="btn btn--ghost btn--sm" x-show="$store.auth.token" @click="$store.auth.clear()">
+      Clear Token
+    </button>
     <button class="btn btn--ghost btn--sm" @click="toggleTheme()">
       <span class="icon" x-html="window.DevtoolsUI.icon(window.DevtoolsUI.getTheme() === 'dark' ? 'sun' : 'moon')"></span>
       <span x-text="window.DevtoolsUI.getTheme() === 'dark' ? 'Light' : 'Dark'"></span>
@@ -567,7 +580,6 @@
                           <button class="btn btn--primary" @click="loadWorkspaceHealth()" :disabled="loadingWorkspace">
                             <span x-text="loadingWorkspace ? 'Loading…' : 'Load'"></span>
                           </button>
-                          <button class="btn btn--danger" @click="repairOrphans()">Repair Orphans</button>
                         </div>
                         <template x-if="workspaceReport">
                           <div class="stack">
@@ -580,7 +592,32 @@
                                 <strong x-text="workspaceReport.total_conflicts"></strong>
                                 <span class="muted">Conflicts</span>
                               </div>
+                              <div class="stat-chip">
+                                <strong x-text="workspaceReport.orphaned_entity_count || 0"></strong>
+                                <span class="muted">Orphaned entities</span>
+                              </div>
                             </div>
+                            <template x-if="(workspaceReport.orphaned_entity_count || 0) > 0">
+                              <section class="callout callout--warning">
+                                <div class="stack">
+                                  <strong>Orphaned EntityFact nodes detected</strong>
+                                  <p class="muted" style="margin: 0;">
+                                    These nodes are not linked to any project. Repair will relink them to a project in the loaded workspace and refresh the health report.
+                                  </p>
+                                </div>
+                                <div class="toolbar-actions">
+                                  <button class="btn btn--danger" @click="repairOrphans()" :disabled="repairing">
+                                    <span class="icon" x-html="window.DevtoolsUI.icon('wrench')"></span>
+                                    <span x-text="repairing ? 'Repairing…' : 'Repair Orphans'"></span>
+                                  </button>
+                                </div>
+                              </section>
+                            </template>
+                            <template x-if="(workspaceReport.orphaned_entity_count || 0) === 0">
+                              <p class="badge badge--success" style="display: flex; white-space: normal;">
+                                No orphaned EntityFact nodes detected for this workspace.
+                              </p>
+                            </template>
                             <template x-if="workspaceReport.conflict_records?.length">
                               <table class="table">
                                 <thead>
@@ -752,7 +789,41 @@
                 <span class="field-value" x-text="$store.inspector.nodeData.workspace_id || '—'"></span>
               </div>
             </div>
+            <template x-if="$store.inspector.editMode">
+              <p class="badge badge--danger" style="display: flex; margin-top: 1rem; white-space: normal;">
+                Direct edit bypasses MCP governance checks
+              </p>
+            </template>
             <div class="drawer-actions">
+              <button
+                class="btn btn--secondary btn--sm"
+                x-show="!$store.inspector.editMode"
+                @click="$store.inspector.beginEdit()"
+              >
+                <span class="icon" x-html="window.DevtoolsUI.icon('edit')"></span>
+                Edit
+              </button>
+              <button
+                class="btn btn--primary btn--sm"
+                x-show="$store.inspector.editMode"
+                @click="$store.inspector.saveEdits()"
+                :disabled="$store.inspector.saving"
+              >
+                <span class="icon" x-html="window.DevtoolsUI.icon('check-circle')"></span>
+                <span x-text="$store.inspector.saving ? 'Saving…' : 'Save'"></span>
+              </button>
+              <button
+                class="btn btn--ghost btn--sm"
+                x-show="$store.inspector.editMode"
+                @click="$store.inspector.cancelEdit()"
+                :disabled="$store.inspector.saving"
+              >
+                Cancel
+              </button>
+              <button class="btn btn--danger btn--sm" @click="$store.inspector.openDeleteModal()">
+                <span class="icon" x-html="window.DevtoolsUI.icon('trash')"></span>
+                Delete
+              </button>
               <button class="btn btn--primary btn--sm" @click="viewInGraph()">
                 <span class="icon" x-html="window.DevtoolsUI.icon('external-link')"></span>
                 View in Graph
@@ -761,6 +832,35 @@
                 <span class="icon" x-html="window.DevtoolsUI.icon('copy')"></span>
                 Copy JSON
               </button>
+              <button class="btn btn--ghost btn--sm" @click="downloadJson()">
+                <span class="icon" x-html="window.DevtoolsUI.icon('download')"></span>
+                Download JSON
+              </button>
+            </div>
+          </section>
+
+          <section class="drawer-section">
+            <h4>Editable Fields</h4>
+            <div class="kv-grid" style="margin-top: 1rem;">
+              <template x-for="field in editableFields()" :key="field.key">
+                <article class="kv-row">
+                  <div class="field-label" x-text="field.label"></div>
+                  <template x-if="$store.inspector.editMode && !field.multiline">
+                    <input class="input" :name="`edit-${field.key}`" x-model="$store.inspector.form[field.key]">
+                  </template>
+                  <template x-if="$store.inspector.editMode && field.multiline">
+                    <textarea class="input" :name="`edit-${field.key}`" x-model="$store.inspector.form[field.key]"></textarea>
+                  </template>
+                  <template x-if="!$store.inspector.editMode">
+                    <div>
+                      <pre class="schema-block" style="margin-top: 0.5rem;" x-text="visibleValue(field.key, fieldValue(field.key))"></pre>
+                      <button class="btn btn--ghost btn--sm" x-show="isLongValue(fieldValue(field.key))" @click="toggleValue(field.key)">
+                        <span x-text="expanded[field.key] ? 'Collapse' : 'Expand'"></span>
+                      </button>
+                    </div>
+                  </template>
+                </article>
+              </template>
             </div>
           </section>
 
@@ -820,6 +920,54 @@
       </template>
     </div>
   </aside>
+
+  <div
+    class="modal-backdrop modal-backdrop--elevated"
+    x-show="$store.inspector.deleteModalOpen"
+    x-cloak
+    @click="$store.inspector.closeDeleteModal()"
+  >
+    <div class="modal" @click.stop x-trap.inert.noscroll="$store.inspector.deleteModalOpen">
+      <div class="card-header">
+        <div>
+          <h3 class="modal-title">Confirm Deletion</h3>
+          <p class="muted">
+            This will permanently remove this node and its
+            <strong x-text="$store.inspector.relationshipCount()"></strong>
+            relationships. Type the node ID to confirm.
+          </p>
+        </div>
+        <button class="btn btn--ghost btn--sm btn--icon" @click="$store.inspector.closeDeleteModal()">
+          <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
+        </button>
+      </div>
+      <div class="card-body stack">
+        <div class="field">
+          <span class="field-label">Node ID</span>
+          <span class="field-value mono" x-text="$store.inspector.nodeId"></span>
+        </div>
+        <label class="field">
+          <span class="field-label">Type ID To Confirm</span>
+          <input
+            class="input mono"
+            name="delete-confirm-id"
+            x-model="$store.inspector.deleteConfirmValue"
+            placeholder="Paste the node ID exactly"
+          >
+        </label>
+        <div class="modal-actions">
+          <button class="btn btn--ghost" @click="$store.inspector.closeDeleteModal()">Cancel</button>
+          <button
+            class="btn btn--danger"
+            @click="$store.inspector.deleteNode()"
+            :disabled="!$store.inspector.canDelete() || $store.inspector.deleting"
+          >
+            <span x-text="$store.inspector.deleting ? 'Deleting…' : 'Confirm Delete'"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div
     class="modal-backdrop"

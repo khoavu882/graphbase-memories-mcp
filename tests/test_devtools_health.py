@@ -4,7 +4,8 @@ Integration: devtools graph stats and memory search routes against live Neo4j.
 
 from __future__ import annotations
 
-from conftest import TEST_DB, TEST_PROJECT_ID  # noqa: F401
+from conftest import TEST_DB
+from httpx import ASGITransport, AsyncClient
 
 
 async def test_graph_stats_returns_node_counts(driver):
@@ -44,13 +45,15 @@ async def test_graph_stats_project_count_increases(driver, fresh_project):
 
 
 async def test_memory_search_returns_list(driver):
-    """POST /memory/search with a query returns a list."""
+    """POST /memory/search with a query returns an items/total payload."""
     from graphbase_memories.devtools.routes.memory import MemorySearchRequest, search_memory
 
     body = MemorySearchRequest(query="test", limit=10)
     result = await search_memory(body, driver)
 
-    assert isinstance(result, list)
+    assert isinstance(result, dict)
+    assert "items" in result
+    assert "total" in result
 
 
 async def test_memory_search_with_label_filter(driver, fresh_project):
@@ -73,21 +76,76 @@ async def test_memory_search_with_label_filter(driver, fresh_project):
     try:
         body = MemorySearchRequest(query="unique search phrase xqzwk", label="Session", limit=5)
         result = await search_memory(body, driver)
-        assert isinstance(result, list)
+        assert isinstance(result, dict)
+        assert "items" in result
         # If found, verify it's a Session
-        if result:
-            assert all(r.get("_label") == "Session" for r in result)
+        if result["items"]:
+            assert all(r.get("_label") == "Session" for r in result["items"])
     finally:
         async with driver.session(database=TEST_DB) as session:
             await session.run("MATCH (s:Session {id: 'test-search-session-001'}) DETACH DELETE s")
 
 
 async def test_memory_list_returns_nodes(driver, fresh_project):
-    """GET /memory returns a list of memory nodes."""
+    """GET /memory returns an items/total payload of memory nodes."""
     from graphbase_memories.devtools.routes.memory import list_memory
 
     result = await list_memory(driver, project_id=None, label=None, limit=10)
-    assert isinstance(result, list)
+    assert isinstance(result, dict)
+    assert "items" in result
+    assert "total" in result
+
+
+async def test_memory_pagination(driver, fresh_project):
+    """GET /memory supports offset, limit, sort_by, sort_order, and total count."""
+    from graphbase_memories.devtools.routes.memory import list_memory
+
+    node_ids = [
+        "test-memory-pagination-alpha",
+        "test-memory-pagination-beta",
+        "test-memory-pagination-gamma",
+    ]
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            UNWIND $rows AS row
+            CREATE (d:Decision {
+                id: row.id,
+                title: row.title,
+                summary: row.title,
+                created_at: datetime()
+            })
+            WITH d, row
+            MATCH (p:Project {id: $pid})
+            MERGE (d)-[:BELONGS_TO]->(p)
+            """,
+            rows=[
+                {"id": node_ids[0], "title": "alpha"},
+                {"id": node_ids[1], "title": "beta"},
+                {"id": node_ids[2], "title": "gamma"},
+            ],
+            pid=fresh_project,
+        )
+
+    try:
+        result = await list_memory(
+            driver,
+            project_id=fresh_project,
+            label="Decision",
+            limit=2,
+            offset=1,
+            sort_by="title",
+            sort_order="asc",
+        )
+        assert result["total"] >= 3
+        titles = [item["title"] for item in result["items"] if item["id"] in node_ids]
+        assert titles == ["beta", "gamma"]
+    finally:
+        async with driver.session(database=TEST_DB) as session:
+            await session.run(
+                "MATCH (d:Decision) WHERE d.id IN $ids DETACH DELETE d",
+                ids=node_ids,
+            )
 
 
 async def test_memory_node_not_found_raises_404(driver):
@@ -101,3 +159,130 @@ async def test_memory_node_not_found_raises_404(driver):
         raise AssertionError("Should have raised HTTPException")
     except HTTPException as exc:
         assert exc.status_code == 404
+
+
+async def test_patch_memory_node(driver, fresh_project):
+    """PATCH /memory/{node_id} updates allowed fields when token is valid."""
+    from graphbase_memories.devtools.deps import set_devtools_token
+    from graphbase_memories.devtools.server import app
+
+    node_id = "test-memory-patch-node"
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            CREATE (d:Decision {
+                id: $id,
+                title: 'before',
+                summary: 'before summary',
+                created_at: datetime()
+            })
+            WITH d
+            MATCH (p:Project {id: $pid})
+            MERGE (d)-[:BELONGS_TO]->(p)
+            """,
+            id=node_id,
+            pid=fresh_project,
+        )
+
+    app.state.driver = driver
+    set_devtools_token("test-devtools-token")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.patch(
+            f"/memory/{node_id}",
+            json={"title": "after", "summary": "after summary"},
+            headers={"X-Devtools-Token": "test-devtools-token"},
+        )
+
+    try:
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["title"] == "after"
+        assert payload["summary"] == "after summary"
+    finally:
+        async with driver.session(database=TEST_DB) as session:
+            await session.run("MATCH (d:Decision {id: $id}) DETACH DELETE d", id=node_id)
+
+
+async def test_delete_memory_node(driver, fresh_project):
+    """DELETE /memory/{node_id}?confirm=true removes the node when token is valid."""
+    from graphbase_memories.devtools.deps import set_devtools_token
+    from graphbase_memories.devtools.server import app
+
+    node_id = "test-memory-delete-node"
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            CREATE (d:Decision {
+                id: $id,
+                title: 'delete me',
+                created_at: datetime()
+            })
+            WITH d
+            MATCH (p:Project {id: $pid})
+            MERGE (d)-[:BELONGS_TO]->(p)
+            """,
+            id=node_id,
+            pid=fresh_project,
+        )
+
+    app.state.driver = driver
+    set_devtools_token("test-devtools-token")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.delete(
+            f"/memory/{node_id}",
+            params={"confirm": "true"},
+            headers={"X-Devtools-Token": "test-devtools-token"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"deleted": True, "id": node_id}
+
+    async with driver.session(database=TEST_DB) as session:
+        result = await session.run("MATCH (d:Decision {id: $id}) RETURN count(d) AS cnt", id=node_id)
+        record = await result.single()
+        assert record["cnt"] == 0
+
+
+async def test_write_requires_token(driver, fresh_project):
+    """PATCH and DELETE reject requests without the startup token."""
+    from graphbase_memories.devtools.deps import set_devtools_token
+    from graphbase_memories.devtools.server import app
+
+    node_id = "test-memory-token-node"
+    async with driver.session(database=TEST_DB) as session:
+        await session.run(
+            """
+            CREATE (d:Decision {
+                id: $id,
+                title: 'guarded',
+                created_at: datetime()
+            })
+            WITH d
+            MATCH (p:Project {id: $pid})
+            MERGE (d)-[:BELONGS_TO]->(p)
+            """,
+            id=node_id,
+            pid=fresh_project,
+        )
+
+    app.state.driver = driver
+    set_devtools_token("expected-token")
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        patch_response = await client.patch(
+            f"/memory/{node_id}",
+            json={"title": "blocked"},
+        )
+        delete_response = await client.delete(
+            f"/memory/{node_id}",
+            params={"confirm": "true"},
+        )
+
+    try:
+        assert patch_response.status_code == 403
+        assert delete_response.status_code == 403
+    finally:
+        async with driver.session(database=TEST_DB) as session:
+            await session.run("MATCH (d:Decision {id: $id}) DETACH DELETE d", id=node_id)

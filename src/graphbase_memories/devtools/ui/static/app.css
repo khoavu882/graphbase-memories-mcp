@@ -56,6 +56,7 @@ textarea {
   z-index: 30;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
   min-height: 48px;
   padding: var(--space-3) var(--space-5);
@@ -85,6 +86,11 @@ textarea {
 
 .topbar-spacer {
   flex: 1;
+}
+
+.topbar-field {
+  min-width: min(280px, 100%);
+  max-width: 360px;
 }
 
 .main-shell {
@@ -311,6 +317,22 @@ textarea {
   font-size: var(--text-lg);
 }
 
+.callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-soft);
+}
+
+.callout--warning {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.06));
+}
+
 .toolbar,
 .toolbar-grid {
   display: grid;
@@ -353,6 +375,11 @@ textarea {
   background: var(--bg-elevated);
   color: var(--text-primary);
   transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.input--compact {
+  min-height: 34px;
+  padding-block: 0.45rem;
 }
 
 textarea {
@@ -715,6 +742,10 @@ pre {
   backdrop-filter: blur(10px);
 }
 
+.modal-backdrop--elevated {
+  z-index: 70;
+}
+
 .modal {
   width: min(560px, calc(100vw - 2rem));
   margin: 8vh auto 0;
@@ -843,6 +874,11 @@ pre {
   .grid-3,
   .split-panel {
     grid-template-columns: 1fr;
+  }
+
+  .callout {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

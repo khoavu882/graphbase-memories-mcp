@@ -77,7 +77,18 @@ async def workspace_health(workspace_id: str, driver: DriverDep):
     """Return health metrics for all services in a workspace."""
     try:
         report = await impact_engine.graph_health(workspace_id, driver, settings.neo4j_database)
-        return report.model_dump()
+        async with driver.session(database=settings.neo4j_database) as session:
+            orphan_result = await session.run(
+                """
+                MATCH (e:EntityFact)
+                WHERE NOT EXISTS { MATCH (e)-[:BELONGS_TO]->(:Project) }
+                RETURN count(e) AS orphaned
+                """
+            )
+            orphan_record = await orphan_result.single()
+        payload = report.model_dump()
+        payload["orphaned_entity_count"] = orphan_record["orphaned"] if orphan_record else 0
+        return payload
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
