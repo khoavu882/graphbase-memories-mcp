@@ -372,10 +372,10 @@
                 </template>
 
                 <div class="results-list" x-show="!loading && visibleResults().length > 0">
-                  <template x-for="item in visibleResults()" :key="item.id">
+                  <template x-for="(item, index) in visibleResults()" :key="item.id">
                     <article
                       class="result-card"
-                      :class="$store.inspector.nodeId === item.id && 'result-card--selected'"
+                      :class="[$store.inspector.nodeId === item.id && 'result-card--selected', isSelected(index) && 'result-card--selected']"
                       @click="selectNode(item.id)"
                     >
                       <div class="result-meta">

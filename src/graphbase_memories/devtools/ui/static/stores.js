@@ -147,6 +147,12 @@
     );
   }
 
+  function focusMemorySearch() {
+    window.setTimeout(() => {
+      document.querySelector('input[name="memory-query"]')?.focus();
+    }, 30);
+  }
+
   function initKeyboardShortcuts() {
     if (keyboardInitialised) {
       return;
@@ -169,6 +175,30 @@
           return;
         }
         nav.navigate(view);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        nav.navigate("memory");
+        focusMemorySearch();
+        return;
+      }
+      if (event.key === "/") {
+        event.preventDefault();
+        nav.navigate("memory");
+        focusMemorySearch();
+        return;
+      }
+      if (nav.view === "memory" && ["j", "k", "Enter"].includes(event.key)) {
+        event.preventDefault();
+        document.dispatchEvent(
+          new CustomEvent("devtools:memory-nav", {
+            detail: {
+              action:
+                event.key === "j" ? "next" : event.key === "k" ? "prev" : "open",
+            },
+          })
+        );
         return;
       }
       if (event.key === "Escape") {
@@ -246,6 +276,7 @@
       view: DEFAULT_VIEW,
       subView: null,
       sidebarCollapsed: window.innerWidth < 820,
+      selectedIndex: -1,
       navigate(view, subView = null, options = {}) {
         if (view === "graph") {
           window.location.href = "/ui/graph.html";
@@ -253,12 +284,18 @@
         }
         this.view = view || DEFAULT_VIEW;
         this.subView = subView;
+        if (this.view !== "memory") {
+          this.selectedIndex = -1;
+        }
         if (!options.skipHash) {
           setHash(this.view, this.subView, options.replaceHash);
         }
       },
       toggleSidebar() {
         this.sidebarCollapsed = !this.sidebarCollapsed;
+      },
+      setSelectedIndex(index) {
+        this.selectedIndex = index;
       },
       contextLabel() {
         if (!this.subView) {

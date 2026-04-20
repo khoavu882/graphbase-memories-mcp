@@ -213,6 +213,7 @@
       loading: false,
       error: "",
       _debounceHandle: null,
+      _navHandler: null,
       init() {
         if (this.initialised) {
           return;
@@ -220,9 +221,24 @@
         this.initialised = true;
         this.loadProjects();
         this.search();
+        Alpine.store("nav").selectedIndex = -1;
         ["query", "label", "projectId", "sinceDays", "sortBy", "sortOrder"].forEach((key) => {
           this.$watch(key, () => this.queueSearch());
         });
+        this._navHandler = (event) => {
+          const action = event.detail?.action;
+          if (Alpine.store("nav").view !== "memory") {
+            return;
+          }
+          if (action === "next") {
+            this.moveSelection(1);
+          } else if (action === "prev") {
+            this.moveSelection(-1);
+          } else if (action === "open") {
+            this.openSelected();
+          }
+        };
+        document.addEventListener("devtools:memory-nav", this._navHandler);
       },
       async loadProjects() {
         try {
@@ -233,6 +249,7 @@
       },
       queueSearch() {
         this.page = 1;
+        Alpine.store("nav").selectedIndex = -1;
         window.clearTimeout(this._debounceHandle);
         this._debounceHandle = window.setTimeout(() => this.search(), 500);
       },
@@ -240,6 +257,7 @@
         this.loading = true;
         this.error = "";
         try {
+          const offset = (this.page - 1) * this.pageSize;
           let payload;
           if (this.query.trim()) {
             payload = await ui.fetchJson("/memory/search", {
@@ -250,49 +268,37 @@
                 label: this.label || undefined,
                 project_id: this.projectId || undefined,
                 since_days: this.sinceDays ? Number(this.sinceDays) : undefined,
-                limit: 100,
+                limit: this.pageSize,
+                offset,
+                sort_by: this.sortBy,
+                sort_order: this.sortOrder,
               }),
             });
           } else {
-            const params = new URLSearchParams({ limit: "100" });
+            const params = new URLSearchParams({
+              limit: String(this.pageSize),
+              offset: String(offset),
+              sort_by: this.sortBy,
+              sort_order: this.sortOrder,
+            });
             if (this.label) {
               params.set("label", this.label);
             }
             if (this.projectId) {
               params.set("project_id", this.projectId);
             }
+            if (this.sinceDays) {
+              params.set("since_days", this.sinceDays);
+            }
             payload = await ui.fetchJson(`/memory?${params.toString()}`);
           }
-          const list = normaliseListResponse(payload)
-            .filter((item) => {
-              if (!this.sinceDays) {
-                return true;
-              }
-              const createdAt = new Date(item.created_at);
-              if (Number.isNaN(createdAt.getTime())) {
-                return true;
-              }
-              const threshold = Date.now() - Number(this.sinceDays) * 86400000;
-              return createdAt.getTime() >= threshold;
-            })
-            .sort((left, right) => {
-              const leftValue =
-                this.sortBy === "title"
-                  ? String(left.title || left.entity_name || left.id)
-                  : String(left.created_at || "");
-              const rightValue =
-                this.sortBy === "title"
-                  ? String(right.title || right.entity_name || right.id)
-                  : String(right.created_at || "");
-              return this.sortOrder === "asc"
-                ? leftValue.localeCompare(rightValue)
-                : rightValue.localeCompare(leftValue);
-            });
-          this.results = list;
-          this.totalCount = list.length;
+          this.results = normaliseListResponse(payload);
+          this.totalCount = payload.total || 0;
+          Alpine.store("nav").selectedIndex = this.results.length ? 0 : -1;
         } catch (error) {
           this.results = [];
           this.totalCount = 0;
+          Alpine.store("nav").selectedIndex = -1;
           this.error = error.message || "Failed to load memory";
         } finally {
           this.loading = false;
@@ -302,20 +308,40 @@
         return Math.max(1, Math.ceil(this.totalCount / this.pageSize));
       },
       visibleResults() {
-        const start = (this.page - 1) * this.pageSize;
-        return this.results.slice(start, start + this.pageSize);
+        return this.results;
       },
       hasMore() {
         return this.page < this.pageCount();
       },
       nextPage() {
         this.page = Math.min(this.page + 1, this.pageCount());
+        this.search();
       },
       prevPage() {
         this.page = Math.max(1, this.page - 1);
+        this.search();
       },
       selectNode(nodeId) {
         Alpine.store("inspector").open(nodeId);
+      },
+      moveSelection(delta) {
+        if (!this.results.length) {
+          Alpine.store("nav").selectedIndex = -1;
+          return;
+        }
+        const current = Alpine.store("nav").selectedIndex;
+        const next =
+          current < 0 ? 0 : Math.max(0, Math.min(current + delta, this.results.length - 1));
+        Alpine.store("nav").selectedIndex = next;
+      },
+      openSelected() {
+        const index = Alpine.store("nav").selectedIndex;
+        if (index >= 0 && this.results[index]) {
+          this.selectNode(this.results[index].id);
+        }
+      },
+      isSelected(localIndex) {
+        return Alpine.store("nav").selectedIndex === localIndex;
       },
       preview(item) {
         return (item.content || item.summary || item.fact || "").slice(0, 160) || "No preview";
@@ -334,6 +360,7 @@
       result: null,
       invoking: false,
       awaitingConfirm: false,
+      historyEntries: [],
       openModules: {},
       init() {
         if (this.initialised) {
@@ -381,6 +408,7 @@
         this.params = {};
         this.result = null;
         this.awaitingConfirm = false;
+        this.historyEntries = this.readHistory(tool.name);
       },
       schemaProperties() {
         return getSchemaProperties(this.selected);
@@ -440,13 +468,14 @@
         const history = getToolHistory();
         history[this.selected.name] = [entry, ...(history[this.selected.name] || [])].slice(0, 5);
         saveToolHistory(history);
+        this.historyEntries = history[this.selected.name];
+      },
+      readHistory(toolName) {
+        const history = getToolHistory();
+        return history[toolName] || [];
       },
       invocationHistory() {
-        if (!this.selected) {
-          return [];
-        }
-        const history = getToolHistory();
-        return history[this.selected.name] || [];
+        return this.historyEntries;
       },
       statusClass(tool) {
         return tool.http_invocable ? "badge badge--success" : "badge badge--warning";
