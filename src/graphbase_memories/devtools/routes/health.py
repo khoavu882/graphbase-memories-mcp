@@ -49,10 +49,6 @@ async def graph_stats(driver: DriverDep):
     node_union = "\nUNION ALL\n".join(
         f"MATCH (n:{lbl}) RETURN '{lbl}' AS name, count(n) AS cnt" for lbl in _NODE_LABELS
     )
-    rel_union = "\nUNION ALL\n".join(
-        f"MATCH ()-[r:{rt}]->() RETURN '{rt}' AS name, count(r) AS cnt" for rt in _REL_TYPES
-    )
-
     node_counts: dict[str, int] = {lbl: 0 for lbl in _NODE_LABELS}
     rel_counts: dict[str, int] = {rt: 0 for rt in _REL_TYPES}
 
@@ -61,7 +57,15 @@ async def graph_stats(driver: DriverDep):
         async for rec in node_result:
             node_counts[rec["name"]] = rec["cnt"]
 
-        rel_result = await session.run(rel_union)
+        rel_result = await session.run(
+            """
+            MATCH ()-[r]->()
+            WITH type(r) AS name, count(r) AS cnt
+            WHERE name IN $rel_types
+            RETURN name, cnt
+            """,
+            rel_types=_REL_TYPES,
+        )
         async for rec in rel_result:
             rel_counts[rec["name"]] = rec["cnt"]
 
@@ -81,7 +85,10 @@ async def workspace_health(workspace_id: str, driver: DriverDep):
             orphan_result = await session.run(
                 """
                 MATCH (e:EntityFact)
-                WHERE NOT EXISTS { MATCH (e)-[:BELONGS_TO]->(:Project) }
+                WHERE NOT EXISTS {
+                    MATCH (e)-[rel]->(:Project)
+                    WHERE type(rel) = "BELONGS_TO"
+                }
                 RETURN count(e) AS orphaned
                 """
             )
@@ -130,7 +137,10 @@ async def repair_orphaned_entities(
         count_result = await session.run(
             """
             MATCH (e:EntityFact)
-            WHERE NOT EXISTS { MATCH (e)-[:BELONGS_TO]->(:Project) }
+            WHERE NOT EXISTS {
+                MATCH (e)-[rel]->(:Project)
+                WHERE type(rel) = "BELONGS_TO"
+            }
             RETURN count(e) AS orphaned
             """
         )
@@ -143,7 +153,8 @@ async def repair_orphaned_entities(
         # Find any active project in this workspace to link to
         proj_result = await session.run(
             """
-            MATCH (p:Project)-[:MEMBER_OF]->(w:Workspace {id: $workspace_id})
+            MATCH (p:Project)-[rel]->(w:Workspace {id: $workspace_id})
+            WHERE type(rel) = "MEMBER_OF"
             RETURN p.id AS project_id LIMIT 1
             """,
             workspace_id=workspace_id.lower(),
@@ -161,7 +172,10 @@ async def repair_orphaned_entities(
         repair_result = await session.run(
             """
             MATCH (e:EntityFact)
-            WHERE NOT EXISTS { MATCH (e)-[:BELONGS_TO]->(:Project) }
+            WHERE NOT EXISTS {
+                MATCH (e)-[existing]->(:Project)
+                WHERE type(existing) = "BELONGS_TO"
+            }
             MATCH (p:Project {id: $project_id})
             MERGE (e)-[:BELONGS_TO]->(p)
             RETURN count(e) AS repaired

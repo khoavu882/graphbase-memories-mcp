@@ -40,11 +40,22 @@ async def hygiene_status(driver: DriverDep):
                 }
             )
 
-        pending_result = await session.run(
-            "MATCH (n {save_status: 'pending_retry'}) RETURN count(n) AS cnt"
+        property_result = await session.run(
+            """
+            CALL db.propertyKeys() YIELD propertyKey
+            WHERE propertyKey = "save_status"
+            RETURN count(*) AS exists
+            """
         )
-        pending_record = await pending_result.single()
-        pending_total = pending_record["cnt"] if pending_record else 0
+        property_record = await property_result.single()
+        if property_record and property_record["exists"]:
+            pending_result = await session.run(
+                "MATCH (n) WHERE n.save_status = 'pending_retry' RETURN count(n) AS cnt"
+            )
+            pending_record = await pending_result.single()
+            pending_total = pending_record["cnt"] if pending_record else 0
+        else:
+            pending_total = 0
 
     return {
         "projects": projects,

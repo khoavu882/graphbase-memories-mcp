@@ -124,7 +124,9 @@ async def list_memory(
     response_format = _validate_format(format)
     label_clause = "AND $label IN labels(n)" if label else ""
     project_clause = (
-        "AND EXISTS { MATCH (n)-[:BELONGS_TO]->(:Project {id: $pid}) }" if project_id else ""
+        'AND EXISTS { MATCH (n)-[rel]->(:Project {id: $pid}) WHERE type(rel) = "BELONGS_TO" }'
+        if project_id
+        else ""
     )
     since_clause = (
         "AND n.created_at > datetime() - duration({days: $since_days})"
@@ -285,7 +287,9 @@ async def search_memory(body: MemorySearchRequest, driver: DriverDep):
     _validate_labels(filter_labels)
     label_clause = "AND any(lbl IN labels(n) WHERE lbl IN $filter_labels)" if filter_labels else ""
     project_clause = (
-        "AND EXISTS { MATCH (n)-[:BELONGS_TO]->(:Project {id: $pid}) }" if body.project_id else ""
+        'AND EXISTS { MATCH (n)-[rel]->(:Project {id: $pid}) WHERE type(rel) = "BELONGS_TO" }'
+        if body.project_id
+        else ""
     )
     since_clause = (
         "AND n.created_at > datetime() - duration({days: $since_days})" if body.since_days else ""
