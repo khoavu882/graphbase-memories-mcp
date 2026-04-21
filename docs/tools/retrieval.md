@@ -35,7 +35,9 @@ Load memory with priority merge: **focus > project > global**.
   "retrieval_status": "succeeded",
   "scope_state": "resolved",
   "conflicts_found": false,
-  "hygiene_due": false
+  "hygiene_due": false,
+  "truncated_scopes": [],
+  "next_step": null
 }
 ```
 
@@ -53,7 +55,7 @@ Load memory with priority merge: **focus > project > global**.
 When `focus` is set, the engine queries three scopes in sequence and merges results:
 
 1. `scope=focus` — up to 10 items
-2. `scope=project` — up to 10 items
+2. `scope=project` — up to 20 items
 3. `scope=global` — up to 5 items
 
 Superseded decisions (connected by `[:SUPERSEDES]` from a newer node) are excluded automatically.

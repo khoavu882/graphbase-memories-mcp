@@ -85,7 +85,7 @@ All settings are read from **environment variables** with the `GRAPHBASE_` prefi
 
 ## Connection pool
 
-`GRAPHBASE_NEO4J_MAX_POOL_SIZE` controls the maximum number of concurrent Bolt connections to Neo4j. The default of `10` is appropriate for a single-agent setup. Increase it if multiple agents share one server instance.
+`GRAPHBASE_NEO4J_MAX_POOL_SIZE` controls the maximum number of concurrent Bolt connections to Neo4j for the MCP server process. The default of `10` is appropriate for a single-agent setup. The devtools server uses a separate fixed pool of `2`, so the default combined ceiling is `12` concurrent connections.
 
 `GRAPHBASE_NEO4J_CONNECTION_TIMEOUT` controls how long the driver waits when opening a connection
 to Neo4j. Increase it if your database is remote or often cold-starts.

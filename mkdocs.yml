@@ -74,10 +74,12 @@ nav:
     - Artifacts: tools/artifacts.md
     - Entity: tools/entity.md
     - Governance: tools/governance.md
-    - Analysis: tools/analysis.md
+    - Prompts: tools/analysis.md
     - Hygiene: tools/hygiene.md
     - Federation: tools/federation.md
     - Topology: tools/topology.md
+  - Release Notes:
+    - v2.0.0: releases/v2.0.0.md
   - Concepts:
     - Memory Model: concepts/memory-model.md
     - Scope Resolution: concepts/scope-resolution.md

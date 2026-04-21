@@ -33,26 +33,35 @@ obsolete patterns, entity drift, and unresolved saves. Returns staleness preview
   "outdated_decisions": 1,
   "obsolete_patterns": 0,
   "entity_drift_count": 3,
-  "pending_saves": 0,
+  "unresolved_saves": 0,
   "stale_items": [
     {
-      "id": "uuid-a",
+      "node_id": "uuid-a",
       "label": "Decision",
       "title": "Use SHA-256 for dedup",
-      "staleness_days": 45.2
+      "age_days": 45,
+      "freshness": "stale",
+      "project_id": "my-project"
     }
   ],
   "candidate_ids": {
-    "duplicates": ["uuid-a", "uuid-b"],
+    "duplicate_decisions": ["uuid-a+uuid-b"],
     "outdated_decisions": ["uuid-c"],
-    "entity_drift": ["uuid-d", "uuid-e", "uuid-f"]
+    "obsolete_patterns": [],
+    "entity_drift": ["uuid-d+uuid-e"],
+    "unresolved_saves": []
   },
-  "last_hygiene_at": "2026-04-08T10:00:00Z",
   "checked_at": "2026-04-17T10:00:00Z"
 }
 ```
 
-When `check_pending_only=true`, only `pending_saves` and `pending_only: true` are meaningful.
+When `check_pending_only=true`, the pending-save fields are the important ones:
+
+- `unresolved_saves`
+- `pending_artifact_ids`
+- `oldest_pending_at`
+- `pending_only: true`
+
 All scan fields (`duplicates_found`, `stale_items`, etc.) are zero/empty, and `last_hygiene_at`
 is not updated.
 
@@ -75,7 +84,7 @@ The server tracks `last_hygiene_at` on each Project and GlobalScope node. If it 
 ```python
 # 1. Quick check — are there pending saves?
 run_hygiene(project_id="my-project", check_pending_only=True)
-# Returns: { "pending_saves": 2, "pending_only": true }
+# Returns: { "unresolved_saves": 2, "pending_only": true, "pending_artifact_ids": [...] }
 
 # 2. Full scan when ready — get actionable candidate_ids and stale_items
 run_hygiene(project_id="my-project")

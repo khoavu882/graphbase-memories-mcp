@@ -60,7 +60,7 @@ graphbase --help
 
 ## Step 3 — Connect to your agent
 
-Copy `.mcp.json.example` to `.mcp.json` in your project root and edit it with the absolute path to your virtual environment binary. Restart your agent host — the 21 `graphbase-memories` tools will appear in the tool list.
+Copy `.mcp.json.example` to `.mcp.json` in your project root and edit it with the absolute path to your virtual environment binary. Restart your agent host — the 20 `graphbase-memories` tools will appear in the tool list, with prompts/resources shown in hosts that support them.
 
 See [Connect to Your Agent](connect.md) for full configuration details, including global install and setup for Cursor, Cline, and other MCP hosts.
 

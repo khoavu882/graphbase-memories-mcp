@@ -30,7 +30,7 @@ Edit the file with the absolute path to your installed binary:
 }
 ```
 
-Restart Claude Code. The 21 `graphbase-memories` tools will appear in the tool panel.
+Restart Claude Code. The 20 `graphbase-memories` tools will appear in the tool panel, alongside prompts/resources if your host surfaces them.
 
 !!! tip "Find your binary path"
     ```bash
@@ -117,18 +117,19 @@ Endpoints:
 | `GET /memory/<node-id>` | Fetch a single node by ID |
 | `GET /memory/<node-id>/relationships` | Fetch all graph edges for a node |
 | `POST /memory/search` | Search memory nodes with JSON body: `query`, `project_id`, `label`, `labels`, `limit`, `offset`, `sort_by`, `sort_order`, `since_days` |
-| `PATCH /memory/<node-id>` | Update editable node fields (`title`, `content`, `summary`, `fact`) |
-| `DELETE /memory/<node-id>?confirm=true` | Delete a node after explicit confirmation |
-| `POST /memory/bulk-delete` | Delete multiple nodes with JSON body: `ids`, `confirm` |
+| `PATCH /memory/<node-id>` | Update editable node fields (`title`, `content`, `summary`, `fact`) with `X-Devtools-Token` |
+| `DELETE /memory/<node-id>?confirm=true` | Delete a node after explicit confirmation and valid `X-Devtools-Token` |
+| `POST /memory/bulk-delete` | Delete multiple nodes with JSON body: `ids`, `confirm` and valid `X-Devtools-Token` |
 | `GET /tools` | List all registered MCP tools |
+| `GET /tools/<name>` | Fetch one tool schema with confirmation metadata |
 | `POST /tools/<name>/invoke` | Invoke a tool directly (write tools also require `confirm: true` and `X-Devtools-Token`) |
 | `GET /graph/overview` | Workspace and project graph overview for the UI canvas |
 | `GET /graph/stats` | Node and relationship counts across the graph |
 | `GET /graph/stats/workspace/<workspace_id>` | Workspace health metrics across all services |
 | `GET /graph/conflicts/<workspace_id>` | Cross-service conflict records for a workspace |
-| `POST /graph/repair/orphaned-entities/<workspace_id>` | Repair orphaned `EntityFact` nodes by linking them to a workspace project |
-| `GET /hygiene/status?project_id=<id>` | Current hygiene status for a project |
-| `POST /hygiene/run` | Trigger a hygiene scan and return the `HygieneReport` |
+| `POST /graph/repair/orphaned-entities/<workspace_id>` | Repair orphaned `EntityFact` nodes by linking them to a workspace project (`X-Devtools-Token` required) |
+| `GET /hygiene/status` | Aggregate hygiene status across all known projects |
+| `POST /hygiene/run` | Trigger a hygiene scan and return the `HygieneReport` (`X-Devtools-Token` required) |
 | `GET /events` | SSE stream — emits `heartbeat` every 5 s with Neo4j connectivity |
 
 !!! note "Write tool confirmation"

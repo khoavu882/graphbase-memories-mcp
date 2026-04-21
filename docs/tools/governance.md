@@ -43,7 +43,9 @@ On approval:
 ```json
 {
   "token": "3f2a1b4c-8e9d-...",
-  "expires_at": "2026-04-08T10:01:00Z"
+  "expires_at": "2026-04-08T10:01:00Z",
+  "ttl_seconds": 60,
+  "instructions": "Pass this token as governance_token in save_decision(scope='global')."
 }
 ```
 

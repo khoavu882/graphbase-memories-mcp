@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "graphbase-memories"
-version = "1.0.0"
+version = "2.0.0"
 description = "Graph-backed coding agent memory as an MCP server (stdio)"
 authors = [{ name = "Kai Vu", email = "kai.vu.dev@gmail.com" }]
 readme = "README.md"
