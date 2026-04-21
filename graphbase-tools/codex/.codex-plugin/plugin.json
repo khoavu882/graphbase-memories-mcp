@@ -1,0 +1,27 @@
+{
+  "name": "graphbase-memories",
+  "version": "1.0.0",
+  "description": "Graphbase persistent graph memory workflows, MCP server config, and Codex hooks.",
+  "author": {
+    "name": "Khoa Vu"
+  },
+  "license": "MIT",
+  "keywords": ["codex", "memory", "graphbase", "neo4j", "mcp"],
+  "skills": "./skills/",
+  "hooks": "./hooks.json",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Graphbase Memories",
+    "shortDescription": "Scoped graph memory for Codex.",
+    "longDescription": "Use Graphbase Memories to load scoped project memory, persist sessions, manage entity facts, inspect topology, and surface context through Codex hooks.",
+    "developerName": "Khoa Vu",
+    "category": "Productivity",
+    "capabilities": ["MCP", "Skills", "Hooks"],
+    "defaultPrompt": [
+      "Load graph memory for this project.",
+      "Save this session to Graphbase.",
+      "Check cross-service impact before editing."
+    ],
+    "brandColor": "#2563EB"
+  }
+}
