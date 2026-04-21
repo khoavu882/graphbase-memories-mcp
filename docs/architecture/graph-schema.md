@@ -82,7 +82,7 @@ CREATE FULLTEXT INDEX topology_fulltext IF NOT EXISTS
 
 ## Property indexes
 
-Selected exact-match and operational indexes:
+Exact-match, scheduling, workspace, impact, and topology indexes:
 
 ```cypher
 // Exact hash dedup for Decision (O(1) lookup)
@@ -99,8 +99,59 @@ CREATE INDEX governance_token_expires IF NOT EXISTS
 CREATE INDEX project_hygiene IF NOT EXISTS
   FOR (p:Project) ON (p.last_hygiene_at);
 
+CREATE INDEX session_status IF NOT EXISTS
+  FOR (s:Session) ON (s.status);
+
+CREATE INDEX decision_scope IF NOT EXISTS
+  FOR (d:Decision) ON (d.scope);
+
 CREATE INDEX entity_fact_name_scope IF NOT EXISTS
   FOR (e:EntityFact) ON (e.entity_name, e.scope);
+
+CREATE INDEX project_workspace_status IF NOT EXISTS
+  FOR (p:Project) ON (p.workspace_id, p.status);
+
+CREATE INDEX project_workspace_id IF NOT EXISTS
+  FOR (p:Project) ON (p.workspace_id);
+
+CREATE INDEX project_last_seen IF NOT EXISTS
+  FOR (p:Project) ON (p.last_seen);
+
+CREATE INDEX impact_event_source_entity IF NOT EXISTS
+  FOR (ie:ImpactEvent) ON (ie.source_entity_id);
+
+CREATE INDEX impact_event_created IF NOT EXISTS
+  FOR (ie:ImpactEvent) ON (ie.created_at);
+
+CREATE INDEX service_health_status IF NOT EXISTS
+  FOR (s:Service) ON (s.health_status);
+
+CREATE INDEX service_bounded_context IF NOT EXISTS
+  FOR (s:Service) ON (s.bounded_context);
+
+CREATE INDEX service_workspace_id IF NOT EXISTS
+  FOR (s:Service) ON (s.workspace_id);
+
+CREATE INDEX datasource_type IF NOT EXISTS
+  FOR (ds:DataSource) ON (ds.source_type);
+
+CREATE INDEX datasource_workspace IF NOT EXISTS
+  FOR (ds:DataSource) ON (ds.workspace_id);
+
+CREATE INDEX mq_workspace IF NOT EXISTS
+  FOR (mq:MessageQueue) ON (mq.workspace_id);
+
+CREATE INDEX mq_type IF NOT EXISTS
+  FOR (mq:MessageQueue) ON (mq.queue_type);
+
+CREATE INDEX feature_workspace IF NOT EXISTS
+  FOR (f:Feature) ON (f.workspace_id);
+
+CREATE INDEX bc_workspace IF NOT EXISTS
+  FOR (bc:BoundedContext) ON (bc.workspace_id);
+
+CREATE INDEX bc_domain IF NOT EXISTS
+  FOR (bc:BoundedContext) ON (bc.domain);
 ```
 
 ---
@@ -171,8 +222,40 @@ CREATE INDEX entity_fact_name_scope IF NOT EXISTS
     |---|---|---|
     | `id` | UUID | Primary key |
     | `name` | string | Human-readable name |
+    | `workspace_id` | string? | Workspace membership |
+    | `display_name` | string? | Human-readable service label |
+    | `status` | string? | Federation liveness status |
+    | `last_seen` | datetime? | Last service registration heartbeat |
     | `created_at` | datetime | |
     | `last_hygiene_at` | datetime? | Last hygiene run timestamp |
+
+=== "Workspace"
+    | Property | Type | Description |
+    |---|---|---|
+    | `id` | string | Primary key |
+    | `name` | string | Human-readable name |
+    | `created_at` | datetime | |
+
+=== "ImpactEvent"
+    | Property | Type | Description |
+    |---|---|---|
+    | `id` | string | Primary key |
+    | `source_entity_id` | string | Changed entity |
+    | `source_project_id` | string | Source project/service |
+    | `change_description` | string | Change summary |
+    | `impact_type` | string | Change category |
+    | `risk_level` | string | Overall risk |
+    | `affected_count` | integer | Number of affected services |
+    | `created_at` | datetime | |
+
+=== "Topology Nodes"
+    | Label | Key properties |
+    |---|---|
+    | `Service` | Dual-label `:Project:Service`; `workspace_id`, `service_type`, `bounded_context`, `owner_team`, `health_status`, `env`, `version`, `sla`, `docs_url`, `tags`, `updated_at` |
+    | `DataSource` | `id`, `source_type`, `host`, `workspace_id`, `owner_team`, `health_status`, `version`, `tags`, `created_at`, `updated_at` |
+    | `MessageQueue` | `id`, `queue_type`, `topic_or_exchange`, `workspace_id`, `owner_team`, `schema_version`, `tags`, `created_at`, `updated_at` |
+    | `Feature` | `id`, `name`, `workspace_id`, `workflow_order`, `owner_team`, `tags`, `created_at`, `updated_at` |
+    | `BoundedContext` | `id`, `name`, `domain`, `workspace_id`, `tags`, `created_at`, `updated_at` |
 
 === "GovernanceToken"
     | Property | Type | Description |

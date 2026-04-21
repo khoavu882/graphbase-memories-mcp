@@ -10,7 +10,7 @@ and tool dispatch, a business logic layer with specialized engines, and a graph 
 ```mermaid
 graph TD
     A["AI Agent<br/>(Claude / Codex / Gemini)"]
-    B["MCP Server Layer<br/>FastMCP · 20 async tools · 4 prompts · 4 resources<br/>stdio JSON-RPC 2.0<br/>────────────────<br/>HTTP Devtools (optional)<br/>FastAPI · uvicorn · inspection + invoke"]
+    B["MCP Server Layer<br/>FastMCP · 20 async tools · 4 prompts<br/>2 resources · 2 resource templates<br/>stdio JSON-RPC 2.0<br/>────────────────<br/>HTTP Devtools (optional)<br/>FastAPI · uvicorn · inspection + invoke"]
     C["ScopeEngine<br/>resolved / uncertain / unresolved"]
     D["RetrievalEngine + SurfaceEngine<br/>focus → project → global priority<br/>BM25 + RRF · 5s timeout · 1 retry"]
     E["WriteEngine + Dedup + Governance<br/>SHA-256 · Jaccard · GovernanceToken<br/>1 retry on ServiceUnavailable"]
@@ -47,7 +47,7 @@ thrown to the caller (see FR-48: business output before write status).
 Prompt calls and resource reads use the same FastMCP server surface but do not mutate graph state:
 
 - **Prompts** return guided message sequences (`analysis_routing`, `memory_review`, `impact_before_edit`, `federated_sync`)
-- **Resources** return YAML snapshots (`graphbase://schema`, `graphbase://services`, `graphbase://health/{workspace_id}`, `graphbase://session/{session_id}`)
+- **Resources** return YAML snapshots (`graphbase://schema`, `graphbase://services`); **resource templates** cover `graphbase://health/{workspace_id}` and `graphbase://session/{session_id}`
 
 ---
 
@@ -73,7 +73,7 @@ src/graphbase_memories/
 │   └── schemas/          Pydantic I/O models (artifacts, results, enums, topology, errors)
 ├── engines/              Business logic (scope, retrieval, surface, write, dedup, hygiene, federation, impact, topology_write)
 ├── graph/
-│   ├── driver.py         AsyncGraphDatabase singleton + lifespan context manager
+│   ├── driver.py         AsyncGraphDatabase setup + lifespan context manager
 │   ├── models.py         Node/relationship Python dataclasses
 │   ├── queries/          Cypher files (schema, retrieval, write, dedup, hygiene, federation, impact, topology, surface)
 │   └── repositories/     Repositories for sessions, artifacts, topology, federation, search, hygiene, tokens, and workspaces

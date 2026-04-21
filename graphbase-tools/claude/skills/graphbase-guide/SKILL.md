@@ -1,7 +1,7 @@
 ---
 name: graphbase-guide
-description: Quick reference for all 21 graphbase MCP tools, 4 prompts, and 3 resources. Use when you need to know which tool to call, what parameters it accepts, or what the server exposes.
-version: 2.0.0
+description: Quick reference for all 20 graphbase MCP tools, 4 prompts, 2 resources, and 2 resource templates. Use when you need to know which tool to call, what parameters it accepts, or what the server exposes.
+version: 2.1.0
 tools:
   - retrieve_context
   - memory_surface
@@ -11,7 +11,6 @@ tools:
   - save_context
   - store_session_with_learnings
   - run_hygiene
-  - route_analysis
   - propagate_impact
   - graph_health
   - register_service
@@ -26,7 +25,7 @@ tools:
   - link_cross_service
 ---
 
-# graphbase — Quick Reference (21 Tools)
+# graphbase — Quick Reference (20 Tools)
 
 ## Memory Lifecycle
 
@@ -36,7 +35,7 @@ tools:
 
 ### While working
 - `memory_surface(query)` — surface relevant memories for a symbol or topic
-- `upsert_entity_with_deps(entity_name, fact, project_id)` — update an entity
+- `upsert_entity_with_deps(entity={...}, project_id="<project>")` — update an entity fact
 
 ### On save / session end
 - `store_session_with_learnings(session={...}, project_id, decisions=[], patterns=[])` — checkpoint
@@ -54,7 +53,7 @@ tools:
 ### Write (4)
 | Tool | When to use |
 |------|-------------|
-| `upsert_entity_with_deps` | Create/update EntityFact + link decisions/patterns |
+| `upsert_entity_with_deps` | Create/update EntityFact + optional typed links to existing EntityFact nodes |
 | `save_decision` | Persist an architectural decision |
 | `save_pattern` | Persist a recurring implementation pattern |
 | `save_context` | Persist a context note (topic + content) |
@@ -69,10 +68,9 @@ tools:
 |------|-------------|
 | `run_hygiene` | Full scan: duplicates, outdated decisions, drift, freshness, pending saves; use `check_pending_only=True` for fast pending check |
 
-### Analysis (3)
+### Analysis and Impact (2 tools + prompts)
 | Tool | When to use |
 |------|-------------|
-| `route_analysis` | Route: should you retrieve, write, or run hygiene? |
 | `propagate_impact` | Blast-radius from a changed entity |
 | `graph_health` | Workspace-level health; returns `conflict_records` inline (replaces detect_conflicts) |
 
@@ -94,13 +92,13 @@ tools:
 ### Cross-Service (2)
 | Tool | When to use |
 |------|-------------|
-| `search_cross_service` | Find patterns shared across workspace services |
+| `search_cross_service` | Find entity facts and decisions across workspace services |
 | `link_cross_service` | Create a cross-service relationship (federated link) |
 
 ### Governance (1)
 | Tool | When to use |
 |------|-------------|
-| `request_global_write_approval` | Get governance token for global-scope writes |
+| `request_global_write_approval` | Get governance token for global decisions or guarded batch topology writes |
 
 ---
 
@@ -115,10 +113,14 @@ tools:
 
 ---
 
-## MCP Resources (3)
+## MCP Resources
 
 - `graphbase://schema` — live Pydantic schema for all tools and result types
 - `graphbase://services` — list of registered services in the current workspace
+
+## MCP Resource Templates
+
+- `graphbase://health/{workspace_id}` — workspace health snapshot
 - `graphbase://session/{session_id}` — retrieve a saved session
 
 ---
@@ -136,4 +138,4 @@ tools:
 | `register_datasource` / `register_message_queue` / `register_feature` / `register_bounded_context` | `batch_upsert_shared_infrastructure` |
 | `check_governance_policy` | Removed — call `request_global_write_approval` directly |
 | `list_services` | `list_active_services` |
-| `analyze_memory_needs` | `route_analysis` |
+| `analyze_memory_needs` / `route_analysis` | `analysis_routing` prompt |

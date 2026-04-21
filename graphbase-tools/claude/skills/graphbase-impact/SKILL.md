@@ -1,7 +1,7 @@
 ---
 name: graphbase-impact
 description: Use when analyzing the blast radius of a code change, before editing a shared entity, or when evaluating cross-service risk. Surfaces affected services and risk levels.
-version: 2.0.0
+version: 2.1.0
 tools:
   - propagate_impact
   - graph_health
@@ -24,18 +24,18 @@ tools:
    → note the node_id of the entity you are changing
 
 2. propagate_impact(
-     source_entity_id="<entity id from step 1>",
+     entity_id="<entity id from step 1>",
      change_description="<what is changing>",
-     impact_type="breaking_change"   # or "deprecation", "behavior_change"
+     impact_type="breaking"   # or "deprecation", "behavior_change"
    )
    → ImpactReport {
        affected_services: [{ project_id, depth, risk_level, entity_count }],
-       overall_risk: "low" | "medium" | "high",
+       overall_risk: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
        impact_event_id,
        next_step
      }
 
-3. If overall_risk == "high":
+3. If overall_risk is "HIGH" or "CRITICAL":
    → review affected_services list
    → notify those teams before merging
 ```
@@ -69,6 +69,7 @@ avoid false merges.
 
 | Level | Meaning | Action |
 |-------|---------|--------|
-| `low` | Only this service affected | Proceed with awareness |
-| `medium` | 2–4 services affected | Notify affected teams |
-| `high` | 5+ services or deep graph | Coordinate before merging |
+| `LOW` | Low-depth or contained impact | Proceed with awareness |
+| `MEDIUM` | Depth-2 impact | Notify affected teams |
+| `HIGH` | Direct dependency impact | Coordinate before merging |
+| `CRITICAL` | Contradicting cross-service link involved | Resolve conflict before merging |

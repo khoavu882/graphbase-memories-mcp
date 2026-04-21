@@ -5,7 +5,8 @@
 In addition to the tool surface, the server also registers:
 
 - **4 prompts**: `analysis_routing`, `memory_review`, `impact_before_edit`, `federated_sync`
-- **4 resources**: `graphbase://schema`, `graphbase://services`, `graphbase://health/{workspace_id}`, `graphbase://session/{session_id}`
+- **2 resources**: `graphbase://schema`, `graphbase://services`
+- **2 resource templates**: `graphbase://health/{workspace_id}`, `graphbase://session/{session_id}`
 
 ---
 
@@ -19,7 +20,7 @@ In addition to the tool surface, the server also registers:
     | [Session](session.md) | `store_session_with_learnings` | Persist session summaries |
     | [Artifacts](artifacts.md) | `save_decision`, `save_pattern`, `save_context` | Save structured knowledge |
     | [Entity](entity.md) | `upsert_entity_with_deps` | Named entity graph nodes |
-    | [Governance](governance.md) | `request_global_write_approval` | Gate global-scope writes |
+    | [Governance](governance.md) | `request_global_write_approval` | Issue one-time governance tokens |
     | [Hygiene](hygiene.md) | `run_hygiene` | Memory maintenance, health, and staleness tracking |
     | [Federation](federation.md) | `register_federated_service`, `list_active_services`, `search_cross_service`, `link_cross_service`, `propagate_impact`, `graph_health` | Multi-service workspace coordination |
     | [Topology](topology.md) | `register_service`, `link_topology_nodes`, `batch_upsert_shared_infrastructure`, `get_service_dependencies`, `get_feature_workflow` | Service dependency and infrastructure graph |
@@ -91,7 +92,7 @@ Tools never throw raw exceptions to the caller. Error states are encoded as retu
 
 - `SaveResult.status` — `saved` / `failed` / `blocked_scope` / `pending_retry` / `duplicate_skip`
 - `ContextBundle.retrieval_status` — `succeeded` / `empty` / `timed_out` / `failed` / `conflicted`
-- `MCPError` — used by `request_global_write_approval` and selected tool flows that need a structured error envelope
+- `MCPError` — used by selected tool flows that need a structured error envelope, such as blocked entity writes and missing impact-analysis entities
 - Governance failures surface as structured failure results rather than crashing the caller
 
 This means the agent always receives a parseable response and can decide what to do next.

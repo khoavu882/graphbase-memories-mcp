@@ -43,6 +43,11 @@ Upsert a named entity fact and optionally link it to related entities. Uses MERG
 | `CONFLICTS_WITH` | This entity conflicts with another entity |
 | `PRODUCED` | This entity was produced by another entity |
 | `MERGES_INTO` | This entity should be merged into a canonical node (hygiene) |
+| `PRODUCES` | Legacy entity-topology producer edge |
+| `CONSUMES` | Legacy entity-topology consumer edge |
+| `READS` | Legacy entity-topology read edge |
+| `WRITES` | Legacy entity-topology write edge |
+| `INVOLVES` | Legacy entity-topology feature/service edge |
 
 ```python
 # First upsert the entities you want to link

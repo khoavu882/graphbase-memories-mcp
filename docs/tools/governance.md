@@ -1,12 +1,12 @@
 # Governance Tool
 
-One tool for obtaining write permission for global-scope memory.
+One tool for obtaining write permission for global-scope decisions.
 
 ---
 
 ## Why global writes require approval
 
-The `global` scope holds **cross-project reusable knowledge** — patterns, decisions, and context that will be surfaced to every project that uses this server. A mistaken global write could pollute memory for all agents. The governance gate requires an explicit approval token to prevent accidental global writes.
+The `global` scope holds cross-project reusable knowledge that can be surfaced to every project that uses this server. In the current tool surface, the governance gate is enforced for global-scope decisions, including decisions saved through `store_session_with_learnings`.
 
 ```mermaid
 sequenceDiagram
@@ -29,7 +29,7 @@ sequenceDiagram
 
 ## `request_global_write_approval`
 
-Obtain a one-time token required for any `scope="global"` write operation. The token is stored as a `GovernanceToken` node in Neo4j (durable across server restarts) and expires after `GRAPHBASE_GOVERNANCE_TOKEN_TTL_S` seconds (default: 60).
+Obtain a one-time token required for global-scope decision writes. The token is stored as a `GovernanceToken` node in Neo4j (durable across server restarts) and expires after `GRAPHBASE_GOVERNANCE_TOKEN_TTL_S` seconds (default: 60).
 
 ### Parameters
 
@@ -49,33 +49,29 @@ On approval:
 }
 ```
 
-On block (e.g. server configured to deny all global writes):
-```json
-{
-  "blocked": true,
-  "reason": "Global write approval not permitted in this configuration"
-}
-```
+If Neo4j is unavailable, the tool returns an `MCPError` with `code: "INTERNAL_ERROR"`.
 
 ---
 
 ## Using the token
 
-Pass the token as `governance_token` to any artifact tool with `scope="global"`:
+Pass the token as `governance_token` to `save_decision` when `decision.scope="global"`, or to `store_session_with_learnings` when any batched decision is global-scoped:
 
 ```python
 # Step 1: get a token
 approval = request_global_write_approval(
-    content_preview="Save session-start pattern as global best practice"
+    content_preview="Save global decision: load scoped graph memory before planning"
 )
 
 # Step 2: use it within the TTL window
-save_pattern(
-    pattern={
-        "trigger": "When starting any new coding session",
-        "repeatable_steps": ["Call retrieve_context(project_id, scope='project')", "Review decisions and patterns"],
+save_decision(
+    decision={
+        "title": "Load scoped graph memory before planning",
+        "rationale": "Shared context reduces repeated investigation across projects.",
+        "owner": "platform",
+        "date": "2026-04-21",
         "scope": "global",
-        "last_validated_at": "2026-04-08T10:00:00Z"
+        "confidence": 1.0
     },
     project_id="my-project",
     governance_token=approval["token"]
@@ -84,7 +80,7 @@ save_pattern(
 
 !!! warning "Single use, short TTL"
     Each token is valid for **one write only** and expires after 60 seconds by default.
-    If you need to write multiple global artifacts, request a new token for each one.
+    If you need to write multiple global decisions, request a new token for each one.
 
 ---
 
