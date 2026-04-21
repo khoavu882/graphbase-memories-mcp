@@ -32,8 +32,8 @@
       <p>Memory, topology, and tool operations</p>
     </div>
     <div class="topbar-spacer"></div>
-    <span :class="$store.neo4j.badgeClass()" x-text="$store.neo4j.statusLabel()"></span>
-    <span class="muted" x-text="`${$store.neo4j.toolCount} tools`"></span>
+    <span class="topbar-status-badge" :class="$store.neo4j.badgeClass()" x-text="$store.neo4j.statusLabel()"></span>
+    <span class="muted topbar-tool-count" x-text="`${$store.neo4j.toolCount} tools`"></span>
     <label class="field topbar-field">
       <span class="field-label">Write Token</span>
       <input
@@ -57,7 +57,12 @@
   </div>
 
   <div class="app-shell">
-    <aside class="sidebar" :class="$store.nav.sidebarCollapsed && 'sidebar--collapsed'">
+    <aside
+      class="sidebar"
+      :class="{ 'sidebar--collapsed': $store.nav.isSidebarOverlay && $store.nav.sidebarCollapsed }"
+      :inert="$store.nav.isSidebarOverlay && $store.nav.sidebarCollapsed"
+      :aria-hidden="$store.nav.isSidebarOverlay && $store.nav.sidebarCollapsed"
+    >
       <div class="sidebar-brand">
         <span class="icon" x-html="window.DevtoolsUI.icon('database')"></span>
       </div>
@@ -104,6 +109,15 @@
         </button>
       </nav>
     </aside>
+    <button
+      type="button"
+      class="sidebar-backdrop"
+      :class="$store.nav.isSidebarOverlay && !$store.nav.sidebarCollapsed && 'sidebar-backdrop--open'"
+      @click="$store.nav.toggleSidebar()"
+      aria-label="Close sidebar"
+      :aria-hidden="!($store.nav.isSidebarOverlay && !$store.nav.sidebarCollapsed)"
+      tabindex="-1"
+    ></button>
 
     <div class="main-shell">
       <main class="view-frame">
@@ -115,7 +129,7 @@
             </div>
             <div class="context-actions muted">
               <span x-text="$store.neo4j.uri"></span>
-              <span x-show="$store.neo4j.lastHeartbeat" x-text="`Heartbeat ${$store.neo4j.lastHeartbeat ? 'active' : 'pending'}`"></span>
+              <span class="context-heartbeat" x-text="`Heartbeat ${$store.neo4j.lastHeartbeat ? 'active' : 'pending'}`"></span>
             </div>
           </header>
 

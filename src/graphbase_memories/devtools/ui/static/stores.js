@@ -2,6 +2,7 @@
   const THEME_KEY = "graphbase-theme";
   const AUTH_TOKEN_KEY = "gb-devtools-token";
   const DEFAULT_VIEW = "projects";
+  const SIDEBAR_OVERLAY_BREAKPOINT = 720;
   const VIEW_LABELS = {
     projects: "Projects",
     memory: "Memory",
@@ -55,6 +56,7 @@
   let routerInitialised = false;
   let keyboardInitialised = false;
   let heartbeatSource = null;
+  let sidebarViewportInitialised = false;
 
   function parseHash(rawHash = window.location.hash) {
     const raw = rawHash.replace(/^#/, "").replace(/^\/+|\/+$/g, "");
@@ -108,6 +110,10 @@
       params.delete("embedded");
     }
     return params.toString() ? `/ui/graph.html?${params.toString()}` : "/ui/graph.html";
+  }
+
+  function isSidebarOverlayViewport() {
+    return window.innerWidth <= SIDEBAR_OVERLAY_BREAKPOINT;
   }
 
   function graphContextLabel(subView) {
@@ -314,6 +320,17 @@
     applyRoute();
   }
 
+  function initSidebarViewport() {
+    if (sidebarViewportInitialised) {
+      return;
+    }
+    sidebarViewportInitialised = true;
+    window.addEventListener("resize", () => {
+      const nav = window.Alpine?.store("nav");
+      nav?.syncSidebarViewport();
+    }, { passive: true });
+  }
+
   function statusMeta(status) {
     return {
       ok: { label: "Connected", badge: "badge badge--success" },
@@ -353,14 +370,20 @@
   };
 
   document.addEventListener("alpine:init", () => {
+    const initialRoute = parseHash();
+
     Alpine.store("nav", {
-      view: DEFAULT_VIEW,
-      subView: null,
-      sidebarCollapsed: window.innerWidth < 820,
+      view: initialRoute.view,
+      subView: initialRoute.subView,
+      isSidebarOverlay: isSidebarOverlayViewport(),
+      sidebarCollapsed: isSidebarOverlayViewport(),
       selectedIndex: -1,
       navigate(view, subView = null, options = {}) {
         this.view = view || DEFAULT_VIEW;
         this.subView = subView;
+        if (this.isSidebarOverlay) {
+          this.sidebarCollapsed = true;
+        }
         if (this.view !== "memory") {
           this.selectedIndex = -1;
           const inspector = window.Alpine?.store("inspector");
@@ -374,6 +397,14 @@
       },
       toggleSidebar() {
         this.sidebarCollapsed = !this.sidebarCollapsed;
+      },
+      syncSidebarViewport() {
+        const nextOverlayMode = isSidebarOverlayViewport();
+        if (this.isSidebarOverlay === nextOverlayMode) {
+          return;
+        }
+        this.isSidebarOverlay = nextOverlayMode;
+        this.sidebarCollapsed = nextOverlayMode;
       },
       setSelectedIndex(index) {
         this.selectedIndex = index;
@@ -656,5 +687,6 @@
 
     initRouter();
     initKeyboardShortcuts();
+    initSidebarViewport();
   });
 })();
