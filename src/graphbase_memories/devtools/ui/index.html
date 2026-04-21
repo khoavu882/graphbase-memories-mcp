@@ -9,6 +9,8 @@
   >
   <title>Graphbase DevTools</title>
   <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="static/tokens.css">
   <link rel="stylesheet" href="static/app.css">
   <script defer src="static/alpine-focus.min.js"></script>
@@ -32,32 +34,41 @@
       <p>Memory, topology, and tool operations</p>
     </div>
     <div class="topbar-spacer"></div>
-    <span :class="$store.neo4j.badgeClass()" x-text="$store.neo4j.statusLabel()"></span>
-    <span class="muted" x-text="`${$store.neo4j.toolCount} tools`"></span>
-    <label class="field topbar-field">
-      <span class="field-label">Write Token</span>
-      <input
-        class="input input--compact mono"
-        name="devtools-token"
-        placeholder="Paste startup token"
-        :value="$store.auth.token"
-        @input="$store.auth.setToken($event.target.value)"
-      >
-    </label>
-    <button class="btn btn--ghost btn--sm" x-show="$store.auth.token" @click="$store.auth.clear()">
-      Clear Token
-    </button>
-    <button class="btn btn--ghost btn--sm" @click="toggleTheme()">
-      <span class="icon" x-html="window.DevtoolsUI.icon(window.DevtoolsUI.getTheme() === 'dark' ? 'sun' : 'moon')"></span>
-      <span x-text="window.DevtoolsUI.getTheme() === 'dark' ? 'Light' : 'Dark'"></span>
-    </button>
-    <button class="btn btn--ghost btn--sm btn--icon" aria-label="Help" @click="helpOpen = !helpOpen">
-      <span class="icon" x-html="window.DevtoolsUI.icon('help')"></span>
-    </button>
+    <div class="topbar-actions" aria-label="Devtools session controls">
+      <div class="topbar-connection" aria-label="Neo4j connection status">
+        <span class="topbar-status-badge" :class="$store.neo4j.badgeClass()" x-text="$store.neo4j.statusLabel()"></span>
+        <span class="muted topbar-tool-count" x-text="`${$store.neo4j.toolCount} tools`"></span>
+      </div>
+      <label class="topbar-token">
+        <span class="topbar-token-label">Write Token</span>
+        <input
+          class="topbar-token-input mono"
+          name="devtools-token"
+          placeholder="Paste startup token"
+          :value="$store.auth.token"
+          @input="$store.auth.setToken($event.target.value)"
+        >
+      </label>
+      <button class="btn btn--ghost btn--sm topbar-clear" x-show="$store.auth.token" @click="$store.auth.clear()">
+        Clear
+      </button>
+      <button class="btn btn--ghost btn--sm topbar-theme" @click="toggleTheme()">
+        <span class="icon" x-html="window.DevtoolsUI.icon(window.DevtoolsUI.getTheme() === 'dark' ? 'sun' : 'moon')"></span>
+        <span x-text="window.DevtoolsUI.getTheme() === 'dark' ? 'Light' : 'Dark'"></span>
+      </button>
+      <button class="btn btn--ghost btn--sm btn--icon topbar-help" aria-label="Help" @click="helpOpen = !helpOpen">
+        <span class="icon" x-html="window.DevtoolsUI.icon('help')"></span>
+      </button>
+    </div>
   </div>
 
-  <div class="app-shell">
-    <aside class="sidebar" :class="$store.nav.sidebarCollapsed && 'sidebar--collapsed'">
+  <div class="app-shell" :class="{ 'app-shell--compact': !$store.nav.isSidebarOverlay && $store.nav.sidebarCollapsed }">
+    <aside
+      class="sidebar"
+      :class="{ 'sidebar--collapsed': $store.nav.sidebarCollapsed }"
+      :inert="$store.nav.sidebarCollapsed"
+      :aria-hidden="$store.nav.sidebarCollapsed ? 'true' : 'false'"
+    >
       <div class="sidebar-brand">
         <span class="icon" x-html="window.DevtoolsUI.icon('database')"></span>
       </div>
@@ -66,44 +77,58 @@
           class="sidebar-item"
           :class="$store.nav.view === 'projects' && 'sidebar-item--active'"
           @click="$store.nav.navigate('projects')"
+          aria-label="Projects"
         >
           <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('folder')"></span>
-          <span class="sidebar-label">Projects</span>
+          <span class="sidebar-label" aria-hidden="true">Projects</span>
         </button>
         <button
           class="sidebar-item"
           :class="$store.nav.view === 'memory' && 'sidebar-item--active'"
           @click="$store.nav.navigate('memory')"
+          aria-label="Memory"
         >
           <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('search')"></span>
-          <span class="sidebar-label">Memory</span>
+          <span class="sidebar-label" aria-hidden="true">Memory</span>
         </button>
         <button
           class="sidebar-item"
           :class="$store.nav.view === 'graph' && 'sidebar-item--active'"
           @click="$store.nav.navigate('graph')"
+          aria-label="Graph"
         >
           <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('share-2')"></span>
-          <span class="sidebar-label">Graph</span>
+          <span class="sidebar-label" aria-hidden="true">Graph</span>
         </button>
         <button
           class="sidebar-item"
           :class="$store.nav.view === 'tools' && 'sidebar-item--active'"
           @click="$store.nav.navigate('tools')"
+          aria-label="Tools"
         >
           <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('wrench')"></span>
-          <span class="sidebar-label">Tools</span>
+          <span class="sidebar-label" aria-hidden="true">Tools</span>
         </button>
         <button
           class="sidebar-item"
           :class="$store.nav.view === 'operations' && 'sidebar-item--active'"
           @click="$store.nav.navigate('operations')"
+          aria-label="Operations"
         >
           <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('activity')"></span>
-          <span class="sidebar-label">Operations</span>
+          <span class="sidebar-label" aria-hidden="true">Operations</span>
         </button>
       </nav>
     </aside>
+    <button
+      type="button"
+      class="sidebar-backdrop"
+      :class="$store.nav.isSidebarOverlay && !$store.nav.sidebarCollapsed && 'sidebar-backdrop--open'"
+      @click="$store.nav.toggleSidebar()"
+      aria-label="Close sidebar"
+      :aria-hidden="!($store.nav.isSidebarOverlay && !$store.nav.sidebarCollapsed)"
+      tabindex="-1"
+    ></button>
 
     <div class="main-shell">
       <main class="view-frame">
@@ -115,7 +140,7 @@
             </div>
             <div class="context-actions muted">
               <span x-text="$store.neo4j.uri"></span>
-              <span x-show="$store.neo4j.lastHeartbeat" x-text="`Heartbeat ${$store.neo4j.lastHeartbeat ? 'active' : 'pending'}`"></span>
+              <span class="context-heartbeat" x-text="`Heartbeat ${$store.neo4j.lastHeartbeat ? 'active' : 'pending'}`"></span>
             </div>
           </header>
 
