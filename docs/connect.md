@@ -30,7 +30,7 @@ Edit the file with the absolute path to your installed binary:
 }
 ```
 
-Restart Claude Code. The 21 `graphbase-memories` tools will appear in the tool panel.
+Restart Claude Code. The 20 `graphbase-memories` tools will appear in the tool panel, alongside prompts/resources if your host surfaces them.
 
 !!! tip "Find your binary path"
     ```bash
@@ -90,8 +90,10 @@ Expected response:
 }
 ```
 
-`empty` with `scope_state: "uncertain"` means the server is reachable and no project node exists yet — that is correct and expected on the first call.
-See [Scope Resolution](concepts/scope-resolution.md) for how to create a project and move to `resolved`.
+`empty` with `scope_state: "uncertain"` means the server is reachable and no matching `Project`
+node exists yet. That is correct and expected on the first call. See
+[Scope Resolution](concepts/scope-resolution.md) for how to move from `uncertain` to `resolved`
+before attempting writes.
 
 ---
 
@@ -101,29 +103,44 @@ For human inspection of memory (not agent use), start the HTTP server:
 
 ```bash
 graphbase devtools --port 8765
+# Console prints: DevTools write token: <token>
 ```
+
+Open `http://localhost:8765` to load the Alpine.js dashboard at `/ui`. The main UI includes sidebar views for Projects, Memory, Tools, and Operations, plus a separate graph canvas at `/ui/graph.html`.
 
 Endpoints:
 
 | Endpoint | Description |
 |---|---|
-| `GET /health` | Liveness check and Neo4j connectivity status |
 | `GET /projects` | List all registered projects with staleness and node counts |
-| `GET /memory?project_id=<id>` | List all memory nodes for a project |
+| `GET /memory?project_id=<id>&label=<label>&limit=20&offset=0&sort_by=created_at&sort_order=desc&since_days=<n>&format=list|timeline` | List memory nodes with server-side pagination, filtering, sorting, or grouped timeline buckets |
 | `GET /memory/<node-id>` | Fetch a single node by ID |
 | `GET /memory/<node-id>/relationships` | Fetch all graph edges for a node |
-| `GET /memory/search?q=<query>&project_id=<id>` | Full-text keyword search across memory nodes |
+| `POST /memory/search` | Search memory nodes with JSON body: `query`, `project_id`, `label`, `labels`, `limit`, `offset`, `sort_by`, `sort_order`, `since_days` |
+| `PATCH /memory/<node-id>` | Update editable node fields (`title`, `content`, `summary`, `fact`) with `X-Devtools-Token` |
+| `DELETE /memory/<node-id>?confirm=true` | Delete a node after explicit confirmation and valid `X-Devtools-Token` |
+| `POST /memory/bulk-delete` | Delete multiple nodes with JSON body: `ids`, `confirm` and valid `X-Devtools-Token` |
 | `GET /tools` | List all registered MCP tools |
-| `POST /tools/<name>/invoke` | Invoke a tool directly (add `confirm: true` for write tools) |
-| `GET /workspace/health?workspace_id=<id>` | Workspace health metrics across all services |
-| `GET /workspace/conflicts?workspace_id=<id>` | List cross-service CONTRADICTS links |
-| `GET /hygiene/status?project_id=<id>` | Current hygiene status for a project |
-| `POST /hygiene/run` | Trigger a hygiene scan and return the `HygieneReport` |
+| `GET /tools/<name>` | Fetch one tool schema with confirmation metadata |
+| `POST /tools/<name>/invoke` | Invoke a tool directly (write tools also require `confirm: true` and `X-Devtools-Token`) |
+| `GET /graph/overview` | Workspace and project graph overview for the UI canvas |
+| `GET /graph/stats` | Node and relationship counts across the graph |
+| `GET /graph/stats/workspace/<workspace_id>` | Workspace health metrics across all services |
+| `GET /graph/conflicts/<workspace_id>` | Cross-service conflict records for a workspace |
+| `POST /graph/repair/orphaned-entities/<workspace_id>` | Repair orphaned `EntityFact` nodes by linking them to a workspace project (`X-Devtools-Token` required) |
+| `GET /hygiene/status` | Aggregate hygiene status across all known projects |
+| `POST /hygiene/run` | Trigger a hygiene scan and return the `HygieneReport` (`X-Devtools-Token` required) |
 | `GET /events` | SSE stream — emits `heartbeat` every 5 s with Neo4j connectivity |
 
 !!! note "Write tool confirmation"
     Tools that mutate graph state (`propagate_impact`, `link_cross_service`,
     `register_federated_service`) require `{ "confirm": true }` in the POST body. Without it, the
     response is `{ "status": "preview", ... }` — a dry-run showing what would change.
+
+!!! note "Devtools write token"
+    Destructive or write-capable devtools routes require the startup-generated write token in the
+    `X-Devtools-Token` header. This includes memory CRUD, bulk delete, orphan repair, and
+    write-capable `/tools/<name>/invoke` calls. The browser UI exposes the same value in the
+    header `Write Token` field and stores it locally as `gb-devtools-token`.
 
 See [Development Guide](development.md) for full architecture notes on the devtools server.

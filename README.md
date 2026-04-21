@@ -2,7 +2,7 @@
 
 Graph-backed persistent memory for AI coding agents, exposed as an MCP server (stdio transport).
 
-Agents call structured tools to read and write scoped memory into a **Neo4j** graph database. Memory is organized into three scopes — `global`, `project`, and `focus` — and five artifact types: sessions, decisions, patterns, context snippets, and entity facts.
+Agents call **20 MCP tools**, plus **4 prompts** and **4 read-only resources**, to read and write scoped memory into a **Neo4j** graph database. Memory is organized into three scopes — `global`, `project`, and `focus` — and five artifact types: sessions, decisions, patterns, context snippets, and entity facts.
 
 ---
 
@@ -58,6 +58,7 @@ All settings are read from environment variables with the `GRAPHBASE_` prefix.
 | `GRAPHBASE_NEO4J_PASSWORD` | `graphbase` | Neo4j password |
 | `GRAPHBASE_NEO4J_DATABASE` | `neo4j` | Neo4j database name |
 | `GRAPHBASE_NEO4J_MAX_POOL_SIZE` | `10` | Connection pool size |
+| `GRAPHBASE_NEO4J_CONNECTION_TIMEOUT` | `5.0` | Connection timeout when opening a Neo4j session |
 | `GRAPHBASE_RETRIEVAL_TIMEOUT_S` | `5.0` | Per-attempt retrieval timeout (seconds) |
 | `GRAPHBASE_RETRIEVAL_MAX_RETRIES` | `1` | Max retries on timeout/transient error |
 | `GRAPHBASE_RETRIEVAL_FOCUS_LIMIT` | `10` | Max focus-scope results per retrieval |
@@ -75,7 +76,7 @@ All settings are read from environment variables with the `GRAPHBASE_` prefix.
 | `GRAPHBASE_FRESHNESS_RECENT_DAYS` | `7` | Days threshold for "recent" freshness label |
 | `GRAPHBASE_FRESHNESS_STALE_DAYS` | `30` | Days threshold for "stale" freshness label |
 
-Set them in your shell or in a `.env` file. Example:
+Set them in your shell or pass them through your MCP host config. Example:
 
 ```bash
 export GRAPHBASE_NEO4J_URI=bolt://my-neo4j-host:7687
@@ -93,7 +94,7 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
   "mcpServers": {
     "graphbase-memories": {
       "command": "uvx",
-      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase@v1.5.0", "graphbase", "serve"],
+      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase-memories-mcp@v2.0.0", "graphbase", "serve"],
       "env": {
         "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",
         "GRAPHBASE_NEO4J_USER": "neo4j",
@@ -104,9 +105,9 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
 }
 ```
 
-After saving, restart Claude Code. The 21 MCP tools will appear in the tool list.
+After saving, restart Claude Code. The 20 MCP tools, 4 prompts, and 4 resources will appear in the host surface that your client supports.
 
-> **Tip**: Use `@v1.5.0` (or the latest tag) to pin to a stable release. `@main` tracks the development branch and may include unreleased changes.
+> **Tip**: Use `@v2.0.0` (or the latest tag) to pin to a stable release. `@main` tracks the development branch and may include unreleased changes.
 
 ---
 
@@ -122,7 +123,6 @@ After saving, restart Claude Code. The 21 MCP tools will appear in the tool list
 | `save_context` | Artifact | Save a free-form context snippet with relevance score |
 | `upsert_entity_with_deps` | Entity | Upsert a named entity fact and link related entities with typed relationships |
 | `request_global_write_approval` | Governance | Obtain a one-time token required for global-scope writes |
-| `route_analysis` | Analysis | Route a task description to sequential / debate / socratic mode |
 | `run_hygiene` | Hygiene | Detect duplicates, stale decisions, obsolete patterns, entity drift; pass `check_pending_only=True` to list pending/failed saves |
 | `register_federated_service` | Federation | Register (or deactivate via `active=False`) a service in a named workspace |
 | `list_active_services` | Federation | List services active within a time window |
@@ -138,6 +138,19 @@ After saving, restart Claude Code. The 21 MCP tools will appear in the tool list
 
 ---
 
+## MCP Prompts And Resources
+
+In addition to the tool surface, `graphbase` also registers reusable prompts and passive resources:
+
+| Type | Names |
+|---|---|
+| Prompts | `analysis_routing`, `memory_review`, `impact_before_edit`, `federated_sync` |
+| Resources | `graphbase://schema`, `graphbase://services`, `graphbase://health/{workspace_id}`, `graphbase://session/{session_id}` |
+
+Prompts return guided workflows; resources return read-only YAML context.
+
+---
+
 ## CLI Commands
 
 ```bash
@@ -146,40 +159,64 @@ graphbase serve
 
 # Start the HTTP devtools inspection server (human browsing)
 graphbase devtools --port 8765
+# Console prints: DevTools write token: <token>
 
 # Run the memory hygiene cycle and print the report as JSON
 graphbase hygiene --project-id <uuid>
 graphbase hygiene --scope global
+
+# Surface scoped memories for editor and hook integrations
+graphbase surface "jwt rotation" --project-id auth-service
 ```
 
 ---
 
 ## Devtools Server
 
-The devtools server (`graphbase devtools`) exposes an HTTP API and a browser dashboard for inspecting graph memory without an agent. Open `http://localhost:8765` after starting — it redirects to the Alpine.js single-page dashboard (`/ui`) with 5 tabs: Projects, Tools, Health, Memory, and Hygiene, plus a standalone Graph canvas page (`/ui/graph.html`) showing the Workspace→Project topology.
+The devtools server (`graphbase devtools`) exposes an HTTP API and a browser dashboard for inspecting graph memory without an agent. Open `http://localhost:8765` after starting — it redirects to the Alpine.js dashboard (`/ui`) with sidebar views for Projects, Memory, Tools, Operations, and a standalone Graph canvas page (`/ui/graph.html`).
+
+Key UX changes in the current dashboard:
+
+- Projects view: connection status, quick actions, project drill-down
+- Memory view: infinite-scroll search with label/project/since-days filters, sort/order, keyboard navigation (`j`/`k`, `Enter`, `Ctrl+K`, `/`)
+- Inspector Drawer: relationship navigation, inline edit/delete for memory nodes, JSON copy/download
+- Graph deep-linking: graph-rendered nodes can jump Memory → Graph, and Graph → Memory opens full detail
+- Graph export: download the currently visible subgraph as JSON or CSV from the graph canvas
+- Operations view: merged graph health + hygiene, workspace orphan detection and repair
+- Header write token field: paste the startup token once and the UI stores it in `localStorage` as `gb-devtools-token`
 
 ```
 GET  /events                          SSE heartbeat (real-time connectivity status)
-GET  /memory                          List nodes
+GET  /memory                          List nodes or grouped timeline (`format=timeline`)
 GET  /memory/{id}/relationships       Relationship inspector
 GET  /memory/{id}                     Node detail
+PATCH /memory/{id}                    Update title/content/summary/fact (requires X-Devtools-Token)
+DELETE /memory/{id}?confirm=true      Delete node (requires X-Devtools-Token)
+POST /memory/bulk-delete              Delete multiple nodes (requires X-Devtools-Token)
 POST /memory/search                   CONTAINS full-text search
 GET  /projects                        Projects with node counts + staleness
 GET  /projects/{id}                   Single project detail
 GET  /tools                           MCP tool registry (live)
 GET  /tools/{name}                    Tool schema + metadata
-POST /tools/{name}/invoke             Engine-direct invoke with write-confirmation gate
+POST /tools/{name}/invoke             Engine-direct invoke with write-confirmation + startup-token gate for write tools
 GET  /graph/overview                  Force-directed graph: Workspace→Project topology with staleness + federation edges
 GET  /graph/stats                     Per-label node + relationship counts
 GET  /graph/stats/workspace/{id}      Workspace health
 GET  /graph/conflicts/{id}            CONTRADICTS conflict detection
+POST /graph/repair/orphaned-entities/{workspace_id} Repair orphaned EntityFact nodes
 GET  /hygiene/status                  All-project hygiene summary
-POST /hygiene/run                     Run hygiene engine
+POST /hygiene/run                     Run hygiene engine (requires X-Devtools-Token)
 MOUNT /ui                             Alpine.js dashboard (StaticFiles)
 GET  /                                → redirect to /ui
 ```
 
 Write tools (`propagate_impact`, `link_cross_service`, `register_federated_service`) require `"confirm": true` in the POST body when invoked via `/tools/{name}/invoke`; without it the response is `{"status": "preview", ...}`.
+
+Direct devtools writes are gated by the startup token:
+
+- `graphbase devtools` prints a startup-only write token to stdout
+- `PATCH /memory/{id}`, `DELETE /memory/{id}`, `POST /memory/bulk-delete`, `POST /hygiene/run`, write-capable `POST /tools/{name}/invoke`, and `POST /graph/repair/orphaned-entities/{workspace_id}` require `X-Devtools-Token: <token>`
+- The browser UI exposes a `Write Token` field in the header and uses that token for Inspector edits/deletes, tool invocation, and orphan repair
 
 ---
 

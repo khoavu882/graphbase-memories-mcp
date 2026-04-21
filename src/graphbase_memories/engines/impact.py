@@ -13,15 +13,14 @@ from uuid import uuid4
 
 from neo4j import AsyncDriver
 
-from graphbase_memories.graph.repositories import federation_repo, impact_repo
-from graphbase_memories.mcp.schemas.errors import ErrorCode, MCPError
-from graphbase_memories.mcp.schemas.results import (
+from graphbase_memories.domain.results import (
     AffectedServiceItem,
     ConflictRecord,
     ImpactReport,
     WorkspaceHealthReport,
     WorkspaceServiceHealth,
 )
+from graphbase_memories.graph.repositories import federation_repo, impact_repo
 
 RISK_BY_DEPTH: dict[int, str] = {1: "HIGH", 2: "MEDIUM", 3: "LOW"}
 RISK_ORDER: dict[str, int] = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
@@ -38,8 +37,8 @@ async def propagate_impact(
     max_depth: int,
     driver: AsyncDriver,
     database: str,
-) -> ImpactReport | MCPError:
-    # ── Pre-check — entity existence (moved from tool layer) ─────────────
+) -> ImpactReport:
+    # ── Pre-check — entity existence ──────────────────────────────────────
     async with driver.session(database=database) as session:
         result = await session.run(
             "MATCH (n {id: $id}) RETURN count(n) AS cnt LIMIT 1",
@@ -47,12 +46,7 @@ async def propagate_impact(
         )
         record = await result.single()
         if not record or record["cnt"] == 0:
-            return MCPError(
-                code=ErrorCode.ENTITY_NOT_FOUND,
-                message=f"Entity '{entity_id}' not found in the graph.",
-                context={"entity_id": entity_id},
-                next_step="Call upsert_entity_with_deps() to create the entity first.",
-            )
+            raise LookupError(f"Entity '{entity_id}' not found in the graph.")
 
     # ── Phase 1 — BFS (B-3: one Cypher per depth level) ──────────────────
     frontier: set[str] = {entity_id}
@@ -202,7 +196,9 @@ async def graph_health(
     # Absorb detect_conflicts when include_conflicts=True
     conflict_records: list[ConflictRecord] = []
     if include_conflicts and total_conflicts > 0:
-        conflict_records = await detect_conflicts(workspace_id, limit=100, driver=driver, database=database)
+        conflict_records = await detect_conflicts(
+            workspace_id, limit=100, driver=driver, database=database
+        )
 
     if total_conflicts > 0:
         health_next_step = (

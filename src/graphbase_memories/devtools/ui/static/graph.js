@@ -1,610 +1,1358 @@
-// ── §1 NODE TYPE REGISTRY ─────────────────────────────────────────────────
-// Single source of truth: replaces NODE_COLORS + CATEGORY_STYLES + TOPO_NODE_LABELS.
-// Add one entry here to propagate to rendering, filtering, and summary strip.
 const NODE_TYPE_REGISTRY = {
-  // Structural nodes
   Workspace: {
-    kind: 'structural', sidebarLabel: 'Workspace', badgeSuffix: 'workspace',
-    summaryIn: ['collapsed'],
-    color: { background: '#7c3aed', border: '#6d28d9',
-             highlight: { background: '#8b5cf6', border: '#7c3aed' } },
-    shape: 'star', size: 24,
+    kind: "structural",
+    sidebarLabel: "Workspace",
+    badgeSuffix: "workspace",
+    summaryIn: ["collapsed"],
+    color: {
+      background: "#7c3aed",
+      border: "#6d28d9",
+      highlight: { background: "#8b5cf6", border: "#7c3aed" },
+    },
+    shape: "star",
+    size: 24,
   },
   Project: {
-    kind: 'structural', sidebarLabel: 'Project', badgeSuffix: 'project',
-    summaryIn: ['collapsed'],
-    color: { background: '#2563eb', border: '#1d4ed8',
-             highlight: { background: '#3b82f6', border: '#2563eb' } },
-    shape: 'dot', size: 16,
+    kind: "structural",
+    sidebarLabel: "Project",
+    badgeSuffix: "project",
+    summaryIn: ["collapsed"],
+    color: {
+      background: "#2563eb",
+      border: "#1d4ed8",
+      highlight: { background: "#3b82f6", border: "#2563eb" },
+    },
+    shape: "dot",
+    size: 16,
   },
   Stale: {
-    kind: 'structural', sidebarLabel: null, badgeSuffix: 'stale',
+    kind: "structural",
+    sidebarLabel: null,
+    badgeSuffix: "stale",
     summaryIn: [],
-    color: { background: '#b45309', border: '#92400e',
-             highlight: { background: '#d97706', border: '#b45309' } },
-    shape: 'dot', size: 16,
+    color: {
+      background: "#b45309",
+      border: "#92400e",
+      highlight: { background: "#d97706", border: "#b45309" },
+    },
+    shape: "dot",
+    size: 16,
   },
-  // EntityFact subcategories (n.label === 'EntityFact', styled by n.category)
-  // All entries use unified vis-network color shape: { background, border, highlight: { background, border } }
-  Service:        { kind: 'entity-category', sidebarLabel: 'Service',        badgeSuffix: 'service',        summaryIn: ['topology'], color: { background: '#0ea5e9', border: '#0284c7', highlight: { background: '#38bdf8', border: '#0284c7' } }, shape: 'dot',      size: 14 },
-  BoundedContext: { kind: 'entity-category', sidebarLabel: 'BoundedContext', badgeSuffix: 'boundedcontext', summaryIn: ['topology'], color: { background: '#f59e0b', border: '#d97706', highlight: { background: '#fbbf24', border: '#d97706' } }, shape: 'hexagon',  size: 18 },
-  Topic:          { kind: 'entity-category', sidebarLabel: 'Topic',          badgeSuffix: 'topic',          summaryIn: ['topology'], color: { background: '#10b981', border: '#059669', highlight: { background: '#34d399', border: '#059669' } }, shape: 'triangle', size: 12 },
-  DataStore:      { kind: 'entity-category', sidebarLabel: 'DataStore',      badgeSuffix: 'datastore',      summaryIn: ['topology'], color: { background: '#8b5cf6', border: '#7c3aed', highlight: { background: '#a78bfa', border: '#7c3aed' } }, shape: 'database', size: 14 },
-  External:       { kind: 'entity-category', sidebarLabel: 'External',       badgeSuffix: 'external',       summaryIn: ['topology'], color: { background: '#f97316', border: '#ea580c', highlight: { background: '#fb923c', border: '#ea580c' } }, shape: 'box',      size: 13 },
-  EntityFact:     { kind: 'entity-category', sidebarLabel: 'Other',          badgeSuffix: 'entityfact',     summaryIn: ['collapsed', 'topology'], color: { background: '#94a3b8', border: '#64748b', highlight: { background: '#cbd5e1', border: '#64748b' } }, shape: 'dot', size: 11 },
-  // First-class topology labels — n.label IS the category key (T5.3)
-  Feature:      { kind: 'topo-label', sidebarLabel: 'Feature',      badgeSuffix: 'feature',      summaryIn: ['topology'], color: { background: '#ec4899', border: '#db2777', highlight: { background: '#f472b6', border: '#db2777' } }, shape: 'star',     size: 14 },
-  DataSource:   { kind: 'topo-label', sidebarLabel: 'DataSource',   badgeSuffix: 'datasource',   summaryIn: ['topology'], color: { background: '#8b5cf6', border: '#7c3aed', highlight: { background: '#a78bfa', border: '#7c3aed' } }, shape: 'database', size: 14 },
-  MessageQueue: { kind: 'topo-label', sidebarLabel: 'MessageQueue', badgeSuffix: 'messagequeue', summaryIn: ['topology'], color: { background: '#10b981', border: '#059669', highlight: { background: '#34d399', border: '#059669' } }, shape: 'triangle', size: 12 },
+  Service: {
+    kind: "entity-category",
+    sidebarLabel: "Service",
+    badgeSuffix: "service",
+    summaryIn: ["topology"],
+    color: {
+      background: "#0ea5e9",
+      border: "#0284c7",
+      highlight: { background: "#38bdf8", border: "#0284c7" },
+    },
+    shape: "dot",
+    size: 14,
+  },
+  BoundedContext: {
+    kind: "entity-category",
+    sidebarLabel: "BoundedContext",
+    badgeSuffix: "boundedcontext",
+    summaryIn: ["topology"],
+    color: {
+      background: "#f59e0b",
+      border: "#d97706",
+      highlight: { background: "#fbbf24", border: "#d97706" },
+    },
+    shape: "hexagon",
+    size: 18,
+  },
+  Topic: {
+    kind: "entity-category",
+    sidebarLabel: "Topic",
+    badgeSuffix: "topic",
+    summaryIn: ["topology"],
+    color: {
+      background: "#10b981",
+      border: "#059669",
+      highlight: { background: "#34d399", border: "#059669" },
+    },
+    shape: "triangle",
+    size: 12,
+  },
+  DataStore: {
+    kind: "entity-category",
+    sidebarLabel: "DataStore",
+    badgeSuffix: "datastore",
+    summaryIn: ["topology"],
+    color: {
+      background: "#8b5cf6",
+      border: "#7c3aed",
+      highlight: { background: "#a78bfa", border: "#7c3aed" },
+    },
+    shape: "database",
+    size: 14,
+  },
+  External: {
+    kind: "entity-category",
+    sidebarLabel: "External",
+    badgeSuffix: "external",
+    summaryIn: ["topology"],
+    color: {
+      background: "#f97316",
+      border: "#ea580c",
+      highlight: { background: "#fb923c", border: "#ea580c" },
+    },
+    shape: "box",
+    size: 13,
+  },
+  EntityFact: {
+    kind: "entity-category",
+    sidebarLabel: "Other",
+    badgeSuffix: "entityfact",
+    summaryIn: ["collapsed", "topology"],
+    color: {
+      background: "#94a3b8",
+      border: "#64748b",
+      highlight: { background: "#cbd5e1", border: "#64748b" },
+    },
+    shape: "dot",
+    size: 11,
+  },
+  Feature: {
+    kind: "topo-label",
+    sidebarLabel: "Feature",
+    badgeSuffix: "feature",
+    summaryIn: ["topology"],
+    color: {
+      background: "#ec4899",
+      border: "#db2777",
+      highlight: { background: "#f472b6", border: "#db2777" },
+    },
+    shape: "star",
+    size: 14,
+  },
+  DataSource: {
+    kind: "topo-label",
+    sidebarLabel: "DataSource",
+    badgeSuffix: "datasource",
+    summaryIn: ["topology"],
+    color: {
+      background: "#8b5cf6",
+      border: "#7c3aed",
+      highlight: { background: "#a78bfa", border: "#7c3aed" },
+    },
+    shape: "database",
+    size: 14,
+  },
+  MessageQueue: {
+    kind: "topo-label",
+    sidebarLabel: "MessageQueue",
+    badgeSuffix: "messagequeue",
+    summaryIn: ["topology"],
+    color: {
+      background: "#10b981",
+      border: "#059669",
+      highlight: { background: "#34d399", border: "#059669" },
+    },
+    shape: "triangle",
+    size: 12,
+  },
 };
 
-// ── §2 THEME SYSTEM ────────────────────────────────────────────────────────
-// dim palette used by activateFocus() — must match CSS token values per theme
 const PALETTE = {
-  dark:  { dimColor: { background: '#1e293b', border: '#334155',
-                       highlight: { background: '#1e293b', border: '#334155' } },
-           dimFont: '#0f172a' },   // matches --bg-base: labels dissolve into background
-  light: { dimColor: { background: '#e2e8f0', border: '#cbd5e1',
-                       highlight: { background: '#e2e8f0', border: '#cbd5e1' } },
-           dimFont: '#f8fafc' },   // matches --bg-base light: labels dissolve into background
+  dark: {
+    dimColor: {
+      background: "#1e293b",
+      border: "#334155",
+      highlight: { background: "#1e293b", border: "#334155" },
+    },
+    dimFont: "#0f172a",
+  },
+  light: {
+    dimColor: {
+      background: "#e2e8f0",
+      border: "#cbd5e1",
+      highlight: { background: "#e2e8f0", border: "#cbd5e1" },
+    },
+    dimFont: "#f8fafc",
+  },
 };
-
-const _THEME_KEY = 'graphbase-theme';
-function currentTheme() { return document.documentElement.dataset.theme || 'dark'; }
-
-function toggleTheme() {
-  const next = currentTheme() === 'dark' ? 'light' : 'dark';
-  document.documentElement.dataset.theme = next;
-  localStorage.setItem(_THEME_KEY, next);
-  const btn = document.getElementById('btn-theme');
-  if (btn) btn.textContent = next === 'dark' ? '☀ Light' : '☽ Dark';
-}
-
-// Apply persisted theme immediately (script is at bottom of <body>, DOM is ready)
-(function initTheme() {
-  const saved = localStorage.getItem(_THEME_KEY);
-  if (saved) document.documentElement.dataset.theme = saved;
-  const btn = document.getElementById('btn-theme');
-  if (btn) btn.textContent = currentTheme() === 'dark' ? '☀ Light' : '☽ Dark';
-}());
-
-// Derived from registry — no manual sync needed
-const TOPO_NODE_LABELS = new Set(
-  Object.entries(NODE_TYPE_REGISTRY)
-    .filter(([, v]) => v.kind === 'topo-label').map(([k]) => k)
-);
 
 const EDGE_COLORS = {
-  MEMBER_OF:          { color: '#475569', highlight: '#64748b' },
-  BELONGS_TO:         { color: '#475569', highlight: '#64748b' },
-  CROSS_SERVICE_LINK: { color: '#10b981', highlight: '#34d399' },
-  AFFECTS:            { color: '#ef4444', highlight: '#f87171' },
-  INVOLVES:           { color: '#ec4899', highlight: '#f472b6' },
-  CONSUMES:           { color: '#10b981', highlight: '#34d399' },
-  PRODUCES:           { color: '#3b82f6', highlight: '#60a5fa' },
-  READS:              { color: '#94a3b8', highlight: '#cbd5e1' },
-  WRITES:             { color: '#f59e0b', highlight: '#fbbf24' },
-  CONFLICTS_WITH:     { color: '#ef4444', highlight: '#f87171' },
-  MERGES_INTO:        { color: '#a78bfa', highlight: '#c4b5fd' },
-  // First-class topology relationship types (T5.3)
-  CALLS_DOWNSTREAM:   { color: '#3b82f6', highlight: '#60a5fa' },
-  CALLS_UPSTREAM:     { color: '#6366f1', highlight: '#818cf8' },
-  READS_FROM:         { color: '#94a3b8', highlight: '#cbd5e1' },
-  WRITES_TO:          { color: '#f59e0b', highlight: '#fbbf24' },
-  PUBLISHES_TO:       { color: '#10b981', highlight: '#34d399' },
-  SUBSCRIBES_TO:      { color: '#06b6d4', highlight: '#22d3ee' },
-  MEMBER_OF_CONTEXT:  { color: '#f59e0b', highlight: '#fbbf24' },
-  PART_OF:            { color: '#475569', highlight: '#64748b' },
-  HAS_FEATURE:        { color: '#ec4899', highlight: '#f472b6' },
+  MEMBER_OF: { color: "#475569", highlight: "#64748b" },
+  BELONGS_TO: { color: "#475569", highlight: "#64748b" },
+  CROSS_SERVICE_LINK: { color: "#10b981", highlight: "#34d399" },
+  AFFECTS: { color: "#ef4444", highlight: "#f87171" },
+  INVOLVES: { color: "#ec4899", highlight: "#f472b6" },
+  CONSUMES: { color: "#10b981", highlight: "#34d399" },
+  PRODUCES: { color: "#3b82f6", highlight: "#60a5fa" },
+  READS: { color: "#94a3b8", highlight: "#cbd5e1" },
+  WRITES: { color: "#f59e0b", highlight: "#fbbf24" },
+  CONFLICTS_WITH: { color: "#ef4444", highlight: "#f87171" },
+  MERGES_INTO: { color: "#a78bfa", highlight: "#c4b5fd" },
+  CALLS_DOWNSTREAM: { color: "#3b82f6", highlight: "#60a5fa" },
+  CALLS_UPSTREAM: { color: "#6366f1", highlight: "#818cf8" },
+  READS_FROM: { color: "#94a3b8", highlight: "#cbd5e1" },
+  WRITES_TO: { color: "#f59e0b", highlight: "#fbbf24" },
+  PUBLISHES_TO: { color: "#10b981", highlight: "#34d399" },
+  SUBSCRIBES_TO: { color: "#06b6d4", highlight: "#22d3ee" },
+  MEMBER_OF_CONTEXT: { color: "#f59e0b", highlight: "#fbbf24" },
+  PART_OF: { color: "#475569", highlight: "#64748b" },
+  HAS_FEATURE: { color: "#ec4899", highlight: "#f472b6" },
 };
 
-// ── State ───────────────────────────────────────────────────────────────
-let rawData    = null;
-let network    = null;
-let topoMode   = false;
-const nodeDataset = new vis.DataSet();
-const edgeDataset = new vis.DataSet();
+const TOPO_NODE_LABELS = new Set(
+  Object.entries(NODE_TYPE_REGISTRY)
+    .filter(([, value]) => value.kind === "topo-label")
+    .map(([key]) => key)
+);
 
-// ── URL params ──────────────────────────────────────────────────────────
-const urlParams = new URLSearchParams(window.location.search);
-const wsInput = document.getElementById('ws-input');
-wsInput.value = urlParams.get('workspace_id') || '';
+const CLUSTER_THRESHOLD = 500;
+const CLUSTER_SAMPLE_LIMIT = 6;
 
-// ── Active filters ──────────────────────────────────────────────────────
-function activeNodeLabels() {
-  return [...document.querySelectorAll('[data-filter="node"]')]
-    .filter(cb => cb.checked).map(cb => cb.dataset.label);
-}
-function activeCategories() {
-  return [...document.querySelectorAll('[data-filter="category"]')]
-    .filter(cb => cb.checked).map(cb => cb.dataset.category);
-}
-function activeEdgeTypes() {
-  const attr = topoMode ? '[data-filter="topo-edge"]' : '[data-filter="edge"]';
-  return [...document.querySelectorAll(attr)]
-    .filter(cb => cb.checked).map(cb => cb.dataset.edge);
-}
+class GraphOverviewApp {
+  static THEME_KEY = "graphbase-theme";
 
-// ── Build vis node object ───────────────────────────────────────────────
-// All NODE_TYPE_REGISTRY entries use unified color shape: { background, border, highlight: {…} }
-function toVisNode(n) {
-  // EntityFact nodes — styled by n.category via registry
-  if (n.label === 'EntityFact') {
-    const key = n.category || 'EntityFact';
-    const reg = NODE_TYPE_REGISTRY[key] || NODE_TYPE_REGISTRY.EntityFact;
+  constructor(documentRef = document) {
+    this.document = documentRef;
+    this.urlParams = new URLSearchParams(window.location.search);
+    this.embedded = this.urlParams.get("embedded") === "1";
+    this.rawData = null;
+    this.network = null;
+    this.topoMode = false;
+    this.pendingFocusId = null;
+    this.focusNodeId = null;
+    this.physicsOn = false;
+    this.workspaceDebounce = null;
+    this.clickTimer = null;
+    this.clusterState = { totalNodes: 0, active: false, expanded: false, skippedReason: null };
+    this.clusterMeta = new Map();
+    this.openClusterIds = [];
+    this.nodeDataset = new vis.DataSet();
+    this.edgeDataset = new vis.DataSet();
+    this.refs = this.cacheRefs();
+  }
+
+  cacheRefs() {
     return {
-      id: n.id, label: n.display,
-      title: `[${key}] ${n.id}${n.fact ? '\n' + n.fact.slice(0, 80) : ''}`,
-      color: reg.color,
-      shape: reg.shape, size: reg.size,
-      font: { size: 10, color: '#e2e8f0' }, borderWidth: 1.5, _raw: n,
+      graph: this.document.getElementById("graph"),
+      workspaceInput: this.document.getElementById("ws-input"),
+      workspaceApply: this.document.getElementById("ws-apply"),
+      collapsedButton: this.document.getElementById("btn-collapsed"),
+      topologyButton: this.document.getElementById("btn-topology"),
+      modeBadge: this.document.getElementById("mode-badge"),
+      summaryPanel: this.document.getElementById("summary-panel"),
+      totalLabel: this.document.getElementById("total-label"),
+      refreshButton: this.document.getElementById("btn-refresh"),
+      fitButton: this.document.getElementById("btn-fit"),
+      physicsButton: this.document.getElementById("btn-physics"),
+      exportJsonButton: this.document.getElementById("btn-export-json"),
+      exportCsvButton: this.document.getElementById("btn-export-csv"),
+      clusterStatus: this.document.getElementById("cluster-status"),
+      clusterSummary: this.document.getElementById("cluster-summary"),
+      clusterExpandButton: this.document.getElementById("btn-expand-clusters"),
+      clusterResetButton: this.document.getElementById("btn-reset-clusters"),
+      themeButton: this.document.getElementById("btn-theme"),
+      loadingOverlay: this.document.getElementById("loading"),
+      loadingHint: this.document.getElementById("loading-hint"),
+      errorPanel: this.document.getElementById("error-panel"),
+      errorMessage: this.document.getElementById("error-msg"),
+      focusIndicator: this.document.getElementById("focus-indicator"),
+      detailPanel: this.document.getElementById("detail-panel"),
+      detailTypeBadge: this.document.getElementById("dp-type-badge"),
+      detailId: this.document.getElementById("dp-id"),
+      detailDisplay: this.document.getElementById("dp-display"),
+      detailMeta: this.document.getElementById("dp-section-meta"),
+      detailEdgesWrap: this.document.getElementById("dp-section-edges"),
+      detailEdgeList: this.document.getElementById("dp-edge-list"),
+      detailNeighborsWrap: this.document.getElementById("dp-section-neighbors"),
+      detailNeighborChips: this.document.getElementById("dp-neighbor-chips"),
+      detailCopy: this.document.getElementById("dp-copy"),
+      detailFullDetail: this.document.getElementById("dp-full-detail"),
+      detailClose: this.document.getElementById("dp-close"),
+      topoSections: [...this.document.querySelectorAll(".topo-section")],
+      collapsedSections: [...this.document.querySelectorAll(".collapsed-section")],
+      filterInputs: [...this.document.querySelectorAll("[data-filter]")],
+      namelessInputs: [...this.document.querySelectorAll("input:not([name])")],
+      nodeFilters: [...this.document.querySelectorAll('[data-filter="node"]')],
+      categoryFilters: [...this.document.querySelectorAll('[data-filter="category"]')],
+      edgeFilters: [...this.document.querySelectorAll('[data-filter="edge"]')],
+      topologyEdgeFilters: [...this.document.querySelectorAll('[data-filter="topo-edge"]')],
     };
   }
-  // First-class topology nodes — n.label IS the registry key
-  if (TOPO_NODE_LABELS.has(n.label)) {
-    const reg = NODE_TYPE_REGISTRY[n.label];
-    return {
-      id: n.id, label: n.display,
-      title: `[${n.label}] ${n.id}`,
-      color: reg.color,
-      shape: reg.shape, size: reg.size,
-      font: { size: 10, color: '#e2e8f0' }, borderWidth: 1.5, _raw: n,
-    };
+
+  init() {
+    this.applySavedTheme();
+    this.ensureInputNames();
+    this.readUrlState();
+    this.applyInitialMode();
+    this.bindEvents();
+    return this.load();
   }
-  // Structural nodes (Workspace, Project, Stale)
-  const colorKey = n.is_stale ? 'Stale' : n.label;
-  const reg = NODE_TYPE_REGISTRY[colorKey] || NODE_TYPE_REGISTRY.Project;
-  return {
-    id: n.id, label: n.display,
-    title: `${n.label}: ${n.id}`,
-    color: reg.color, size: reg.size, shape: reg.shape,
-    font: { size: 12, color: '#e2e8f0' }, borderWidth: 2, _raw: n,
-  };
-}
 
-function toVisEdge(e, idx) {
-  const col = EDGE_COLORS[e.type] || { color: '#334155', highlight: '#475569' };
-  return {
-    id: `e-${idx}`,
-    from: e.source,
-    to: e.target,
-    label: e.type === 'MEMBER_OF' || e.type === 'BELONGS_TO' ? '' : e.type,
-    color: col,
-    arrows: { to: { enabled: true, scaleFactor: 0.5 } },
-    smooth: { type: 'continuous' },
-    font: { size: 8, color: '#64748b', align: 'middle' },
-    _type: e.type,
-  };
-}
-
-// ── Apply filters (no network reinit) ───────────────────────────────────
-function applyFilters() {
-  // Reset focus state inline — do NOT call exitFocus() to avoid §9→§11 coupling cycle
-  focusNodeId = null;
-  _focusIndicator?.classList.remove('visible');
-
-  if (!rawData) return;
-  const types = activeEdgeTypes();
-  let visibleNodes;
-
-  if (topoMode) {
-    const cats = activeCategories();
-    visibleNodes = rawData.nodes.filter(n => {
-      if (n.label === 'EntityFact') return cats.includes(n.category || 'EntityFact');
-      if (TOPO_NODE_LABELS.has(n.label)) return cats.includes(n.label);
-      return true; // Workspace + Project always visible in topology too
+  ensureInputNames() {
+    this.refs.namelessInputs.forEach((input, index) => {
+      input.name =
+        input.dataset.label ||
+        input.dataset.edge ||
+        input.dataset.category ||
+        input.id ||
+        `graph-field-${index}`;
     });
-  } else {
-    const labels = activeNodeLabels();
-    visibleNodes = rawData.nodes.filter(n => labels.includes(n.label));
   }
 
-  const visibleIds   = new Set(visibleNodes.map(n => n.id));
-  const visibleEdges = rawData.edges.filter(e =>
-    types.includes(e.type) &&
-    visibleIds.has(e.source) &&
-    visibleIds.has(e.target)
-  );
-
-  nodeDataset.clear();
-  edgeDataset.clear();
-  nodeDataset.add(visibleNodes.map(toVisNode));
-  edgeDataset.add(visibleEdges.map(toVisEdge));
-}
-
-// ── Update summary strip (registry-driven, fixes F2) ───────────────────
-function updateSummary(summary) {
-  const mode   = topoMode ? 'topology' : 'collapsed';
-  const counts = summary.counts || {};
-  const rows   = Object.entries(NODE_TYPE_REGISTRY)
-    .filter(([, r]) => r.summaryIn.includes(mode) && r.sidebarLabel !== null)
-    .map(([key, r]) =>
-      `<div class="summary-row"><span>${r.sidebarLabel}</span><span>${(counts[key] ?? 0).toLocaleString()}</span></div>`
-    ).join('');
-  document.getElementById('summary-panel').innerHTML = rows;
-
-  const total  = summary.total_nodes_in_graph ?? 0;
-  const capped = summary.capped_at ?? 200;
-  const totalEl = document.getElementById('total-label');
-  if (totalEl) {
-    totalEl.textContent = topoMode
-      ? `${(counts.EntityFact ?? 0).toLocaleString()} entities loaded`
-      : (total > capped
-          ? `Showing ≤${capped} of ${total.toLocaleString()} total nodes`
-          : `${total.toLocaleString()} total nodes`);
+  readUrlState() {
+    this.pendingFocusId = this.urlParams.get("focus");
+    this.refs.workspaceInput.value =
+      this.urlParams.get("workspace") || this.urlParams.get("workspace_id") || "";
+    this.topoMode = this.urlParams.get("topology") === "true" || Boolean(this.pendingFocusId);
   }
-}
 
-// ── §12 DETAIL PANEL ───────────────────────────────────────────────────────
-const _detailPanel  = document.getElementById('detail-panel');
-const _dpTypeBadge  = document.getElementById('dp-type-badge');
-const _dpId         = document.getElementById('dp-id');
-const _dpDisplay    = document.getElementById('dp-display');
-const _dpMeta       = document.getElementById('dp-section-meta');
-const _dpEdgesWrap  = document.getElementById('dp-section-edges');
-const _dpEdgeList   = document.getElementById('dp-edge-list');
-const _dpNeighWrap  = document.getElementById('dp-section-neighbors');
-const _dpNeighChips = document.getElementById('dp-neighbor-chips');
-const _dpCopy       = document.getElementById('dp-copy');
-
-function buildEdgeSummary(nodeId) {
-  const counts = {};
-  for (const e of (rawData?.edges || [])) {
-    if (e.source === nodeId || e.target === nodeId) {
-      const dir = e.source === nodeId ? '→' : '←';
-      const key = `${dir}__${e.type}`;
-      if (!counts[key]) counts[key] = { dir, type: e.type, n: 0 };
-      counts[key].n++;
-    }
-  }
-  return Object.values(counts).sort((a, b) => b.n - a.n);
-}
-
-function renderMetaSection(item) {
-  let html = '';
-  if (item.label === 'Project') {
-    html += '<h3>Metadata</h3>';
-    if (item.staleness_days != null) {
-      const pct   = Math.min(item.staleness_days / 30 * 100, 100).toFixed(0);
-      const color = item.is_stale ? '#d97706' : '#16a34a';
-      const label = item.is_stale
-        ? `Stale — ${item.staleness_days.toFixed(1)} days`
-        : `Fresh — ${item.staleness_days.toFixed(1)} days`;
-      html += `<div class="dp-field">
-        <span class="dp-label">Freshness</span>
-        <span class="dp-value">${label}</span>
-        <div class="freshness-bar"><div class="freshness-fill" style="width:${pct}%;background:${color}"></div></div>
-      </div>`;
-    }
-    if (item.badge_counts) {
-      html += '<div class="dp-field"><span class="dp-label">Child Nodes</span>';
-      for (const [k, v] of Object.entries(item.badge_counts)) {
-        if (v > 0) html += `<div class="dp-count-row"><span>${k}</span><span>${v}</span></div>`;
+  bindEvents() {
+    this.refs.detailClose.addEventListener("click", () => this.closeDetailPanel());
+    this.refs.collapsedButton.addEventListener("click", () => {
+      if (this.topoMode) {
+        this.setMode(false);
       }
-      html += '</div>';
-    }
-  } else if (item.label === 'Workspace') {
-    html += '<h3>Metadata</h3>';
-    const childCount = (rawData?.edges || []).filter(e => e.target === item.id && e.type === 'MEMBER_OF').length;
-    html += `<div class="dp-field"><span class="dp-label">Projects</span><span class="dp-value">${childCount}</span></div>`;
-  } else if (item.label === 'EntityFact') {
-    html += '<h3>Metadata</h3>';
-    if (item.category) html += `<div class="dp-field"><span class="dp-label">Category</span><span class="dp-value">${item.category}</span></div>`;
-    if (item.scope)    html += `<div class="dp-field"><span class="dp-label">Scope</span><span class="dp-value">${item.scope}</span></div>`;
-    if (item.fact)     html += `<div class="dp-field"><span class="dp-label">Fact</span><div class="dp-value fact">${item.fact}</div></div>`;
-  } else {
-    // Topology nodes: Feature, DataSource, MessageQueue, BoundedContext
-    html += '<h3>Metadata</h3>';
-    if (item.health_status) html += `<div class="dp-field"><span class="dp-label">Health</span><span class="dp-value">${item.health_status}</span></div>`;
-    if (item.source_type)   html += `<div class="dp-field"><span class="dp-label">Source Type</span><span class="dp-value">${item.source_type}</span></div>`;
-    if (item.queue_type)    html += `<div class="dp-field"><span class="dp-label">Queue Type</span><span class="dp-value">${item.queue_type}</span></div>`;
-    if (item.domain)        html += `<div class="dp-field"><span class="dp-label">Domain</span><span class="dp-value">${item.domain}</span></div>`;
-  }
-  return html || '<p style="color:#475569;font-size:12px;padding:4px 0">No additional metadata.</p>';
-}
-
-function openDetailPanel(nodeId) {
-  const item = rawData?.nodes.find(n => n.id === nodeId);
-  if (!item) return;
-
-  _dpId.textContent      = item.id;
-  _dpDisplay.textContent = item.display;
-
-  // Type badge — use category for EntityFact nodes
-  const badgeLabel = (item.label === 'EntityFact' && item.category) ? item.category : item.label;
-  _dpTypeBadge.textContent = badgeLabel;
-  _dpTypeBadge.className   = `inspect-badge badge-${badgeLabel.toLowerCase()}`;
-
-  // Copy button
-  _dpCopy.onclick = () => {
-    navigator.clipboard.writeText(item.id).catch(() => {});
-    _dpCopy.textContent = 'Copied!';
-    setTimeout(() => { _dpCopy.textContent = 'Copy'; }, 1500);
-  };
-
-  // Meta section
-  _dpMeta.innerHTML = renderMetaSection(item);
-
-  // Edge summary (client-side from rawData)
-  const edges = buildEdgeSummary(nodeId);
-  if (edges.length > 0) {
-    _dpEdgesWrap.style.display = '';
-    _dpEdgeList.innerHTML = edges.map(e =>
-      `<div class="dp-edge-row">
-        <span><span class="dp-edge-dir">${e.dir}</span>${e.type}</span>
-        <span class="dp-edge-count">×${e.n}</span>
-      </div>`
-    ).join('');
-  } else {
-    _dpEdgesWrap.style.display = 'none';
-  }
-
-  // Neighbors (first 5 via vis-network, reflects active edge filters)
-  const neighborIds = network
-    ? [...new Set([
-        ...network.getConnectedNodes(nodeId, 'from'),
-        ...network.getConnectedNodes(nodeId, 'to'),
-      ])].slice(0, 5)
-    : [];
-  if (neighborIds.length > 0) {
-    _dpNeighWrap.style.display = '';
-    _dpNeighChips.innerHTML = neighborIds.map(nid => {
-      const neighbor = rawData?.nodes.find(n => n.id === nid);
-      const label    = neighbor ? neighbor.display : nid;
-      return `<button class="neighbor-chip" data-nid="${nid}" title="${nid}">${label}</button>`;
-    }).join('');
-    _dpNeighChips.querySelectorAll('.neighbor-chip').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (network) network.selectNodes([btn.dataset.nid]);
-        openDetailPanel(btn.dataset.nid);
-      });
     });
-  } else {
-    _dpNeighWrap.style.display = 'none';
+    this.refs.topologyButton.addEventListener("click", () => {
+      if (!this.topoMode) {
+        this.setMode(true);
+      }
+    });
+    this.refs.themeButton.addEventListener("click", () => this.toggleTheme());
+    this.refs.workspaceApply.addEventListener("click", () => this.load());
+    this.refs.workspaceInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        this.load();
+      }
+    });
+    this.refs.workspaceInput.addEventListener("input", () => {
+      window.clearTimeout(this.workspaceDebounce);
+      this.workspaceDebounce = window.setTimeout(() => this.load(), 300);
+    });
+    this.refs.fitButton.addEventListener("click", () => {
+      if (this.network) {
+        this.network.fit({
+          animation: { duration: 500, easingFunction: "easeInOutQuad" },
+        });
+      }
+    });
+    this.refs.physicsButton.addEventListener("click", () => this.togglePhysics());
+    this.refs.exportJsonButton.addEventListener("click", () => this.exportVisibleJson());
+    this.refs.exportCsvButton.addEventListener("click", () => this.exportVisibleCsv());
+    this.refs.clusterExpandButton?.addEventListener("click", () => this.expandAllClusters());
+    this.refs.clusterResetButton?.addEventListener("click", () => this.reclusterVisible());
+    this.refs.filterInputs.forEach((input) => {
+      input.addEventListener("change", () => this.applyFilters());
+    });
+    this.refs.refreshButton.addEventListener("click", () => this.load());
+    this.document.addEventListener("keydown", (event) => this.handleGlobalKeyDown(event));
   }
 
-  _detailPanel.classList.add('open');
-}
+  currentTheme() {
+    return this.document.documentElement.dataset.theme || "dark";
+  }
 
-function closeDetailPanel() {
-  _detailPanel.classList.remove('open');
-}
-
-document.getElementById('dp-close').addEventListener('click', closeDetailPanel);
-
-// ── §11 FOCUS MODE ─────────────────────────────────────────────────────────
-// State: null = idle; string nodeId = focus active on that node.
-let focusNodeId = null;
-const _focusIndicator = document.getElementById('focus-indicator');
-
-function activateFocus(nodeId) {
-  focusNodeId = nodeId;
-
-  // Keep-set: focal node + 1-hop neighbours (both directions via active edge filters)
-  // Note: getConnectedNodes() reflects the CURRENTLY VISIBLE (filtered) dataset — intentional.
-  const neighbors = new Set([
-    nodeId,
-    ...(network?.getConnectedNodes(nodeId, 'from') || []),
-    ...(network?.getConnectedNodes(nodeId, 'to')   || []),
-  ]);
-
-  // Batch update — O(N), single DataSet write. Safe for 5000-node topology mode.
-  // Uses { returnType: 'Object' } for O(1) keyed access (vis-network official pattern).
-  const allNodes = nodeDataset.get({ returnType: 'Object' });
-  const updates  = Object.keys(allNodes).map(id => {
-    if (id === nodeId) {
-      // Focal node: full color + white border + thicker border width.
-      // Use _raw to derive original color — item.color may already be p.dimColor when shifting focus.
-      const orig = allNodes[id]._raw ? toVisNode(allNodes[id]._raw) : allNodes[id];
-      return { id, opacity: 1, borderWidth: 4, borderDashes: false,
-               color: { ...orig.color, border: '#ffffff',
-                        highlight: { ...orig.color?.highlight, border: '#ffffff' } } };
+  applySavedTheme() {
+    const saved = window.localStorage.getItem(GraphOverviewApp.THEME_KEY);
+    if (saved) {
+      this.document.documentElement.dataset.theme = saved;
     }
-    if (neighbors.has(id)) {
-      // 1-hop neighbors: restore full original appearance from _raw.
-      // Restoring only opacity is insufficient — dim operations set color and font.color explicitly,
-      // so a shift-focus would leave neighbors invisible (dimmed colors at opacity 1) without this.
-      const raw = allNodes[id]._raw;
-      if (raw) return { ...toVisNode(raw), opacity: 1, borderDashes: false };
-      return { id, opacity: 1, borderWidth: 1.5, borderDashes: false };
+    this.updateThemeButton();
+  }
+
+  updateThemeButton() {
+    this.refs.themeButton.textContent =
+      this.currentTheme() === "dark" ? "\u2600 Light" : "\u263d Dark";
+  }
+
+  toggleTheme() {
+    const next = this.currentTheme() === "dark" ? "light" : "dark";
+    this.document.documentElement.dataset.theme = next;
+    window.localStorage.setItem(GraphOverviewApp.THEME_KEY, next);
+    this.updateThemeButton();
+  }
+
+  applyInitialMode() {
+    this.refs.collapsedButton.classList.toggle("active", !this.topoMode);
+    this.refs.topologyButton.classList.toggle("active", this.topoMode);
+    this.refs.modeBadge.textContent = this.topoMode ? "Topology" : "Collapsed";
+    this.refs.modeBadge.className = this.topoMode ? "mode-badge topology" : "mode-badge";
+    this.refs.topoSections.forEach((element) => {
+      element.classList.toggle("visible", this.topoMode);
+    });
+    this.refs.collapsedSections.forEach((element) => {
+      element.classList.toggle("hidden", this.topoMode);
+    });
+  }
+
+  activeNodeLabels() {
+    return this.refs.nodeFilters.filter((input) => input.checked).map((input) => input.dataset.label);
+  }
+
+  activeCategories() {
+    return this.refs.categoryFilters
+      .filter((input) => input.checked)
+      .map((input) => input.dataset.category);
+  }
+
+  activeEdgeTypes() {
+    const source = this.topoMode ? this.refs.topologyEdgeFilters : this.refs.edgeFilters;
+    return source.filter((input) => input.checked).map((input) => input.dataset.edge);
+  }
+
+  currentVisibleGraphData() {
+    if (!this.rawData) {
+      return { nodes: [], edges: [] };
     }
-    // Dimmed: near-background color + invisible label (WCAG 1.4.1 secondary non-color cue via dashes).
-    // font.color is explicitly dimmed because vis-network renders labels in a separate canvas pass
-    // that does not reliably inherit node opacity — must be set explicitly to prevent label bleed.
-    const p = PALETTE[currentTheme()];
-    return { id, opacity: 0.12, color: p.dimColor, borderDashes: [4, 4], font: { color: p.dimFont } };
-  });
-  nodeDataset.update(updates);
 
-  // TODO(post-MVP): dim edges not connected to focusNodeId via edgeDataset.update()
+    let visibleNodes;
+    if (this.topoMode) {
+      const categories = this.activeCategories();
+      visibleNodes = this.rawData.nodes.filter((node) => {
+        if (node.label === "EntityFact") {
+          return categories.includes(node.category || "EntityFact");
+        }
+        if (TOPO_NODE_LABELS.has(node.label)) {
+          return categories.includes(node.label);
+        }
+        return true;
+      });
+    } else {
+      const labels = this.activeNodeLabels();
+      visibleNodes = this.rawData.nodes.filter((node) => labels.includes(node.label));
+    }
 
-  network?.focus(nodeId, {
-    scale: 1.4,
-    animation: { duration: 400, easingFunction: 'easeInOutQuad' },
-  });
-  _focusIndicator.classList.add('visible');
-}
+    const visibleIds = new Set(visibleNodes.map((node) => node.id));
+    const edgeTypes = this.activeEdgeTypes();
+    const visibleEdges = this.rawData.edges.filter(
+      (edge) =>
+        edgeTypes.includes(edge.type) &&
+        visibleIds.has(edge.source) &&
+        visibleIds.has(edge.target)
+    );
 
-function exitFocus() {
-  if (focusNodeId === null) return;
-  focusNodeId = null;
-  _focusIndicator.classList.remove('visible');
-  // Full re-render restores all node colors from NODE_TYPE_REGISTRY (Option A: lightweight restore)
-  applyFilters();
-}
+    return { nodes: visibleNodes, edges: visibleEdges };
+  }
 
-// ── Bootstrap vis-network ───────────────────────────────────────────────
-function initNetwork(nodeCount) {
-  const container = document.getElementById('graph');
-  const isLarge = nodeCount > 200;
-  const options = {
-    physics: {
-      solver: 'forceAtlas2Based',
-      forceAtlas2Based: {
-        avoidOverlap:         isLarge ? 0.3  : 0.5,
-        gravitationalConstant: isLarge ? -30  : -50,
-        springLength:         isLarge ? 80   : 100,
+  safeExportSegment(value, fallback) {
+    const text = String(value || fallback).trim();
+    const normalized = text.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+    return normalized || fallback;
+  }
+
+  exportBaseName() {
+    const mode = this.topoMode ? "topology" : "collapsed";
+    const workspace = this.safeExportSegment(this.refs.workspaceInput.value, "all-workspaces");
+    return `graph-subgraph-${mode}-${workspace}`;
+  }
+
+  downloadBlob(filename, mimeType, content) {
+    const blob = new Blob([content], { type: mimeType });
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = this.document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+  }
+
+  exportVisibleJson() {
+    const visible = this.currentVisibleGraphData();
+    const payload = {
+      exported_at: new Date().toISOString(),
+      mode: this.topoMode ? "topology" : "collapsed",
+      workspace_id: this.refs.workspaceInput.value.trim() || null,
+      filters: {
+        node_labels: this.topoMode ? [] : this.activeNodeLabels(),
+        categories: this.topoMode ? this.activeCategories() : [],
+        edge_types: this.activeEdgeTypes(),
       },
-      stabilization: {
-        iterations:    isLarge ? 80  : 150,
-        updateInterval: isLarge ? 50 : 25,
+      visible_counts: {
+        nodes: visible.nodes.length,
+        edges: visible.edges.length,
       },
-    },
-    interaction: { hover: true, tooltipDelay: 200, zoomView: true, dragView: true },
-    layout: { improvedLayout: false },
-  };
-  if (!network) {
-    network = new vis.Network(container, { nodes: nodeDataset, edges: edgeDataset }, options);
-    window.network = network;
-    // ── Click handler with 75ms debounce ────────────────────────────────
-    // Single-click opens detail panel; doubleClick (added in P2) cancels this timer.
-    let _clickTimer = null;
-    network.on('click', params => {
-      clearTimeout(_clickTimer);
+      summary: this.rawData?.summary || null,
+      nodes: visible.nodes,
+      edges: visible.edges,
+    };
+    this.downloadBlob(
+      `${this.exportBaseName()}.json`,
+      "application/json",
+      JSON.stringify(payload, null, 2)
+    );
+  }
+
+  csvCell(value) {
+    const text =
+      value === null || value === undefined
+        ? ""
+        : typeof value === "object"
+          ? JSON.stringify(value)
+          : String(value);
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
+  collectRecordKeys(records) {
+    return [...new Set(records.flatMap((record) => Object.keys(record)))].sort();
+  }
+
+  exportVisibleCsv() {
+    const visible = this.currentVisibleGraphData();
+    const nodeKeys = this.collectRecordKeys(visible.nodes);
+    const edgeKeys = this.collectRecordKeys(visible.edges);
+    const columns = ["record_type", ...nodeKeys, ...edgeKeys.filter((key) => !nodeKeys.includes(key))];
+    const rows = [columns];
+
+    for (const node of visible.nodes) {
+      rows.push(columns.map((column) => (column === "record_type" ? "node" : node[column])));
+    }
+    for (const edge of visible.edges) {
+      rows.push(columns.map((column) => (column === "record_type" ? "edge" : edge[column])));
+    }
+
+    this.downloadBlob(
+      `${this.exportBaseName()}.csv`,
+      "text/csv;charset=utf-8",
+      rows.map((row) => row.map((cell) => this.csvCell(cell)).join(",")).join("\n")
+    );
+  }
+
+  clusterGroupFor(node) {
+    if (node.label === "EntityFact") {
+      const category = node.category || "EntityFact";
+      return {
+        key: `entity:${category}`,
+        label: category === "EntityFact" ? "Other" : category,
+        registryKey: category,
+      };
+    }
+    if (TOPO_NODE_LABELS.has(node.label)) {
+      return {
+        key: `topology:${node.label}`,
+        label: node.label,
+        registryKey: node.label,
+      };
+    }
+    return null;
+  }
+
+  toVisNode(node) {
+    const clusterGroup = this.clusterGroupFor(node);
+    if (node.label === "EntityFact") {
+      const key = node.category || "EntityFact";
+      const registry = NODE_TYPE_REGISTRY[key] || NODE_TYPE_REGISTRY.EntityFact;
+      return {
+        id: node.id,
+        label: node.display,
+        title: `[${key}] ${node.id}${node.fact ? `\n${node.fact.slice(0, 80)}` : ""}`,
+        color: registry.color,
+        shape: registry.shape,
+        size: registry.size,
+        font: { size: 10, color: "#e2e8f0" },
+        borderWidth: 1.5,
+        _clusterGroupKey: clusterGroup?.key || null,
+        _raw: node,
+      };
+    }
+    if (TOPO_NODE_LABELS.has(node.label)) {
+      const registry = NODE_TYPE_REGISTRY[node.label];
+      return {
+        id: node.id,
+        label: node.display,
+        title: `[${node.label}] ${node.id}`,
+        color: registry.color,
+        shape: registry.shape,
+        size: registry.size,
+        font: { size: 10, color: "#e2e8f0" },
+        borderWidth: 1.5,
+        _clusterGroupKey: clusterGroup?.key || null,
+        _raw: node,
+      };
+    }
+    const colorKey = node.is_stale ? "Stale" : node.label;
+    const registry = NODE_TYPE_REGISTRY[colorKey] || NODE_TYPE_REGISTRY.Project;
+    return {
+      id: node.id,
+      label: node.display,
+      title: `${node.label}: ${node.id}`,
+      color: registry.color,
+      size: registry.size,
+      shape: registry.shape,
+      font: { size: 12, color: "#e2e8f0" },
+      borderWidth: 2,
+      _clusterGroupKey: clusterGroup?.key || null,
+      _raw: node,
+    };
+  }
+
+  toVisEdge(edge, index) {
+    const color = EDGE_COLORS[edge.type] || { color: "#334155", highlight: "#475569" };
+    return {
+      id: `e-${index}`,
+      from: edge.source,
+      to: edge.target,
+      label: edge.type === "MEMBER_OF" || edge.type === "BELONGS_TO" ? "" : edge.type,
+      color,
+      arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+      smooth: { type: "continuous" },
+      font: { size: 8, color: "#64748b", align: "middle" },
+      _type: edge.type,
+    };
+  }
+
+  applyFilters() {
+    this.focusNodeId = null;
+    this.refs.focusIndicator.classList.remove("visible");
+
+    if (!this.rawData) {
+      return;
+    }
+
+    const visible = this.currentVisibleGraphData();
+    this.closeDetailPanel();
+    this.clusterMeta.clear();
+    this.openClusterIds = [];
+    this.nodeDataset.clear();
+    this.edgeDataset.clear();
+    this.nodeDataset.add(visible.nodes.map((node) => this.toVisNode(node)));
+    this.edgeDataset.add(visible.edges.map((edge, index) => this.toVisEdge(edge, index)));
+    this.initNetwork(visible.nodes.length, { forceReset: true });
+    this.applyLargeGraphClustering(visible);
+  }
+
+  updateSummary(summary) {
+    const mode = this.topoMode ? "topology" : "collapsed";
+    const counts = summary.counts || {};
+    const rows = Object.entries(NODE_TYPE_REGISTRY)
+      .filter(([, registry]) => registry.summaryIn.includes(mode) && registry.sidebarLabel !== null)
+      .map(
+        ([key, registry]) =>
+          `<div class="summary-row"><span>${registry.sidebarLabel}</span><span>${(counts[key] ?? 0).toLocaleString()}</span></div>`
+      )
+      .join("");
+    this.refs.summaryPanel.innerHTML = rows;
+
+    const total = summary.total_nodes_in_graph ?? 0;
+    const capped = summary.capped_at ?? 200;
+    this.refs.totalLabel.textContent = this.topoMode
+      ? `${(counts.EntityFact ?? 0).toLocaleString()} entities loaded`
+      : total > capped
+        ? `Showing ≤${capped} of ${total.toLocaleString()} total nodes`
+        : `${total.toLocaleString()} total nodes`;
+  }
+
+  buildEdgeSummary(nodeId) {
+    const counts = {};
+    for (const edge of this.rawData?.edges || []) {
+      if (edge.source === nodeId || edge.target === nodeId) {
+        const direction = edge.source === nodeId ? "→" : "←";
+        const key = `${direction}__${edge.type}`;
+        if (!counts[key]) {
+          counts[key] = { dir: direction, type: edge.type, n: 0 };
+        }
+        counts[key].n += 1;
+      }
+    }
+    return Object.values(counts).sort((left, right) => right.n - left.n);
+  }
+
+  renderMetaSection(item) {
+    let html = "";
+    if (item.label === "Project") {
+      html += "<h3>Metadata</h3>";
+      if (item.staleness_days != null) {
+        const pct = Math.min((item.staleness_days / 30) * 100, 100).toFixed(0);
+        const color = item.is_stale ? "#d97706" : "#16a34a";
+        const label = item.is_stale
+          ? `Stale — ${item.staleness_days.toFixed(1)} days`
+          : `Fresh — ${item.staleness_days.toFixed(1)} days`;
+        html += `<div class="dp-field">
+          <span class="dp-label">Freshness</span>
+          <span class="dp-value">${label}</span>
+          <div class="freshness-bar"><div class="freshness-fill" style="width:${pct}%;background:${color}"></div></div>
+        </div>`;
+      }
+      if (item.badge_counts) {
+        html += '<div class="dp-field"><span class="dp-label">Child Nodes</span>';
+        for (const [key, value] of Object.entries(item.badge_counts)) {
+          if (value > 0) {
+            html += `<div class="dp-count-row"><span>${key}</span><span>${value}</span></div>`;
+          }
+        }
+        html += "</div>";
+      }
+    } else if (item.label === "Workspace") {
+      const childCount = (this.rawData?.edges || []).filter(
+        (edge) => edge.target === item.id && edge.type === "MEMBER_OF"
+      ).length;
+      html += `<h3>Metadata</h3><div class="dp-field"><span class="dp-label">Projects</span><span class="dp-value">${childCount}</span></div>`;
+    } else if (item.label === "EntityFact") {
+      html += "<h3>Metadata</h3>";
+      if (item.category) {
+        html += `<div class="dp-field"><span class="dp-label">Category</span><span class="dp-value">${item.category}</span></div>`;
+      }
+      if (item.scope) {
+        html += `<div class="dp-field"><span class="dp-label">Scope</span><span class="dp-value">${item.scope}</span></div>`;
+      }
+      if (item.fact) {
+        html += `<div class="dp-field"><span class="dp-label">Fact</span><div class="dp-value fact">${item.fact}</div></div>`;
+      }
+    } else {
+      html += "<h3>Metadata</h3>";
+      if (item.health_status) {
+        html += `<div class="dp-field"><span class="dp-label">Health</span><span class="dp-value">${item.health_status}</span></div>`;
+      }
+      if (item.source_type) {
+        html += `<div class="dp-field"><span class="dp-label">Source Type</span><span class="dp-value">${item.source_type}</span></div>`;
+      }
+      if (item.queue_type) {
+        html += `<div class="dp-field"><span class="dp-label">Queue Type</span><span class="dp-value">${item.queue_type}</span></div>`;
+      }
+      if (item.domain) {
+        html += `<div class="dp-field"><span class="dp-label">Domain</span><span class="dp-value">${item.domain}</span></div>`;
+      }
+    }
+    return (
+      html || '<p style="color:#475569;font-size:12px;padding:4px 0">No additional metadata.</p>'
+    );
+  }
+
+  renderClusterMetaSection(meta) {
+    const sampleMembers = meta.sampleMembers
+      .map(
+        (member) => `
+          <div class="dp-count-row">
+            <span>${member.display}</span>
+            <span>${member.label}</span>
+          </div>
+        `
+      )
+      .join("");
+    const remainder =
+      meta.memberCount > meta.sampleMembers.length
+        ? `<div class="dp-field"><span class="dp-label">More Members</span><span class="dp-value">${(meta.memberCount - meta.sampleMembers.length).toLocaleString()} additional nodes inside this cluster.</span></div>`
+        : "";
+    return `
+      <h3>Cluster</h3>
+      <div class="dp-field">
+        <span class="dp-label">Grouping</span>
+        <span class="dp-value">${meta.groupLabel}</span>
+      </div>
+      <div class="dp-field">
+        <span class="dp-label">Contained Nodes</span>
+        <span class="dp-value">${meta.memberCount.toLocaleString()}</span>
+      </div>
+      <div class="dp-field">
+        <span class="dp-label">Sample Members</span>
+        ${sampleMembers || '<span class="dp-value">No members available.</span>'}
+      </div>
+      ${remainder}
+    `;
+  }
+
+  isClusterNode(nodeId) {
+    return Boolean(this.network && typeof this.network.isCluster === "function" && this.network.isCluster(nodeId));
+  }
+
+  openClusterPanel(clusterId) {
+    const meta = this.clusterMeta.get(clusterId);
+    if (!meta) {
+      return;
+    }
+
+    this.refs.detailId.textContent = clusterId;
+    this.refs.detailDisplay.textContent = meta.display;
+    this.refs.detailTypeBadge.textContent = "Cluster";
+    this.refs.detailTypeBadge.className = "inspect-badge badge-cluster";
+    this.refs.detailFullDetail.textContent = "Expand Cluster";
+    this.refs.detailFullDetail.onclick = () => this.expandCluster(clusterId);
+    this.refs.detailFullDetail.disabled = false;
+
+    this.refs.detailCopy.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(meta.memberIds.join("\n"));
+      } catch {}
+      this.refs.detailCopy.textContent = "Copied!";
+      window.setTimeout(() => {
+        this.refs.detailCopy.textContent = "Copy";
+      }, 1500);
+    };
+
+    this.refs.detailMeta.innerHTML = this.renderClusterMetaSection(meta);
+    this.refs.detailEdgesWrap.style.display = "none";
+
+    if (meta.sampleMembers.length > 0) {
+      this.refs.detailNeighborsWrap.style.display = "";
+      this.refs.detailNeighborChips.innerHTML = meta.sampleMembers
+        .map(
+          (member) =>
+            `<button class="neighbor-chip" data-cluster="${clusterId}" data-nid="${member.id}" title="${member.id}">${member.display}</button>`
+        )
+        .join("");
+      this.refs.detailNeighborChips.querySelectorAll(".neighbor-chip").forEach((button) => {
+        button.addEventListener("click", () => {
+          this.expandCluster(button.dataset.cluster, button.dataset.nid);
+        });
+      });
+    } else {
+      this.refs.detailNeighborsWrap.style.display = "none";
+    }
+
+    this.refs.detailPanel.classList.add("open");
+  }
+
+  openDetailPanel(nodeId) {
+    if (this.isClusterNode(nodeId)) {
+      this.openClusterPanel(nodeId);
+      return;
+    }
+    const item = this.rawData?.nodes.find((node) => node.id === nodeId);
+    if (!item) {
+      return;
+    }
+
+    this.refs.detailId.textContent = item.id;
+    this.refs.detailDisplay.textContent = item.display;
+    this.refs.detailFullDetail.textContent = "View Full Detail";
+    this.refs.detailFullDetail.disabled = false;
+    this.refs.detailFullDetail.onclick = () => {
+      this.openMemoryDetail(item.id);
+    };
+
+    const badgeLabel = item.label === "EntityFact" && item.category ? item.category : item.label;
+    this.refs.detailTypeBadge.textContent = badgeLabel;
+    this.refs.detailTypeBadge.className = `inspect-badge badge-${badgeLabel.toLowerCase()}`;
+
+    this.refs.detailCopy.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(item.id);
+      } catch {}
+      this.refs.detailCopy.textContent = "Copied!";
+      window.setTimeout(() => {
+        this.refs.detailCopy.textContent = "Copy";
+      }, 1500);
+    };
+
+    this.refs.detailMeta.innerHTML = this.renderMetaSection(item);
+
+    const edges = this.buildEdgeSummary(nodeId);
+    if (edges.length > 0) {
+      this.refs.detailEdgesWrap.style.display = "";
+      this.refs.detailEdgeList.innerHTML = edges
+        .map(
+          (edge) => `<div class="dp-edge-row">
+            <span><span class="dp-edge-dir">${edge.dir}</span>${edge.type}</span>
+            <span class="dp-edge-count">×${edge.n}</span>
+          </div>`
+        )
+        .join("");
+    } else {
+      this.refs.detailEdgesWrap.style.display = "none";
+    }
+
+    const neighborIds = this.network
+      ? [
+          ...new Set([
+            ...this.network.getConnectedNodes(nodeId, "from"),
+            ...this.network.getConnectedNodes(nodeId, "to"),
+          ]),
+        ].slice(0, 5)
+      : [];
+
+    if (neighborIds.length > 0) {
+      this.refs.detailNeighborsWrap.style.display = "";
+      this.refs.detailNeighborChips.innerHTML = neighborIds
+        .map((neighborId) => {
+          const neighbor = this.rawData?.nodes.find((node) => node.id === neighborId);
+          const label = neighbor ? neighbor.display : neighborId;
+          return `<button class="neighbor-chip" data-nid="${neighborId}" title="${neighborId}">${label}</button>`;
+        })
+        .join("");
+      this.refs.detailNeighborChips.querySelectorAll(".neighbor-chip").forEach((button) => {
+        button.addEventListener("click", () => {
+          if (this.network) {
+            this.network.selectNodes([button.dataset.nid]);
+          }
+          this.openDetailPanel(button.dataset.nid);
+        });
+      });
+    } else {
+      this.refs.detailNeighborsWrap.style.display = "none";
+    }
+
+    this.refs.detailPanel.classList.add("open");
+  }
+
+  closeDetailPanel() {
+    this.refs.detailPanel.classList.remove("open");
+  }
+
+  activateFocus(nodeId) {
+    this.focusNodeId = nodeId;
+    const neighbors = new Set([
+      nodeId,
+      ...(this.network?.getConnectedNodes(nodeId, "from") || []),
+      ...(this.network?.getConnectedNodes(nodeId, "to") || []),
+    ]);
+    const allNodes = this.nodeDataset.get({ returnType: "Object" });
+    const updates = Object.keys(allNodes).map((id) => {
+      if (id === nodeId) {
+        const original = allNodes[id]._raw ? this.toVisNode(allNodes[id]._raw) : allNodes[id];
+        return {
+          id,
+          opacity: 1,
+          borderWidth: 4,
+          borderDashes: false,
+          color: {
+            ...original.color,
+            border: "#ffffff",
+            highlight: { ...original.color?.highlight, border: "#ffffff" },
+          },
+        };
+      }
+      if (neighbors.has(id)) {
+        const raw = allNodes[id]._raw;
+        if (raw) {
+          return { ...this.toVisNode(raw), opacity: 1, borderDashes: false };
+        }
+        return { id, opacity: 1, borderWidth: 1.5, borderDashes: false };
+      }
+      const palette = PALETTE[this.currentTheme()];
+      return {
+        id,
+        opacity: 0.12,
+        color: palette.dimColor,
+        borderDashes: [4, 4],
+        font: { color: palette.dimFont },
+      };
+    });
+
+    this.nodeDataset.update(updates);
+    this.network?.focus(nodeId, {
+      scale: 1.4,
+      animation: { duration: 400, easingFunction: "easeInOutQuad" },
+    });
+    this.refs.focusIndicator.classList.add("visible");
+  }
+
+  exitFocus() {
+    if (this.focusNodeId === null) {
+      return;
+    }
+    this.focusNodeId = null;
+    this.refs.focusIndicator.classList.remove("visible");
+    this.applyFilters();
+  }
+
+  buildClusterBuckets(nodes) {
+    const buckets = new Map();
+    for (const node of nodes) {
+      const clusterGroup = this.clusterGroupFor(node);
+      if (!clusterGroup) {
+        continue;
+      }
+      if (!buckets.has(clusterGroup.key)) {
+        buckets.set(clusterGroup.key, { ...clusterGroup, nodes: [] });
+      }
+      buckets.get(clusterGroup.key).nodes.push(node);
+    }
+    return [...buckets.values()].filter((bucket) => bucket.nodes.length >= 2);
+  }
+
+  clusterNodeProperties(bucket, clusterId) {
+    const registry = NODE_TYPE_REGISTRY[bucket.registryKey] || NODE_TYPE_REGISTRY.EntityFact;
+    return {
+      id: clusterId,
+      label: `${bucket.label} ×${bucket.nodes.length}`,
+      title: `${bucket.nodes.length} ${bucket.label} nodes`,
+      shape: "database",
+      size: Math.min(18 + Math.round(bucket.nodes.length / 12), 42),
+      borderWidth: 2,
+      font: { size: 12, color: "#e2e8f0", face: "inherit" },
+      color: registry.color,
+    };
+  }
+
+  setClusterState(nextState) {
+    this.clusterState = {
+      totalNodes: 0,
+      active: false,
+      expanded: false,
+      skippedReason: null,
+      clusterCount: 0,
+      clusteredNodes: 0,
+      ...nextState,
+    };
+    this.updateClusterUi();
+  }
+
+  updateClusterUi() {
+    if (!this.refs.clusterStatus || !this.refs.clusterSummary) {
+      return;
+    }
+
+    const state = this.clusterState;
+    if (state.active) {
+      this.refs.clusterStatus.hidden = false;
+      this.refs.clusterSummary.textContent =
+        `Clustering active: ${state.totalNodes.toLocaleString()} visible nodes condensed into ${state.clusterCount.toLocaleString()} groups. Double-click a cluster to expand it.`;
+      this.refs.clusterExpandButton.hidden = false;
+      this.refs.clusterExpandButton.disabled = false;
+      this.refs.clusterResetButton.hidden = false;
+      this.refs.clusterResetButton.disabled = false;
+      return;
+    }
+
+    if (state.expanded) {
+      this.refs.clusterStatus.hidden = false;
+      this.refs.clusterSummary.textContent =
+        "Clusters expanded. Use Re-cluster to condense the visible graph again.";
+      this.refs.clusterExpandButton.hidden = true;
+      this.refs.clusterResetButton.hidden = false;
+      this.refs.clusterResetButton.disabled = false;
+      return;
+    }
+
+    if (state.skippedReason === "focus") {
+      this.refs.clusterStatus.hidden = false;
+      this.refs.clusterSummary.textContent =
+        "Large graph detected. Clustering is paused so the requested node can stay directly inspectable.";
+      this.refs.clusterExpandButton.hidden = true;
+      this.refs.clusterResetButton.hidden = false;
+      this.refs.clusterResetButton.disabled = false;
+      return;
+    }
+
+    this.refs.clusterStatus.hidden = true;
+    this.refs.clusterExpandButton.hidden = true;
+    this.refs.clusterResetButton.hidden = true;
+  }
+
+  applyLargeGraphClustering(visible) {
+    const totalNodes = visible.nodes.length;
+    if (!this.network || totalNodes <= CLUSTER_THRESHOLD) {
+      this.setClusterState({ totalNodes });
+      return;
+    }
+
+    if (this.pendingFocusId) {
+      this.setClusterState({ totalNodes, skippedReason: "focus" });
+      return;
+    }
+
+    const buckets = this.buildClusterBuckets(visible.nodes);
+    if (buckets.length === 0) {
+      this.setClusterState({ totalNodes });
+      return;
+    }
+
+    let clusterCount = 0;
+    let clusteredNodes = 0;
+
+    for (const bucket of buckets) {
+      const clusterId = `cluster:${bucket.key}`;
+      const meta = {
+        id: clusterId,
+        display: `${bucket.label} Cluster`,
+        groupLabel: bucket.label,
+        memberCount: bucket.nodes.length,
+        memberIds: bucket.nodes.map((node) => node.id),
+        sampleMembers: bucket.nodes.slice(0, CLUSTER_SAMPLE_LIMIT).map((node) => ({
+          id: node.id,
+          display: node.display,
+          label: node.category || node.label,
+        })),
+      };
+      this.clusterMeta.set(clusterId, meta);
+      this.network.cluster({
+        joinCondition: (nodeOptions) => nodeOptions._clusterGroupKey === bucket.key,
+        processProperties: (clusterOptions, childNodes) => ({
+          ...clusterOptions,
+          label: `${bucket.label} ×${childNodes.length}`,
+          title: `${childNodes.length} ${bucket.label} nodes`,
+          mass: Math.max(childNodes.length, 2),
+          value: childNodes.length,
+        }),
+        clusterNodeProperties: this.clusterNodeProperties(bucket, clusterId),
+      });
+      if (this.isClusterNode(clusterId)) {
+        this.openClusterIds.push(clusterId);
+        clusterCount += 1;
+        clusteredNodes += bucket.nodes.length;
+      }
+    }
+
+    this.setClusterState({
+      totalNodes,
+      active: clusterCount > 0,
+      clusterCount,
+      clusteredNodes,
+    });
+  }
+
+  selectAndInspectNode(nodeId) {
+    if (!this.network) {
+      return;
+    }
+    window.setTimeout(() => {
+      this.network.selectNodes([nodeId]);
+      this.network.focus(nodeId, {
+        scale: 1.2,
+        animation: { duration: 350, easingFunction: "easeInOutQuad" },
+      });
+      this.openDetailPanel(nodeId);
+    }, 60);
+  }
+
+  expandCluster(clusterId, nodeId = null) {
+    if (!this.isClusterNode(clusterId)) {
+      if (nodeId) {
+        this.selectAndInspectNode(nodeId);
+      }
+      return;
+    }
+
+    this.network.openCluster(clusterId);
+    this.openClusterIds = this.openClusterIds.filter((id) => id !== clusterId);
+
+    if (this.openClusterIds.some((id) => this.isClusterNode(id))) {
+      this.setClusterState({
+        ...this.clusterState,
+        active: true,
+        expanded: false,
+        clusterCount: this.openClusterIds.filter((id) => this.isClusterNode(id)).length,
+      });
+    } else {
+      this.setClusterState({
+        totalNodes: this.clusterState.totalNodes,
+        expanded: true,
+      });
+    }
+
+    if (nodeId) {
+      this.selectAndInspectNode(nodeId);
+    } else {
+      this.closeDetailPanel();
+    }
+  }
+
+  expandAllClusters() {
+    if (!this.network) {
+      return;
+    }
+    for (const clusterId of this.openClusterIds) {
+      if (this.isClusterNode(clusterId)) {
+        this.network.openCluster(clusterId);
+      }
+    }
+    this.openClusterIds = [];
+    this.closeDetailPanel();
+    this.setClusterState({
+      totalNodes: this.clusterState.totalNodes,
+      expanded: true,
+    });
+  }
+
+  reclusterVisible() {
+    this.applyFilters();
+  }
+
+  networkOptions(nodeCount) {
+    const isLarge = nodeCount > 200;
+    return {
+      physics: {
+        enabled: this.physicsOn,
+        solver: "forceAtlas2Based",
+        forceAtlas2Based: {
+          avoidOverlap: isLarge ? 0.3 : 0.5,
+          gravitationalConstant: isLarge ? -30 : -50,
+          springLength: isLarge ? 80 : 100,
+        },
+        stabilization: {
+          iterations: isLarge ? 80 : 150,
+          updateInterval: isLarge ? 50 : 25,
+        },
+      },
+      interaction: { hover: true, tooltipDelay: 200, zoomView: true, dragView: true },
+      layout: { improvedLayout: false },
+    };
+  }
+
+  initNetwork(nodeCount, { forceReset = false } = {}) {
+    const options = this.networkOptions(nodeCount);
+    if (forceReset && this.network) {
+      this.network.destroy();
+      this.network = null;
+    }
+    if (!this.network) {
+      this.network = new vis.Network(
+        this.refs.graph,
+        { nodes: this.nodeDataset, edges: this.edgeDataset },
+        options
+      );
+      this.bindNetworkEvents();
+      window.network = this.network;
+    } else {
+      this.network.setOptions(options);
+    }
+  }
+
+  bindNetworkEvents() {
+    this.network.on("click", (params) => {
+      window.clearTimeout(this.clickTimer);
       if (params.nodes.length === 0) {
-        _clickTimer = setTimeout(() => { closeDetailPanel(); }, 75);
+        this.clickTimer = window.setTimeout(() => this.closeDetailPanel(), 75);
         return;
       }
-      const nid = params.nodes[0];
-      _clickTimer = setTimeout(() => { openDetailPanel(nid); }, 75);
+      const nodeId = params.nodes[0];
+      this.clickTimer = window.setTimeout(() => {
+        if (this.isClusterNode(nodeId)) {
+          this.openClusterPanel(nodeId);
+          return;
+        }
+        this.openDetailPanel(nodeId);
+      }, 75);
     });
-    // ── Double-click enters/shifts/exits focus mode ──────────────────────
-    // Cancels the pending single-click detail-panel open (75ms debounce above).
-    network.on('doubleClick', params => {
-      clearTimeout(_clickTimer);           // cancel pending single-click (shared closure)
-      if (params.nodes.length === 0) return;
-      const nid = params.nodes[0];
-      if (focusNodeId === nid) exitFocus();   // same node → exit focus
-      else activateFocus(nid);               // new node → enter / shift focus
+
+    this.network.on("doubleClick", (params) => {
+      window.clearTimeout(this.clickTimer);
+      if (params.nodes.length === 0) {
+        return;
+      }
+      const nodeId = params.nodes[0];
+      if (this.isClusterNode(nodeId)) {
+        this.expandCluster(nodeId);
+        return;
+      }
+      if (this.focusNodeId === nodeId) {
+        this.exitFocus();
+      } else {
+        this.activateFocus(nodeId);
+      }
     });
-    network.on('stabilizationIterationsDone', () => {
-      network.setOptions({ physics: { enabled: false } });
+
+    this.network.on("stabilizationIterationsDone", () => {
+      if (!this.physicsOn) {
+        this.network.setOptions({ physics: { enabled: false } });
+      }
     });
-  } else {
-    network.setOptions(options);
+  }
+
+  applyPendingFocus() {
+    if (!this.pendingFocusId || !this.network) {
+      return;
+    }
+    const node = this.nodeDataset.get(this.pendingFocusId);
+    if (!node) {
+      return;
+    }
+    this.network.selectNodes([this.pendingFocusId]);
+    this.network.focus(this.pendingFocusId, {
+      scale: 1.2,
+      animation: { duration: 400, easingFunction: "easeInOutQuad" },
+    });
+    this.openDetailPanel(this.pendingFocusId);
+    this.pendingFocusId = null;
+  }
+
+  buildOverviewUrl() {
+    const workspaceId = this.refs.workspaceInput.value.trim();
+    const params = new URLSearchParams();
+    if (workspaceId) {
+      params.set("workspace_id", workspaceId);
+    }
+    if (this.topoMode) {
+      params.set("topology", "true");
+    }
+    return params.toString() ? `/graph/overview?${params.toString()}` : "/graph/overview";
+  }
+
+  openMemoryDetail(nodeId) {
+    const destination = `/ui/index.html#memory/${encodeURIComponent(nodeId)}`;
+    if (this.embedded && window.parent && window.parent !== window) {
+      try {
+        window.parent.location.href = destination;
+        return;
+      } catch {}
+    }
+    window.location.href = destination;
+  }
+
+  async load() {
+    this.focusNodeId = null;
+    this.refs.focusIndicator.classList.remove("visible");
+    this.closeDetailPanel();
+    this.refs.loadingOverlay.style.display = "flex";
+    this.refs.errorPanel.style.display = "none";
+    this.refs.refreshButton.disabled = true;
+    this.refs.loadingHint.textContent = this.topoMode
+      ? "Topology mode may take a moment for large graphs…"
+      : "";
+
+    try {
+      const response = await fetch(this.buildOverviewUrl());
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      this.rawData = await response.json();
+      this.updateSummary(this.rawData.summary);
+      this.applyFilters();
+      this.applyPendingFocus();
+      this.refs.loadingOverlay.style.display = "none";
+    } catch (error) {
+      this.refs.loadingOverlay.style.display = "none";
+      this.refs.errorMessage.textContent = `Failed to load: ${error.message}`;
+      this.refs.errorPanel.style.display = "flex";
+    } finally {
+      this.refs.refreshButton.disabled = false;
+    }
+  }
+
+  setMode(topology) {
+    this.topoMode = topology;
+    this.applyInitialMode();
+    this.load();
+  }
+
+  togglePhysics() {
+    if (!this.network) {
+      return;
+    }
+    this.physicsOn = !this.physicsOn;
+    this.network.setOptions({ physics: { enabled: this.physicsOn } });
+    this.refs.physicsButton.textContent = this.physicsOn ? "⚡ Physics ON" : "⚡ Physics";
+    this.refs.physicsButton.classList.toggle("physics-on", this.physicsOn);
+  }
+
+  handleGlobalKeyDown(event) {
+    if (this.document.activeElement?.tagName === "INPUT") {
+      return;
+    }
+    if (event.key === "Escape") {
+      if (this.focusNodeId !== null) {
+        this.exitFocus();
+        return;
+      }
+      this.closeDetailPanel();
+      return;
+    }
+    if (event.key === "f" || event.key === "F") {
+      if (this.focusNodeId !== null) {
+        this.exitFocus();
+        return;
+      }
+      const selected = this.network?.getSelectedNodes() || [];
+      if (selected.length > 0) {
+        if (this.isClusterNode(selected[0])) {
+          this.expandCluster(selected[0]);
+          return;
+        }
+        this.activateFocus(selected[0]);
+      }
+    }
   }
 }
 
-// ── Fetch & render ──────────────────────────────────────────────────────
-async function load() {
-  focusNodeId = null;                                         // sync focus reset before any await
-  _focusIndicator?.classList.remove('visible');
-  closeDetailPanel();                                         // sync panel reset before any await
-  document.getElementById('loading').style.display   = 'flex';
-  document.getElementById('error-panel').style.display = 'none';
-  document.getElementById('btn-refresh').disabled    = true;
-
-  const hint = document.getElementById('loading-hint');
-  if (topoMode) hint.textContent = 'Topology mode may take a moment for large graphs…';
-  else hint.textContent = '';
-
-  try {
-    const wsId  = wsInput.value.trim();
-    const parts = ['/graph/overview'];
-    const qs    = [];
-    if (wsId)      qs.push(`workspace_id=${encodeURIComponent(wsId)}`);
-    if (topoMode)  qs.push('topology=true');
-    if (qs.length) parts.push('?' + qs.join('&'));
-
-    const res = await fetch(parts.join(''));
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    rawData = await res.json();
-
-    updateSummary(rawData.summary);
-    applyFilters();
-    initNetwork(nodeDataset.length);
-
-    document.getElementById('loading').style.display = 'none';
-  } catch (err) {
-    document.getElementById('loading').style.display   = 'none';
-    document.getElementById('error-msg').textContent   = `Failed to load: ${err.message}`;
-    document.getElementById('error-panel').style.display = 'flex';
-  } finally {
-    document.getElementById('btn-refresh').disabled = false;
-  }
-}
-
-// ── Topology mode toggle ────────────────────────────────────────────────
-function setMode(topology) {
-  topoMode = topology;
-
-  document.getElementById('btn-collapsed').classList.toggle('active', !topology);
-  document.getElementById('btn-topology').classList.toggle('active',  topology);
-
-  const modeBadge = document.getElementById('mode-badge');
-  modeBadge.textContent = topology ? 'Topology' : 'Collapsed';
-  modeBadge.className   = topology ? 'mode-badge topology' : 'mode-badge';
-
-  document.querySelectorAll('.topo-section').forEach(el => el.classList.toggle('visible', topology));
-  document.querySelectorAll('.collapsed-section').forEach(el => el.classList.toggle('hidden', topology));
-
-  load();
-}
-
-document.getElementById('btn-collapsed').addEventListener('click', () => { if (topoMode)  setMode(false); });
-document.getElementById('btn-topology').addEventListener('click',  () => { if (!topoMode) setMode(true);  });
-
-// ── Theme toggle ─────────────────────────────────────────────────────────
-document.getElementById('btn-theme').addEventListener('click', toggleTheme);
-
-// ── Workspace apply ─────────────────────────────────────────────────────
-document.getElementById('ws-apply').addEventListener('click', load);
-wsInput.addEventListener('keydown', e => { if (e.key === 'Enter') load(); });
-
-// ── Debounced workspace input ───────────────────────────────────────────
-let _wsDebounce = null;
-wsInput.addEventListener('input', () => {
-  clearTimeout(_wsDebounce);
-  _wsDebounce = setTimeout(load, 300);
-});
-
-// ── Canvas controls ─────────────────────────────────────────────────────
-let _physicsOn = false;
-document.getElementById('btn-fit').addEventListener('click', () => {
-  if (network) network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
-});
-document.getElementById('btn-physics').addEventListener('click', () => {
-  if (!network) return;
-  _physicsOn = !_physicsOn;
-  network.setOptions({ physics: { enabled: _physicsOn } });
-  const btn = document.getElementById('btn-physics');
-  btn.textContent = _physicsOn ? '⚡ Physics ON' : '⚡ Physics';
-  btn.classList.toggle('physics-on', _physicsOn);
-});
-
-// ── Filter checkboxes ───────────────────────────────────────────────────
-document.querySelectorAll('[data-filter]').forEach(cb => {
-  cb.addEventListener('change', applyFilters);
-});
-
-// ── Refresh button ──────────────────────────────────────────────────────
-document.getElementById('btn-refresh').addEventListener('click', load);
-
-// ── Global keyboard shortcuts ────────────────────────────────────────────
-// Escape priority chain: exit focus first, then close detail panel
-// F key: enter focus on selected node (or exit if already focused)
-document.addEventListener('keydown', e => {
-  if (document.activeElement.tagName === 'INPUT') return;   // never intercept text entry
-  if (e.key === 'Escape') {
-    if (focusNodeId !== null) { exitFocus(); return; }
-    closeDetailPanel();
-    return;
-  }
-  if (e.key === 'f' || e.key === 'F') {
-    if (focusNodeId !== null) { exitFocus(); return; }
-    const sel = network?.getSelectedNodes() || [];
-    if (sel.length > 0) activateFocus(sel[0]);
-  }
-});
-
-// ── Boot ────────────────────────────────────────────────────────────────
-if (urlParams.get('topology') === 'true') {
-  topoMode = true;
-  document.getElementById('btn-collapsed').classList.remove('active');
-  document.getElementById('btn-topology').classList.add('active');
-  document.getElementById('mode-badge').textContent = 'Topology';
-  document.getElementById('mode-badge').className   = 'mode-badge topology';
-  document.querySelectorAll('.topo-section').forEach(el => el.classList.add('visible'));
-  document.querySelectorAll('.collapsed-section').forEach(el => el.classList.add('hidden'));
-}
-load();
+window.GraphOverviewApp = GraphOverviewApp;
+window.graphOverviewApp = new GraphOverviewApp();
+window.graphOverviewApp.init();

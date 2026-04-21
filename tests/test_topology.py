@@ -245,8 +245,11 @@ async def test_link_topology_nodes_creates_edge(driver):
             driver, TEST_DB, service_id=SVC_B, name="B", workspace_id=WS_ID
         )
         record = await topology_repo.link_topology_nodes(
-            from_id=SVC_A, to_id=SVC_B, rel_type="CALLS_DOWNSTREAM",
-            driver=driver, database=TEST_DB,
+            from_id=SVC_A,
+            to_id=SVC_B,
+            rel_type="CALLS_DOWNSTREAM",
+            driver=driver,
+            database=TEST_DB,
         )
         assert record["from_id"] == SVC_A
         assert record["to_id"] == SVC_B
@@ -281,8 +284,11 @@ async def test_link_topology_nodes_invalid_rel_type_returns_status(driver):
         )
         # READS_FROM is valid for Service→DataSource, not Service→Service
         record = await topology_repo.link_topology_nodes(
-            from_id=SVC_A, to_id=SVC_B, rel_type="READS_FROM",
-            driver=driver, database=TEST_DB,
+            from_id=SVC_A,
+            to_id=SVC_B,
+            rel_type="READS_FROM",
+            driver=driver,
+            database=TEST_DB,
         )
         assert record["status"] == "invalid_rel_type"
         assert "error" in record
@@ -370,8 +376,11 @@ async def test_get_service_dependencies_downstream(driver):
         from graphbase_memories.graph.repositories import topology_repo
 
         await topology_repo.link_topology_nodes(
-            from_id=svc_root, to_id=svc_leaf, rel_type="CALLS_DOWNSTREAM",
-            driver=driver, database=TEST_DB,
+            from_id=svc_root,
+            to_id=svc_leaf,
+            rel_type="CALLS_DOWNSTREAM",
+            driver=driver,
+            database=TEST_DB,
         )
         result = await eng.get_service_dependencies(
             GetServiceDependenciesInput(service_id=svc_root, direction="downstream", depth=2),

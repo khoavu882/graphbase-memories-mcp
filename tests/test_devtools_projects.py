@@ -103,7 +103,8 @@ async def test_hygiene_run_returns_report(driver, fresh_project):
     from graphbase_memories.devtools.routes.hygiene import HygieneRunRequest, run_hygiene
 
     body = HygieneRunRequest(project_id=TEST_PROJECT_ID, scope="project")
-    result = await run_hygiene(body, driver)
+    # Pass a sentinel token — DevtoolsTokenDep is FastAPI DI; bypassed on direct calls.
+    result = await run_hygiene(body, driver, "test-token")
 
     # Result is a model_dump() dict from HygieneReport
     assert isinstance(result, dict)
@@ -114,6 +115,6 @@ async def test_hygiene_run_global_scope(driver):
     from graphbase_memories.devtools.routes.hygiene import HygieneRunRequest, run_hygiene
 
     body = HygieneRunRequest(project_id=None, scope="global")
-    result = await run_hygiene(body, driver)
+    result = await run_hygiene(body, driver, "test-token")
 
     assert isinstance(result, dict)

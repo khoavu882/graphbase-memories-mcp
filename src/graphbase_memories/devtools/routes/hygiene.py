@@ -8,7 +8,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from graphbase_memories.config import settings
-from graphbase_memories.devtools.deps import DriverDep
+from graphbase_memories.devtools.deps import DevtoolsTokenDep, DriverDep
 from graphbase_memories.engines import hygiene as hygiene_engine
 
 router = APIRouter(prefix="/hygiene", tags=["hygiene"])
@@ -60,11 +60,12 @@ class HygieneRunRequest(BaseModel):
 
 
 @router.post("/run")
-async def run_hygiene(body: HygieneRunRequest, driver: DriverDep):
-    """Run the memory hygiene cycle. Report-only — does not auto-mutate graph nodes.
+async def run_hygiene(body: HygieneRunRequest, driver: DriverDep, _: DevtoolsTokenDep):
+    """Run the memory hygiene cycle. Writes last_hygiene_at to Project nodes on completion.
 
     Set check_pending_only=true to skip all content scans and only return pending-save
     status. Does not update last_hygiene_at when check_pending_only is true.
+    Requires the startup write token (X-Devtools-Token header).
     """
     report = await hygiene_engine.run(
         project_id=body.project_id,

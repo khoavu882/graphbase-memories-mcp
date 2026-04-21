@@ -14,14 +14,15 @@
 
 ```bash
 # 1. Clone
-git clone https://github.com/khoavu882/graphbase.git
-cd graphbase
+git clone https://github.com/khoavu882/graphbase-memories-mcp.git
+cd graphbase-memories-mcp
 
 # 2. Install dependencies (uv respects the lockfile)
-uv sync
+uv sync --group dev
 
 # Or with pip in a manual virtual environment
-# python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
+# python3 -m venv .venv && source .venv/bin/activate && pip install -e .
+# pip install ruff pytest pytest-asyncio
 
 # 3. Start Neo4j
 docker compose -f docker-compose.neo4j.yml up -d
@@ -39,23 +40,23 @@ Tests are **integration tests** — they require a live Neo4j instance.
 
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run with verbose output
-pytest -v
+uv run pytest -v
 
 # Run a specific test file
-pytest tests/test_dedup_engine.py
+uv run pytest tests/test_engines.py
 
 # Run a specific test
-pytest tests/test_dedup_engine.py::test_exact_hash_duplicate_skip
+uv run pytest tests/test_topology.py::test_upsert_service_creates_dual_label_node
 ```
 
 !!! warning "Neo4j must be running"
     Tests connect to `bolt://localhost:7687` with credentials `neo4j` / `graphbase`.
     They will fail with a connection error if Neo4j is not running.
 
-Test configuration is in `pytest.ini`. Async tests use `pytest-asyncio`.
+Pytest configuration lives in `pyproject.toml`. Async tests use `pytest-asyncio`.
 
 ---
 
@@ -83,21 +84,22 @@ Ruff is configured in `pyproject.toml`. Key rules enabled: `E`, `W`, `F`, `I` (i
 
 ```
 src/graphbase_memories/
-├── main.py               CLI (typer): serve | devtools | hygiene
+├── main.py               CLI (typer): serve | devtools | hygiene | surface
 ├── config.py             pydantic-settings: GRAPHBASE_* env vars
 ├── mcp/
-│   ├── server.py         FastMCP app + tool registration
+│   ├── server.py         FastMCP app + tool/prompt/resource registration
 │   ├── tools/            Tool handlers (one file per group)
-│   └── schemas/          Pydantic I/O models
+│   ├── prompts.py        MCP prompt templates
+│   └── resources.py      MCP resource handlers
 ├── engines/              Business logic engines
 ├── graph/
 │   ├── driver.py         AsyncDriver + lifespan context manager
 │   ├── models.py         Node dataclasses
-│   ├── queries/          .cypher files (schema, retrieval, write, dedup, hygiene)
+│   ├── queries/          .cypher files (schema, retrieval, write, dedup, hygiene, topology, federation, impact, surface)
 │   └── repositories/     One repo class per node type
 └── devtools/             FastAPI HTTP inspection server + Alpine.js UI
     ├── server.py         FastAPI app, lifespan, router mounting (pool=2)
-    ├── routes/           14 HTTP endpoint handlers
+    ├── routes/           Route modules for graph, projects, tools, hygiene, memory, events, and health
     │   ├── events.py     SSE heartbeat stream
     │   ├── memory.py     Memory node list/get/search/relationships
     │   ├── projects.py   Project registry with staleness + node counts
@@ -105,8 +107,9 @@ src/graphbase_memories/
     │   ├── health.py     Graph stats, workspace health, conflicts
     │   └── hygiene.py    Hygiene status + run control
     └── ui/               Alpine.js single-page dashboard
-        ├── index.html    5-tab SPA (Projects/Tools/Health/Memory/Hygiene)
-        └── static/       app.js + alpine.min.js
+        ├── index.html    Sidebar-driven dashboard shell
+        ├── graph.html    Standalone graph overview canvas
+        └── static/       CSS, Alpine helpers, stores, graph renderer, inspector
 ```
 
 ---
@@ -164,14 +167,26 @@ The devtools server provides a human-readable HTTP interface for inspecting grap
 
 ```bash
 graphbase devtools --port 8765
+# Console prints: DevTools write token: <token>
 # Open http://localhost:8765 — redirects to /ui (Alpine.js dashboard)
 ```
 
+Current UI layout:
+
+- `/ui` loads the main dashboard with sidebar navigation for Projects, Memory, Tools, and Operations.
+- `/ui/graph.html` loads the standalone graph canvas for workspace and project topology inspection.
+- The header `Write Token` field stores the startup token in browser `localStorage` under `gb-devtools-token`.
+- The Memory view supports infinite scroll, date/title sorting, project and label filters, keyboard navigation, and a live Inspector Drawer.
+- The Inspector Drawer supports inline edit, delete, JSON copy/download, and deep-links into the graph canvas for graph-rendered node types.
+- The Operations view consolidates health, hygiene, conflict, and orphan-repair workflows that were previously split across separate tabs.
+
 Architecture notes:
 
-- Connection pool capped at 2 (MCP server uses 8; Neo4j Community Edition allows 10 total).
+- Connection pool capped at 2 for devtools. The MCP server default pool is 10, for a combined default ceiling of 12 Bolt connections.
 - All route handlers call engine functions directly with the devtools driver — no FastMCP Context needed.
-- Write tools (`propagate_impact`, `link_cross_service`, `register_federated_service`) require `confirm: true` in the invoke body; without it, the response is `{"status": "preview", ...}`.
+- The server generates a random write token at startup and prints it to stdout once connectivity succeeds.
+- Devtools write routes require the `X-Devtools-Token` header to match the startup token, including memory CRUD, bulk delete, hygiene runs, orphan repair, and write-capable tool invocation.
+- Write tools (`propagate_impact`, `link_cross_service`, `register_federated_service`) also require `confirm: true` in the invoke body; without it, the response is `{"status": "preview", ...}`.
 - The SSE `/events` endpoint emits a `heartbeat` event every 5 seconds with Neo4j connectivity status.
 
 ---
@@ -189,8 +204,8 @@ Architecture notes:
 ## Building the documentation locally
 
 ```bash
-pip install -e ".[docs]"
-mkdocs serve
+uv sync --group docs
+uv run mkdocs serve
 # Open http://127.0.0.1:8000
 ```
 

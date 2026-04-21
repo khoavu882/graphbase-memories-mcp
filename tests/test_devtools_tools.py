@@ -32,7 +32,6 @@ async def test_list_tools_includes_known_tools(driver):
     names = {t["name"] for t in result}
 
     expected = {
-        "route_analysis",
         "graph_health",
         "list_active_services",
         "search_cross_service",
@@ -44,6 +43,18 @@ async def test_list_tools_includes_known_tools(driver):
         "register_federated_service",
     }
     assert expected.issubset(names), f"Missing tools: {expected - names}"
+
+
+async def test_list_tools_no_unknown_module(driver):
+    """Every tool returned by the MCP registry has a known module (not 'unknown')."""
+    from graphbase_memories.devtools.routes.tools import list_tools
+
+    result = await list_tools()
+    unknown = [t["name"] for t in result if t["module"] == "unknown"]
+    assert unknown == [], (
+        f"Tools with module='unknown' are missing from _TOOL_REGISTRY: {unknown}. "
+        "Add an entry to _TOOL_REGISTRY in routes/tools.py."
+    )
 
 
 async def test_list_tools_read_only_not_require_confirmation(driver):
@@ -68,14 +79,26 @@ async def test_list_tools_write_tools_require_confirmation(driver):
     write_tools = [
         "propagate_impact",
         "link_cross_service",
-        "register_service",
-        "deregister_service",
+        "register_federated_service",
     ]
     for name in write_tools:
         if name in by_name:
             assert by_name[name]["requires_confirmation"] is True, (
                 f"{name} should require confirmation"
             )
+
+
+async def test_list_tools_memory_surface_is_http_invocable(driver):
+    """memory_surface is in _READ_ONLY_TOOLS and must also be http_invocable."""
+    from graphbase_memories.devtools.routes.tools import list_tools
+
+    result = await list_tools()
+    by_name = {t["name"]: t for t in result}
+
+    assert "memory_surface" in by_name, "memory_surface not in tool registry"
+    tool = by_name["memory_surface"]
+    assert tool["http_invocable"] is True, "memory_surface should be http_invocable"
+    assert tool["requires_confirmation"] is False, "memory_surface should be read-only"
 
 
 async def test_get_tool_returns_single_tool(driver):
@@ -103,26 +126,38 @@ async def test_get_tool_not_found_raises_404(driver):
 
 async def test_invoke_tool_write_without_confirm_returns_preview(driver):
     """POST /tools/propagate_impact/invoke without confirm=True returns status=preview."""
+    from graphbase_memories.devtools.deps import set_devtools_token
     from graphbase_memories.devtools.routes.tools import InvokeRequest, invoke_tool
+
+    set_devtools_token("test-devtools-token")
 
     body = InvokeRequest(
         params={"entity_id": "test-entity", "change_description": "breaking change"},
         confirm=False,
     )
-    result = await invoke_tool("propagate_impact", body, driver)
+    result = await invoke_tool(
+        "propagate_impact",
+        body,
+        driver,
+        x_devtools_token="test-devtools-token",
+    )
 
     assert result["status"] == "preview"
     assert "params_received" in result
 
 
-async def test_invoke_tool_not_dispatched_returns_not_supported(driver):
-    """POST /tools/save_decision/invoke returns status=not_supported."""
+async def test_invoke_tool_not_dispatched_returns_501(driver):
+    """POST /tools/save_decision/invoke returns HTTP 501 (not 200)."""
+    from fastapi import HTTPException
+
     from graphbase_memories.devtools.routes.tools import InvokeRequest, invoke_tool
 
     body = InvokeRequest(params={}, confirm=False)
-    result = await invoke_tool("save_decision", body, driver)
-
-    assert result["status"] == "not_supported"
+    try:
+        await invoke_tool("save_decision", body, driver)
+        raise AssertionError("Should have raised HTTPException 501")
+    except HTTPException as exc:
+        assert exc.status_code == 501
 
 
 async def test_invoke_read_tool_executes_immediately(driver):
@@ -136,3 +171,23 @@ async def test_invoke_read_tool_executes_immediately(driver):
     assert result["status"] == "ok"
     assert "result" in result
     assert "duration_ms" in result
+
+
+async def test_invoke_write_tool_requires_token(driver):
+    """POST /tools/{name}/invoke rejects write-capable tools without the startup token."""
+    from fastapi import HTTPException
+
+    from graphbase_memories.devtools.deps import set_devtools_token
+    from graphbase_memories.devtools.routes.tools import InvokeRequest, invoke_tool
+
+    set_devtools_token("expected-token")
+    body = InvokeRequest(
+        params={"entity_id": "test-entity", "change_description": "breaking change"},
+        confirm=False,
+    )
+
+    try:
+        await invoke_tool("propagate_impact", body, driver)
+        raise AssertionError("Should have raised HTTPException 403")
+    except HTTPException as exc:
+        assert exc.status_code == 403

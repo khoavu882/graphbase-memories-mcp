@@ -6,43 +6,16 @@
   <title>Graphbase — Graph Overview</title>
   <meta name="description" content="Interactive graph topology canvas for graphbase-memories devtools — visualise Workspace, Project, and federation edges.">
   <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="static/tokens.css">
   <script src="/ui/static/vis-network.min.js"></script>
+  <script>
+    if (new URLSearchParams(window.location.search).get("embedded") === "1") {
+      document.documentElement.classList.add("graph-embedded");
+    }
+  </script>
   <style>
-    /* ── Theme tokens ────────────────────────────────────────────────────── */
-    :root,
-    [data-theme="dark"] {
-      --bg-base:        #0f172a;
-      --bg-surface:     #1e293b;
-      --bg-raised:      #334155;
-      --border:         #334155;
-      --text-dim:       #475569;
-      --text-subdued:   #64748b;
-      --text-secondary: #94a3b8;
-      --text-muted:     #cbd5e1;
-      --text-primary:   #e2e8f0;
-      --text-bright:    #f8fafc;
-      --accent:         #3b82f6;
-      --accent-strong:  #1d4ed8;
-      --text-error:     #fca5a5;
-    }
-    [data-theme="light"] {
-      --bg-base:        #f8fafc;
-      --bg-surface:     #ffffff;
-      --bg-raised:      #e2e8f0;
-      --border:         #cbd5e1;
-      --text-dim:       #94a3b8;
-      --text-subdued:   #64748b;
-      --text-secondary: #475569;
-      --text-muted:     #334155;
-      --text-primary:   #1e293b;
-      --text-bright:    #0f172a;
-      --accent:         #2563eb;
-      --accent-strong:  #1d4ed8;
-      --text-error:     #dc2626;
-    }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: var(--bg-base); color: var(--text-primary);
+    body { font-family: var(--font-sans); background: var(--bg-base); color: var(--text-primary);
            font-size: 14px; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
     /* ── Header ─────────────────────────────────────────────────────────── */
@@ -127,14 +100,44 @@
     .badge-stale        { background: #78350f; color: #fde68a; }
     .badge-fresh        { background: #166534; color: #86efac; }
     .badge-category     { background: #1c1917; color: #d4d4aa; border: 1px solid #44403c; }
+    .badge-cluster      { background: #0f172a; color: #e2e8f0; border: 1px solid #334155; }
 
     /* ── Canvas controls (top-right floating buttons) ──────────────────── */
-    .canvas-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 6; }
+    .canvas-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 6;
+                       flex-wrap: wrap; justify-content: flex-end; max-width: min(520px, calc(100% - 24px)); }
     .ctrl-btn { padding: 5px 10px; background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-secondary);
                 border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500;
                 transition: background 0.15s, color 0.15s; }
     .ctrl-btn:hover { background: var(--bg-raised); color: var(--text-primary); }
     .ctrl-btn.physics-on { border-color: #22c55e; color: #4ade80; }
+
+    .cluster-status {
+      position: absolute;
+      left: 12px;
+      top: 48px;
+      z-index: 7;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      max-width: min(720px, calc(100% - 360px));
+      padding: 8px 10px;
+      background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+      backdrop-filter: blur(10px);
+    }
+    .cluster-status[hidden] { display: none; }
+    .cluster-copy {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .cluster-title { font-size: 11px; font-weight: 700; color: var(--text-bright); text-transform: uppercase; letter-spacing: 0.05em; }
+    .cluster-summary { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+    .cluster-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
     /* ── Topology-only sections ─────────────────────────────────────────── */
     .topo-section { display: none; }
@@ -215,6 +218,10 @@
                        color: #fff; font-size: 11px; font-weight: 600;
                        display: none; pointer-events: none; }
     .focus-indicator.visible { display: block; }
+
+    html.graph-embedded body { height: 100%; }
+    html.graph-embedded header { display: none; }
+    html.graph-embedded .body { min-height: 100vh; }
   </style>
 </head>
 <body>
@@ -233,7 +240,7 @@
       <div>
         <h2>Workspace</h2>
         <div class="ws-input-wrap">
-          <input id="ws-input" type="text" placeholder="workspace id…" title="Filter graph by workspace ID">
+          <input id="ws-input" name="workspace_id" type="text" placeholder="workspace id…" title="Filter graph by workspace ID">
           <button id="ws-apply" title="Apply workspace filter">Go</button>
         </div>
       </div>
@@ -256,12 +263,12 @@
         <h2>Node Types</h2>
         <div class="filter-group" id="node-filters">
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="node" data-label="Workspace">
+            <input type="checkbox" name="node_workspace" checked data-filter="node" data-label="Workspace">
             <span class="color-dot" aria-hidden="true" style="background:#7c3aed"></span>
             <span class="lbl">Workspace</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="node" data-label="Project">
+            <input type="checkbox" name="node_project" checked data-filter="node" data-label="Project">
             <span class="color-dot" aria-hidden="true" style="background:#2563eb"></span>
             <span class="lbl">Project</span>
           </label>
@@ -273,47 +280,47 @@
         <h2>Categories</h2>
         <div class="filter-group" id="category-filters">
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="category" data-category="Service">
+            <input type="checkbox" name="category_service" checked data-filter="category" data-category="Service">
             <span class="color-dot" aria-hidden="true" style="background:#0ea5e9"></span>
             <span class="lbl">Service</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="category" data-category="BoundedContext">
+            <input type="checkbox" name="category_bounded_context" checked data-filter="category" data-category="BoundedContext">
             <span class="color-dot" aria-hidden="true" style="background:#f59e0b"></span>
             <span class="lbl">BoundedContext</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="category" data-category="Topic">
+            <input type="checkbox" name="category_topic" checked data-filter="category" data-category="Topic">
             <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
             <span class="lbl">Topic</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="category" data-category="DataStore">
+            <input type="checkbox" name="category_data_store" checked data-filter="category" data-category="DataStore">
             <span class="color-dot" aria-hidden="true" style="background:#8b5cf6"></span>
             <span class="lbl">DataStore</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="category" data-category="External">
+            <input type="checkbox" name="category_external" checked data-filter="category" data-category="External">
             <span class="color-dot" aria-hidden="true" style="background:#f97316"></span>
             <span class="lbl">External</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="category" data-category="Feature">
+            <input type="checkbox" name="category_feature" checked data-filter="category" data-category="Feature">
             <span class="color-dot" aria-hidden="true" style="background:#ec4899"></span>
             <span class="lbl">Feature</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="category" data-category="DataSource">
+            <input type="checkbox" name="category_data_source" checked data-filter="category" data-category="DataSource">
             <span class="color-dot" aria-hidden="true" style="background:#8b5cf6"></span>
             <span class="lbl">DataSource</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="category" data-category="MessageQueue">
+            <input type="checkbox" name="category_message_queue" checked data-filter="category" data-category="MessageQueue">
             <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
             <span class="lbl">MessageQueue</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" data-filter="category" data-category="EntityFact">
+            <input type="checkbox" name="category_entity_fact" data-filter="category" data-category="EntityFact">
             <span class="color-dot" aria-hidden="true" style="background:#94a3b8"></span>
             <span class="lbl">Other</span>
           </label>
@@ -327,17 +334,17 @@
         <h2>Edge Types</h2>
         <div class="filter-group" id="edge-filters">
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="edge" data-edge="MEMBER_OF">
+            <input type="checkbox" name="edge_member_of" checked data-filter="edge" data-edge="MEMBER_OF">
             <span class="color-dot" aria-hidden="true" style="background:#475569"></span>
             <span class="lbl">MEMBER_OF</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="edge" data-edge="CROSS_SERVICE_LINK">
+            <input type="checkbox" name="edge_cross_service_link" checked data-filter="edge" data-edge="CROSS_SERVICE_LINK">
             <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
             <span class="lbl">CROSS_SERVICE_LINK</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="edge" data-edge="AFFECTS">
+            <input type="checkbox" name="edge_affects" checked data-filter="edge" data-edge="AFFECTS">
             <span class="color-dot" aria-hidden="true" style="background:#ef4444"></span>
             <span class="lbl">AFFECTS</span>
           </label>
@@ -349,92 +356,92 @@
         <h2>Edge Types</h2>
         <div class="filter-group" id="topo-edge-filters">
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="MEMBER_OF">
+            <input type="checkbox" name="topo_edge_member_of" checked data-filter="topo-edge" data-edge="MEMBER_OF">
             <span class="color-dot" aria-hidden="true" style="background:#475569"></span>
             <span class="lbl">MEMBER_OF</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="BELONGS_TO">
+            <input type="checkbox" name="topo_edge_belongs_to" checked data-filter="topo-edge" data-edge="BELONGS_TO">
             <span class="color-dot" aria-hidden="true" style="background:#475569"></span>
             <span class="lbl">BELONGS_TO</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="INVOLVES">
+            <input type="checkbox" name="topo_edge_involves" checked data-filter="topo-edge" data-edge="INVOLVES">
             <span class="color-dot" aria-hidden="true" style="background:#ec4899"></span>
             <span class="lbl">INVOLVES</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="CONSUMES">
+            <input type="checkbox" name="topo_edge_consumes" checked data-filter="topo-edge" data-edge="CONSUMES">
             <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
             <span class="lbl">CONSUMES</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="PRODUCES">
+            <input type="checkbox" name="topo_edge_produces" checked data-filter="topo-edge" data-edge="PRODUCES">
             <span class="color-dot" aria-hidden="true" style="background:#3b82f6"></span>
             <span class="lbl">PRODUCES</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="READS">
+            <input type="checkbox" name="topo_edge_reads" checked data-filter="topo-edge" data-edge="READS">
             <span class="color-dot" aria-hidden="true" style="background:#94a3b8"></span>
             <span class="lbl">READS</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="WRITES">
+            <input type="checkbox" name="topo_edge_writes" checked data-filter="topo-edge" data-edge="WRITES">
             <span class="color-dot" aria-hidden="true" style="background:#f59e0b"></span>
             <span class="lbl">WRITES</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="CONFLICTS_WITH">
+            <input type="checkbox" name="topo_edge_conflicts_with" checked data-filter="topo-edge" data-edge="CONFLICTS_WITH">
             <span class="color-dot" aria-hidden="true" style="background:#ef4444"></span>
             <span class="lbl">CONFLICTS_WITH</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="MERGES_INTO">
+            <input type="checkbox" name="topo_edge_merges_into" checked data-filter="topo-edge" data-edge="MERGES_INTO">
             <span class="color-dot" aria-hidden="true" style="background:#a78bfa"></span>
             <span class="lbl">MERGES_INTO</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="CALLS_DOWNSTREAM">
+            <input type="checkbox" name="topo_edge_calls_downstream" checked data-filter="topo-edge" data-edge="CALLS_DOWNSTREAM">
             <span class="color-dot" aria-hidden="true" style="background:#3b82f6"></span>
             <span class="lbl">CALLS_DOWNSTREAM</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="CALLS_UPSTREAM">
+            <input type="checkbox" name="topo_edge_calls_upstream" checked data-filter="topo-edge" data-edge="CALLS_UPSTREAM">
             <span class="color-dot" aria-hidden="true" style="background:#6366f1"></span>
             <span class="lbl">CALLS_UPSTREAM</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="READS_FROM">
+            <input type="checkbox" name="topo_edge_reads_from" checked data-filter="topo-edge" data-edge="READS_FROM">
             <span class="color-dot" aria-hidden="true" style="background:#94a3b8"></span>
             <span class="lbl">READS_FROM</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="WRITES_TO">
+            <input type="checkbox" name="topo_edge_writes_to" checked data-filter="topo-edge" data-edge="WRITES_TO">
             <span class="color-dot" aria-hidden="true" style="background:#f59e0b"></span>
             <span class="lbl">WRITES_TO</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="PUBLISHES_TO">
+            <input type="checkbox" name="topo_edge_publishes_to" checked data-filter="topo-edge" data-edge="PUBLISHES_TO">
             <span class="color-dot" aria-hidden="true" style="background:#10b981"></span>
             <span class="lbl">PUBLISHES_TO</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="SUBSCRIBES_TO">
+            <input type="checkbox" name="topo_edge_subscribes_to" checked data-filter="topo-edge" data-edge="SUBSCRIBES_TO">
             <span class="color-dot" aria-hidden="true" style="background:#06b6d4"></span>
             <span class="lbl">SUBSCRIBES_TO</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="MEMBER_OF_CONTEXT">
+            <input type="checkbox" name="topo_edge_member_of_context" checked data-filter="topo-edge" data-edge="MEMBER_OF_CONTEXT">
             <span class="color-dot" aria-hidden="true" style="background:#f59e0b"></span>
             <span class="lbl">MEMBER_OF_CONTEXT</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="PART_OF">
+            <input type="checkbox" name="topo_edge_part_of" checked data-filter="topo-edge" data-edge="PART_OF">
             <span class="color-dot" aria-hidden="true" style="background:#475569"></span>
             <span class="lbl">PART_OF</span>
           </label>
           <label class="filter-item">
-            <input type="checkbox" checked data-filter="topo-edge" data-edge="HAS_FEATURE">
+            <input type="checkbox" name="topo_edge_has_feature" checked data-filter="topo-edge" data-edge="HAS_FEATURE">
             <span class="color-dot" aria-hidden="true" style="background:#ec4899"></span>
             <span class="lbl">HAS_FEATURE</span>
           </label>
@@ -469,6 +476,19 @@
       <div class="canvas-controls">
         <button class="ctrl-btn" id="btn-fit" title="Fit all nodes into view">⊡ Fit</button>
         <button class="ctrl-btn" id="btn-physics" title="Toggle force-directed physics">⚡ Physics</button>
+        <button class="ctrl-btn" id="btn-export-json" title="Download the currently visible subgraph as JSON">Export JSON</button>
+        <button class="ctrl-btn" id="btn-export-csv" title="Download the currently visible subgraph as CSV">Export CSV</button>
+      </div>
+
+      <div class="cluster-status" id="cluster-status" hidden>
+        <div class="cluster-copy">
+          <span class="cluster-title">Large Graph Clustering</span>
+          <span class="cluster-summary" id="cluster-summary"></span>
+        </div>
+        <div class="cluster-actions">
+          <button class="ctrl-btn" id="btn-expand-clusters" type="button" hidden>Expand All</button>
+          <button class="ctrl-btn" id="btn-reset-clusters" type="button" hidden>Re-cluster</button>
+        </div>
       </div>
 
       <!-- Focus mode indicator -->
@@ -495,6 +515,11 @@
           <div class="dp-field">
             <span class="dp-label">Display Name</span>
             <span class="dp-value" id="dp-display">—</span>
+          </div>
+          <div class="dp-field">
+            <button class="copy-btn" id="dp-full-detail" aria-label="Open full node detail in Devtools">
+              View Full Detail
+            </button>
           </div>
         </div>
         <div class="dp-section" id="dp-section-meta">

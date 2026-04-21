@@ -5,9 +5,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from neo4j import AsyncDriver
+
 from graphbase_memories.config import settings
-from graphbase_memories.mcp.schemas.enums import FreshnessLevel
-from graphbase_memories.mcp.schemas.results import FreshnessReport, StaleItem
+from graphbase_memories.domain.enums import FreshnessLevel
+from graphbase_memories.domain.results import FreshnessReport, StaleItem
+from graphbase_memories.graph.repositories import freshness_repo
 
 
 def compute_freshness_str(ts_raw: Any) -> str:
@@ -35,45 +38,6 @@ def compute_freshness_str(ts_raw: Any) -> str:
     return "stale"
 
 
-# ── Cypher — fetch stale memory nodes for a project ──────────────────────────
-# Scans Decision, Pattern, Context, EntityFact nodes that have not been updated
-# within stale_after_days. Uses updated_at with created_at as fallback.
-# CASE WHEN label checks are deterministic; labels()[0] ordering is not.
-
-_SCAN_QUERY = """
-MATCH (n)
-WHERE (n:Decision OR n:Pattern OR n:Context OR n:EntityFact)
-  AND EXISTS {
-    MATCH (n)-[:BELONGS_TO]->(p:Project {id: $project_id})
-  }
-WITH n,
-     CASE WHEN n.updated_at IS NOT NULL THEN n.updated_at ELSE n.created_at END AS ts
-WHERE ts IS NOT NULL
-  AND ts < datetime() - duration({days: $stale_after_days})
-OPTIONAL MATCH (n)-[:BELONGS_TO]->(proj:Project)
-RETURN
-  n.id AS node_id,
-  CASE
-    WHEN n:Decision   THEN "Decision"
-    WHEN n:Pattern    THEN "Pattern"
-    WHEN n:Context    THEN "Context"
-    WHEN n:EntityFact THEN "EntityFact"
-    ELSE "Unknown"
-  END AS label,
-  CASE
-    WHEN n:Decision   THEN n.title
-    WHEN n:Pattern    THEN n.trigger
-    WHEN n:Context    THEN n.topic
-    WHEN n:EntityFact THEN n.entity_name
-    ELSE null
-  END AS title,
-  ts,
-  proj.id AS project_id
-ORDER BY ts ASC
-LIMIT $scan_limit
-"""
-
-
 async def scan(
     project_id: str,
     stale_after_days: int,
@@ -90,30 +54,32 @@ async def scan(
     now = datetime.now(UTC)
     stale_items: list[StaleItem] = []
 
-    async with driver.session(database=database) as session:
-        result = await session.run(
-            _SCAN_QUERY,
-            project_id=project_id,
-            stale_after_days=stale_after_days,
-            scan_limit=scan_limit,
-        )
-        async for record in result:
-            ts_raw = record["ts"]
-            ts = ts_raw.to_native() if hasattr(ts_raw, "to_native") else ts_raw
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=UTC)
-            age_days = (now - ts).days
-            freshness_str = compute_freshness_str(ts_raw)
-            stale_items.append(
-                StaleItem(
-                    node_id=record["node_id"],
-                    label=record["label"],
-                    title=record["title"],
-                    age_days=age_days,
-                    freshness=FreshnessLevel(freshness_str) if freshness_str != "unknown" else FreshnessLevel.stale,
-                    project_id=record["project_id"],
-                )
+    records = await freshness_repo.scan_stale_records(
+        project_id=project_id,
+        stale_after_days=stale_after_days,
+        scan_limit=scan_limit,
+        driver=driver,
+        database=database,
+    )
+    for record in records:
+        ts_raw = record["ts"]
+        ts = ts_raw.to_native() if hasattr(ts_raw, "to_native") else ts_raw
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        age_days = (now - ts).days
+        freshness_str = compute_freshness_str(ts_raw)
+        stale_items.append(
+            StaleItem(
+                node_id=record["node_id"],
+                label=record["label"],
+                title=record["title"],
+                age_days=age_days,
+                freshness=FreshnessLevel(freshness_str)
+                if freshness_str != "unknown"
+                else FreshnessLevel.stale,
+                project_id=record["project_id"],
             )
+        )
 
     stale_count = len(stale_items)
     if stale_count == 0:

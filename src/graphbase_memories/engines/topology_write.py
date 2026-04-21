@@ -26,10 +26,10 @@ from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError, ServiceUnavailable
 
 from graphbase_memories.config import settings
+from graphbase_memories.domain.enums import ScopeState
 from graphbase_memories.engines import scope as scope_engine
 from graphbase_memories.graph.repositories import token_repo, topology_repo
 from graphbase_memories.graph.repositories.topology_repo import LinkEdgeProps
-from graphbase_memories.mcp.schemas.enums import ScopeState
 from graphbase_memories.mcp.schemas.topology import (
     BatchInfraResult,
     BatchUpsertInfraInput,

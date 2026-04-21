@@ -7,13 +7,16 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+import secrets
 
-from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from neo4j import AsyncGraphDatabase
+from neo4j.exceptions import DriverError, Neo4jError
 
 from graphbase_memories.config import settings
+from graphbase_memories.devtools.deps import require_token, set_devtools_token
 from graphbase_memories.devtools.routes import (
     events,
     graph,
@@ -31,6 +34,8 @@ UI_DIR = Path(__file__).parent / "ui"
 # Devtools uses a capped pool (2) to stay within Neo4j Community Edition's
 # connection limit when running alongside the MCP server (pool=8).
 _DEVTOOLS_POOL_SIZE = 2
+_DEVTOOLS_TOKEN = secrets.token_urlsafe(32)
+set_devtools_token(_DEVTOOLS_TOKEN)
 
 
 @asynccontextmanager
@@ -43,6 +48,7 @@ async def lifespan(app: FastAPI):
     )
     try:
         await driver.verify_connectivity()
+        print(f"DevTools write token: {_DEVTOOLS_TOKEN}")
         app.state.driver = driver
         async with driver.session(database=settings.neo4j_database) as session:
             for stmt in split_statements(SCHEMA_DDL):
@@ -57,6 +63,29 @@ app = FastAPI(
     description="HTTP interface for inspecting graph memory nodes and invoking MCP tools",
     lifespan=lifespan,
 )
+
+# ---------------------------------------------------------------------------
+# Global exception handlers
+# ---------------------------------------------------------------------------
+
+
+@app.exception_handler(Neo4jError)
+async def neo4j_error_handler(request: Request, exc: Neo4jError) -> JSONResponse:
+    """Return 503 for all Neo4j query and connectivity errors."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "neo4j_error", "message": str(exc)},
+    )
+
+
+@app.exception_handler(DriverError)
+async def driver_error_handler(request: Request, exc: DriverError) -> JSONResponse:
+    """Return 503 for Neo4j driver-level errors (connection pool, auth)."""
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "neo4j_driver_error", "message": str(exc)},
+    )
+
 
 # ---------------------------------------------------------------------------
 # Mount route modules
@@ -81,3 +110,6 @@ if UI_DIR.exists():
 async def root():
     """Redirect browser root to the devtools UI."""
     return RedirectResponse(url="/ui")
+
+
+__all__ = ["_DEVTOOLS_TOKEN", "app", "require_token"]

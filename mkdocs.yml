@@ -1,9 +1,9 @@
 site_name: Graphbase Memories MCP
 site_description: Graph-backed persistent memory for AI coding agents, exposed as an MCP server
 site_author: Kai Vu
-site_url: https://khoavu882.github.io/graphbase/
+site_url: https://khoavu882.github.io/graphbase-memories-mcp/
 repo_url: https://github.com/khoavu882/graphbase-memories-mcp
-repo_name: khoavu882/graphbase
+repo_name: khoavu882/graphbase-memories-mcp
 edit_uri: edit/main/docs/
 
 theme:
@@ -62,6 +62,7 @@ plugins:
       minify_html: true
 
 nav:
+  - Home: index.md
   - Getting Started:
     - Quick Start: quickstart.md
     - Configuration: configuration.md
@@ -73,10 +74,12 @@ nav:
     - Artifacts: tools/artifacts.md
     - Entity: tools/entity.md
     - Governance: tools/governance.md
-    - Analysis: tools/analysis.md
+    - Prompts: tools/analysis.md
     - Hygiene: tools/hygiene.md
     - Federation: tools/federation.md
     - Topology: tools/topology.md
+  - Release Notes:
+    - v2.0.0: releases/v2.0.0.md
   - Concepts:
     - Memory Model: concepts/memory-model.md
     - Scope Resolution: concepts/scope-resolution.md

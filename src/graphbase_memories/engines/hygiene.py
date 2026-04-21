@@ -13,8 +13,8 @@ from datetime import UTC, datetime
 
 from neo4j import AsyncDriver
 
+from graphbase_memories.domain.results import HygieneReport
 from graphbase_memories.graph.repositories import hygiene_repo, token_repo
-from graphbase_memories.mcp.schemas.results import HygieneReport
 
 
 async def run(

@@ -9,7 +9,7 @@ Understanding scope resolution prevents `blocked_scope` write failures and confu
 
 | State | Meaning | Read? | Write? |
 |---|---|---|---|
-| `resolved` | Project exists in graph; focus (if given) exists as a `FocusArea` node | Yes (full) | Yes |
+| `resolved` | Project exists in graph | Yes (full) | Yes |
 | `uncertain` | `project_id` provided but no matching `Project` node exists yet | Yes (project scope only, no focus) | No |
 | `unresolved` | No `project_id` provided | No | No |
 
@@ -23,8 +23,8 @@ stateDiagram-v2
     [*] --> uncertain : project_id given, project not in graph
     [*] --> resolved : project_id given, project exists
 
-    uncertain --> resolved : save_session creates Project node
-    resolved --> resolved : focus provided and FocusArea exists
+    uncertain --> resolved : Project created by service registration or other graph seed path
+    resolved --> resolved : focus may be supplied; FocusArea is created on first write
     resolved --> uncertain : project deleted from graph
 ```
 
@@ -42,31 +42,40 @@ check tool. Read `scope_state` and `retrieval_status` from the bundle to determi
 retrieve_context(project_id="my-new-project", scope="project")
 # Returns: { items: [], retrieval_status: "empty", scope_state: "uncertain", ... }
 
-# 2. Save a session — this creates the Project node
-save_session(session={...}, project_id="my-new-project")
-# Returns: { status: "saved" }
+# 2. Register the project/service so the Project node exists
+register_federated_service(
+    service_id="my-new-project",
+    workspace_id="demo-workspace"
+)
 
 # 3. Subsequent retrieval now resolves
 retrieve_context(project_id="my-new-project", scope="project")
-# Returns: { items: [...], retrieval_status: "succeeded", scope_state: "resolved", ... }
+# Returns: { items: [], retrieval_status: "empty", scope_state: "resolved", ... }
+
+# 4. Writes are now allowed
+store_session_with_learnings(
+    session={...},
+    project_id="my-new-project",
+    decisions=[],
+    patterns=[]
+)
 ```
 
 ### Using focus areas
 
 ```python
-# 1. Load with focus — scope_state reflects whether the FocusArea node exists yet
+# 1. Load with focus on an existing project
 retrieve_context(project_id="my-project", scope="focus", focus="auth-refactor")
-# Returns: { items: [], retrieval_status: "empty", scope_state: "uncertain", ... }
-# ← FocusArea node doesn't exist yet
+# Returns: { items: [], retrieval_status: "empty", scope_state: "resolved", ... }
 
-# 2. Save something with focus — this creates the FocusArea node
+# 2. Save something with focus — this creates the FocusArea node if needed
 save_context(
     context={"content": "...", "topic": "auth", "scope": "focus", "relevance_score": 1.0},
     project_id="my-project",
     focus="auth-refactor"
 )
 
-# 3. Focus is now resolved
+# 3. Focus-scoped retrieval now returns focus-linked items when they exist
 retrieve_context(project_id="my-project", scope="focus", focus="auth-refactor")
 # Returns: { items: [...], scope_state: "resolved", ... }
 ```
@@ -75,13 +84,13 @@ retrieve_context(project_id="my-project", scope="focus", focus="auth-refactor")
 
 ## Why writes block on uncertain scope
 
-Writing to a project that doesn't exist would silently create orphaned nodes without a proper
-`[:BELONGS_TO]` relationship. The scope gate prevents this by requiring an explicit Project node
-before any non-session writes are allowed.
+Writing to a project that doesn't exist would silently create memory under an implicit or
+mis-scoped anchor. The scope gate prevents this by requiring an explicit `Project` node before any
+memory write is allowed.
 
-The exception is `save_session` — it is the **bootstrapping tool** that creates the Project node
-on first use. All other write tools (`save_decision`, `save_pattern`, etc.) require a pre-existing
-Project node and return `blocked_scope` if one doesn't exist.
+There is no standalone bootstrapping session tool in the current MCP surface. All memory write
+tools, including `store_session_with_learnings`, require a pre-existing `Project` node and return
+`blocked_scope` if one doesn't exist.
 
 ---
 
@@ -90,7 +99,7 @@ Project node and return `blocked_scope` if one doesn't exist.
 | Tool | Allowed when `uncertain`? | Creates Project node? |
 |---|---|---|
 | `retrieve_context` | Partial (project scope only; returns `scope_state: "uncertain"`) | No |
-| `save_session` | Yes | **Yes** |
+| `store_session_with_learnings` | No → `blocked_scope` | No |
 | `save_decision` | No → `blocked_scope` | No |
 | `save_pattern` | No → `blocked_scope` | No |
 | `save_context` | No → `blocked_scope` | No |

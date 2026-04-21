@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException
 
 from graphbase_memories.config import settings
-from graphbase_memories.devtools.deps import DriverDep
+from graphbase_memories.devtools.deps import DevtoolsTokenDep, DriverDep
 from graphbase_memories.engines import impact as impact_engine
 
 router = APIRouter(tags=["health"])
@@ -41,19 +41,29 @@ _REL_TYPES = [
 async def graph_stats(driver: DriverDep):
     """Return node counts by label and relationship counts by type."""
     now = datetime.now(UTC)
-    node_counts: dict[str, int] = {}
-    rel_counts: dict[str, int] = {}
+
+    # Build two UNION ALL queries instead of N individual round-trips (was 19).
+    # Note: when a label/rel-type has zero matches, Neo4j returns no row for that
+    # subquery (MATCH with a grouped RETURN emits nothing on empty input). We
+    # pre-initialize both dicts so zero-count entries are always present.
+    node_union = "\nUNION ALL\n".join(
+        f"MATCH (n:{lbl}) RETURN '{lbl}' AS name, count(n) AS cnt" for lbl in _NODE_LABELS
+    )
+    rel_union = "\nUNION ALL\n".join(
+        f"MATCH ()-[r:{rt}]->() RETURN '{rt}' AS name, count(r) AS cnt" for rt in _REL_TYPES
+    )
+
+    node_counts: dict[str, int] = {lbl: 0 for lbl in _NODE_LABELS}
+    rel_counts: dict[str, int] = {rt: 0 for rt in _REL_TYPES}
 
     async with driver.session(database=settings.neo4j_database) as session:
-        for lbl in _NODE_LABELS:
-            res = await session.run(f"MATCH (n:{lbl}) RETURN count(n) AS cnt")
-            rec = await res.single()
-            node_counts[lbl] = rec["cnt"] if rec else 0
+        node_result = await session.run(node_union)
+        async for rec in node_result:
+            node_counts[rec["name"]] = rec["cnt"]
 
-        for rt in _REL_TYPES:
-            res = await session.run(f"MATCH ()-[r:{rt}]->() RETURN count(r) AS cnt")
-            rec = await res.single()
-            rel_counts[rt] = rec["cnt"] if rec else 0
+        rel_result = await session.run(rel_union)
+        async for rec in rel_result:
+            rel_counts[rec["name"]] = rec["cnt"]
 
     return {
         "node_counts": node_counts,
@@ -67,7 +77,18 @@ async def workspace_health(workspace_id: str, driver: DriverDep):
     """Return health metrics for all services in a workspace."""
     try:
         report = await impact_engine.graph_health(workspace_id, driver, settings.neo4j_database)
-        return report.model_dump()
+        async with driver.session(database=settings.neo4j_database) as session:
+            orphan_result = await session.run(
+                """
+                MATCH (e:EntityFact)
+                WHERE NOT EXISTS { MATCH (e)-[:BELONGS_TO]->(:Project) }
+                RETURN count(e) AS orphaned
+                """
+            )
+            orphan_record = await orphan_result.single()
+        payload = report.model_dump()
+        payload["orphaned_entity_count"] = orphan_record["orphaned"] if orphan_record else 0
+        return payload
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -89,7 +110,11 @@ async def workspace_conflicts(workspace_id: str, driver: DriverDep, limit: int =
 
 
 @router.post("/graph/repair/orphaned-entities/{workspace_id}")
-async def repair_orphaned_entities(workspace_id: str, driver: DriverDep):
+async def repair_orphaned_entities(
+    workspace_id: str,
+    driver: DriverDep,
+    _: DevtoolsTokenDep,
+):
     """
     Repair EntityFact nodes that are not linked to any Project.
 

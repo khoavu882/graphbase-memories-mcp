@@ -1,206 +1,23 @@
-"""Result schemas for all MCP tool responses."""
+"""Re-exports from domain.results — kept so adapter code needs no import changes."""
 
-from __future__ import annotations
-
-from datetime import datetime
-
-from pydantic import BaseModel
-
-from graphbase_memories.mcp.schemas.enums import (
-    AnalysisMode,
-    DedupOutcome,
-    FreshnessLevel,
-    RetrievalStatus,
-    SaveStatus,
-    ScopeState,
+from graphbase_memories.domain.results import (  # noqa: F401
+    AffectedServiceItem,
+    BatchSaveResult,
+    ConflictRecord,
+    ContextBundle,
+    CrossServiceBundle,
+    CrossServiceItem,
+    FreshnessReport,
+    GovernanceTokenResult,
+    HygieneReport,
+    ImpactReport,
+    SaveResult,
+    ServiceInfo,
+    ServiceListResult,
+    ServiceRegistrationResult,
+    StaleItem,
+    SurfaceMatch,
+    SurfaceResult,
+    WorkspaceHealthReport,
+    WorkspaceServiceHealth,
 )
-
-
-class SaveResult(BaseModel):
-    status: SaveStatus
-    artifact_id: str | None = None
-    dedup_outcome: DedupOutcome | None = None
-    message: str | None = None
-    next_step: str | None = None
-
-
-class BatchSaveResult(BaseModel):
-    session: SaveResult
-    decisions: list[SaveResult] = []
-    patterns: list[SaveResult] = []
-    overall: SaveStatus  # partial if any sub-result failed
-
-
-class ContextBundle(BaseModel):
-    """M-4: hygiene_due surfaces overdue hygiene passively during retrieval."""
-
-    items: list[dict]
-    retrieval_status: RetrievalStatus
-    scope_state: ScopeState
-    conflicts_found: bool = False
-    hygiene_due: bool = False
-    truncated_scopes: list[str] = []  # scopes where result count hit the configured limit
-    next_step: str | None = None
-
-
-class AnalysisResult(BaseModel):
-    """M-1: actionable routing result with suggested_steps."""
-
-    mode: AnalysisMode
-    rationale: str
-    suggested_steps: list[str]
-
-
-class GovernanceTokenResult(BaseModel):
-    """Typed result for request_global_write_approval — fixes H1 raw dict return."""
-
-    token: str
-    expires_at: str  # ISO 8601
-    ttl_seconds: int
-    instructions: str
-
-
-class HygieneReport(BaseModel):
-    project_id: str | None
-    scope: str
-    duplicates_found: int
-    outdated_decisions: int
-    obsolete_patterns: int
-    entity_drift_count: int
-    unresolved_saves: int
-    candidate_ids: dict[str, list[str]]  # category → [node_ids]
-    checked_at: datetime
-    next_step: str | None = None
-    # Freshness absorption (from memory_freshness)
-    stale_items: list[StaleItem] = []
-    # Save-status absorption (from get_save_status)
-    oldest_pending_at: datetime | None = None
-    pending_artifact_ids: list[str] = []
-    pending_only: bool = False  # True when check_pending_only=True fast-path is used
-
-
-class ServiceInfo(BaseModel):
-    service_id: str
-    display_name: str | None = None
-    workspace_id: str | None = None
-    status: str
-    last_seen: datetime | None = None
-    tags: list[str] = []
-
-
-class ServiceListResult(BaseModel):
-    services: list[ServiceInfo]
-    workspace_id: str
-    retrieval_status: RetrievalStatus
-
-
-class ServiceRegistrationResult(BaseModel):
-    service_info: ServiceInfo
-    workspace_created: bool
-    status: SaveStatus
-
-
-class CrossServiceItem(BaseModel):
-    node_id: str
-    node_type: str  # "EntityFact" | "Decision" | "Pattern"
-    source_project: str
-    score: float
-    summary: str  # entity_name+fact for EntityFact, title for Decision
-
-
-class CrossServiceBundle(BaseModel):
-    items: list[CrossServiceItem]
-    total_count: int
-    queried_projects: list[str]
-    retrieval_status: RetrievalStatus
-
-
-class AffectedServiceItem(BaseModel):
-    project_id: str
-    depth: int
-    risk_level: str
-    entity_count: int
-
-
-class ImpactReport(BaseModel):
-    source_entity_id: str
-    change_description: str
-    impact_type: str
-    overall_risk: str
-    affected_services: list[AffectedServiceItem]
-    impact_event_id: str
-    created_at: datetime
-    next_step: str | None = None
-
-
-class WorkspaceServiceHealth(BaseModel):
-    service_id: str
-    entity_count: int
-    decision_count: int
-    pattern_count: int
-    conflict_count: int
-    staleness_days: float | None
-    hygiene_status: str  # "clean" | "needs_hygiene" | "critical"
-
-
-class WorkspaceHealthReport(BaseModel):
-    workspace_id: str
-    service_count: int
-    services: list[WorkspaceServiceHealth]
-    total_conflicts: int
-    checked_at: datetime
-    next_step: str | None = None
-    # detect_conflicts absorption
-    conflict_records: list[ConflictRecord] = []
-
-
-class ConflictRecord(BaseModel):
-    source_id: str
-    source_project: str
-    source_summary: str
-    target_id: str
-    target_project: str
-    target_summary: str
-    link_rationale: str | None = None
-    link_confidence: float | None = None
-
-
-class StaleItem(BaseModel):
-    node_id: str
-    label: str
-    title: str | None
-    age_days: int
-    freshness: FreshnessLevel
-    project_id: str | None
-
-
-class FreshnessReport(BaseModel):
-    """Result of freshness.scan() — stale memory nodes for a given project."""
-
-    project_id: str | None
-    stale_count: int
-    stale_items: list[StaleItem]
-    checked_at: datetime
-    next_step: str | None = None
-
-
-class SurfaceMatch(BaseModel):
-    """Single memory node returned by memory_surface or surface CLI."""
-
-    id: str
-    label: str  # "Decision" | "Pattern" | "Context" | "EntityFact"
-    name: str  # label-appropriate: title / trigger / topic / entity_name
-    content: str  # label-appropriate: rationale / repeatable_steps_text / content / fact
-    scope: str
-    freshness: str  # "current" | "recent" | "stale"
-    bm25_score: float
-    project_id: str | None = None
-
-
-class SurfaceResult(BaseModel):
-    """Result of memory_surface tool or surface CLI command."""
-
-    matches: list[SurfaceMatch]
-    query_used: str
-    total_found: int
-    next_step: str | None = None

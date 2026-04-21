@@ -22,6 +22,7 @@ async def store_session_with_learnings(
     project_id: str,
     decisions: list[DecisionSchema] | None = None,
     patterns: list[PatternSchema] | None = None,
+    governance_token: str | None = None,
 ) -> BatchSaveResult:
     """
     Batched save: session summary + related decisions and patterns in one operation (FR-41).
@@ -29,6 +30,9 @@ async def store_session_with_learnings(
 
     Replaces the removed save_session tool — pass decisions=[] and patterns=[]
     (or omit them) to save a session-only summary.
+
+    governance_token: required when any decision in the batch has scope=global (FR-55).
+    Obtain one via request_global_write_approval() before calling this tool.
     """
     driver = ctx.lifespan_context["driver"]
     return await write_engine.save_batch(
@@ -38,4 +42,5 @@ async def store_session_with_learnings(
         project_id=project_id,
         driver=driver,
         database=settings.neo4j_database,
+        governance_token=governance_token,
     )

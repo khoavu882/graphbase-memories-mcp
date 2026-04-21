@@ -5,13 +5,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GRAPHBASE_")
 
-    backend: str = "neo4j"
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: SecretStr = SecretStr("graphbase")
     neo4j_database: str = "neo4j"
-    neo4j_max_pool_size: int = 10  # S-3: safe for Community single-node
-    neo4j_connection_timeout: float = 5.0  # S-3
+    # Pool budget: MCP server uses this pool (default 10), devtools server uses a
+    # separate hard-capped pool of 2 (see devtools/server.py:_DEVTOOLS_POOL_SIZE).
+    # Combined ceiling = 12, which fits comfortably within Neo4j Community Edition's
+    # default of 100 simultaneous connections. Raise here only if you also raise
+    # _DEVTOOLS_POOL_SIZE so both processes stay within the available budget.
+    neo4j_max_pool_size: int = 10
+    neo4j_connection_timeout: float = 5.0
 
     retrieval_timeout_s: float = 5.0  # FR-23
     retrieval_max_retries: int = 1  # FR-24

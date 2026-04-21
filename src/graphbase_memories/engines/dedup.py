@@ -17,8 +17,8 @@ import re
 
 from neo4j import AsyncDriver
 
+from graphbase_memories.domain.enums import DedupOutcome
 from graphbase_memories.graph.repositories import decision_repo, pattern_repo
-from graphbase_memories.mcp.schemas.enums import DedupOutcome
 
 
 def _tokenize(text: str) -> set[str]:
