@@ -60,7 +60,7 @@ graphbase --help
 
 ## Step 3 — Connect to your agent
 
-Copy `.mcp.json.example` to `.mcp.json` in your project root and edit it with the absolute path to your virtual environment binary. Restart your agent host — the 21 `graphbase-memories` tools will appear in the tool list.
+Copy `.mcp.json.example` to `.mcp.json` in your project root and edit it with the absolute path to your virtual environment binary. Restart your agent host — the 20 `graphbase-memories` tools will appear in the tool list, with prompts/resources shown in hosts that support them.
 
 See [Connect to Your Agent](connect.md) for full configuration details, including global install and setup for Cursor, Cline, and other MCP hosts.
 
@@ -129,6 +129,7 @@ graphbase serve
 
 # Start the HTTP devtools inspection server (human browsing)
 graphbase devtools --port 8765
+# Console prints: DevTools write token: <token>
 
 # Run the memory hygiene cycle and print report as JSON
 graphbase hygiene --project-id <uuid>
@@ -137,3 +138,25 @@ graphbase hygiene --scope global
 # Surface relevant memories for a keyword or symbol
 graphbase surface "dedup hash" --project-id my-project
 ```
+
+## Devtools UI quick tour
+
+After starting `graphbase devtools`, open `http://localhost:8765`:
+
+- `/` redirects to `/ui`
+- The main dashboard uses a sidebar for Projects, Memory, Tools, and Operations
+- `/ui/graph.html` is the standalone graph canvas with deep-link support
+- The graph canvas can export the current visible subgraph as JSON or CSV
+
+For write actions in the UI:
+
+- Copy the startup token printed by the server
+- Paste it into the `Write Token` field in the header
+- The UI stores it in `localStorage` and uses it for Inspector edit/delete actions
+
+The main interactive flows are:
+
+- Projects: browse projects and drill into project-scoped memory
+- Memory: paginated search with filters, sort, and keyboard shortcuts
+- Inspector: navigate relationships, edit/delete memory nodes, copy/download per-node JSON
+- Operations: inspect workspace health, run hygiene, and repair orphaned `EntityFact` nodes

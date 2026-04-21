@@ -10,11 +10,11 @@ and tool dispatch, a business logic layer with specialized engines, and a graph 
 ```mermaid
 graph TD
     A["AI Agent<br/>(Claude / Codex / Gemini)"]
-    B["MCP Server Layer<br/>FastMCP · 21 async tools · stdio JSON-RPC 2.0<br/>────────────────<br/>HTTP Devtools (optional)<br/>FastAPI · uvicorn · inspection + invoke"]
+    B["MCP Server Layer<br/>FastMCP · 20 async tools · 4 prompts · 4 resources<br/>stdio JSON-RPC 2.0<br/>────────────────<br/>HTTP Devtools (optional)<br/>FastAPI · uvicorn · inspection + invoke"]
     C["ScopeEngine<br/>resolved / uncertain / unresolved"]
-    D["RetrievalEngine<br/>focus → project → global priority<br/>5s timeout · 1 retry"]
-    E["WriteEngine<br/>+ DedupEngine<br/>SHA-256 · Jaccard · GovernanceToken<br/>1 retry on ServiceUnavailable"]
-    F["AnalysisRouter<br/>sequential / debate / socratic"]
+    D["RetrievalEngine + SurfaceEngine<br/>focus → project → global priority<br/>BM25 + RRF · 5s timeout · 1 retry"]
+    E["WriteEngine + Dedup + Governance<br/>SHA-256 · Jaccard · GovernanceToken<br/>1 retry on ServiceUnavailable"]
+    F["Federation + Impact + Topology<br/>workspace liveness · cross-service links<br/>impact propagation · service graph"]
     G["HygieneEngine<br/>30-day cycle per project"]
     N[("Neo4j 5<br/>Community / Enterprise<br/>Bolt :7687")]
 
@@ -44,6 +44,11 @@ Agent → FastMCP (deserialize + validate Pydantic schema)
 Tools always return a structured response — errors are encoded as status fields, never as exceptions
 thrown to the caller (see FR-48: business output before write status).
 
+Prompt calls and resource reads use the same FastMCP server surface but do not mutate graph state:
+
+- **Prompts** return guided message sequences (`analysis_routing`, `memory_review`, `impact_before_edit`, `federated_sync`)
+- **Resources** return YAML snapshots (`graphbase://schema`, `graphbase://services`, `graphbase://health/{workspace_id}`, `graphbase://session/{session_id}`)
+
 ---
 
 ## Transport
@@ -62,11 +67,11 @@ src/graphbase_memories/
 ├── config.py             pydantic-settings: all GRAPHBASE_* env vars
 ├── mcp/
 │   ├── server.py         FastMCP app instance + tool/prompt/resource registration
-│   ├── tools/            21 tool handlers (one file per group)
+│   ├── tools/            20 tool handlers (grouped by domain)
 │   ├── prompts.py        MCP prompt templates
 │   ├── resources.py      MCP resources
 │   └── schemas/          Pydantic I/O models (artifacts, results, enums, topology, errors)
-├── engines/              Business logic (scope, retrieval, write, dedup, analysis, hygiene, surface, federation, impact, topology)
+├── engines/              Business logic (scope, retrieval, surface, write, dedup, hygiene, federation, impact, topology_write)
 ├── graph/
 │   ├── driver.py         AsyncGraphDatabase singleton + lifespan context manager
 │   ├── models.py         Node/relationship Python dataclasses

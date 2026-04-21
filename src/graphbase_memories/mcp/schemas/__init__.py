@@ -7,7 +7,6 @@ from graphbase_memories.mcp.schemas.artifacts import (
     SessionSchema,
 )
 from graphbase_memories.mcp.schemas.enums import (
-    AnalysisMode,
     DataSourceType,
     DedupOutcome,
     DependencyDirection,
@@ -24,7 +23,6 @@ from graphbase_memories.mcp.schemas.enums import (
 )
 from graphbase_memories.mcp.schemas.errors import ErrorCode, MCPError
 from graphbase_memories.mcp.schemas.results import (
-    AnalysisResult,
     BatchSaveResult,
     ContextBundle,
     HygieneReport,
@@ -55,8 +53,6 @@ from graphbase_memories.mcp.schemas.topology import (
 )
 
 __all__ = [
-    "AnalysisMode",
-    "AnalysisResult",
     "BatchInfraResult",
     "BatchSaveResult",
     "BatchUpsertInfraInput",

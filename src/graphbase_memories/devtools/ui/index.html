@@ -1,414 +1,1179 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="graphbase-memories MCP devtools — inspect memory nodes, invoke tools, and monitor graph health">
-  <title>Graphbase Devtools</title>
+  <meta
+    name="description"
+    content="Graphbase DevTools for browsing memory, inspecting graph state, and invoking MCP tools."
+  >
+  <title>Graphbase DevTools</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="static/tokens.css">
+  <link rel="stylesheet" href="static/app.css">
+  <script defer src="static/alpine-focus.min.js"></script>
+  <script defer src="static/alpine-intersect.min.js"></script>
+  <script defer src="static/stores.js"></script>
+  <script defer src="static/components.js"></script>
+  <script defer src="static/inspector.js"></script>
   <script defer src="static/alpine.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; font-size: 14px; }
-    header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: #1e293b; border-bottom: 1px solid #334155; }
-    header h1 { font-size: 16px; font-weight: 600; color: #f8fafc; }
-    .badge { padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
-    .badge-ok { background: #166534; color: #86efac; }
-    .badge-degraded { background: #78350f; color: #fde68a; }
-    .badge-disconnected { background: #7f1d1d; color: #fca5a5; }
-    .badge-connecting { background: #1e3a5f; color: #93c5fd; }
-    nav { display: flex; gap: 2px; padding: 8px 20px; background: #1e293b; border-bottom: 1px solid #334155; }
-    nav button { padding: 6px 14px; border: none; background: transparent; color: #94a3b8; cursor: pointer; border-radius: 6px; font-size: 13px; }
-    nav button:hover { background: #334155; color: #e2e8f0; }
-    nav button.active { background: #1d4ed8; color: #fff; }
-    main { padding: 20px; }
-    .panel { display: none; }
-    .panel.active { display: block; }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-    .card h2 { font-size: 14px; font-weight: 600; color: #f1f5f9; margin-bottom: 8px; }
-    .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px; }
-    .tag-write { background: #7f1d1d; color: #fca5a5; }
-    .tag-read { background: #166534; color: #86efac; }
-    .tag-module { background: #1e3a5f; color: #93c5fd; }
-    input, select, textarea { background: #0f172a; border: 1px solid #475569; color: #e2e8f0; border-radius: 6px; padding: 6px 10px; width: 100%; margin-top: 4px; font-size: 13px; }
-    button.btn { padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
-    button.btn-primary { background: #3b82f6; color: #fff; }
-    button.btn-primary:hover { background: #2563eb; }
-    button.btn-danger { background: #dc2626; color: #fff; }
-    button.btn-secondary { background: #475569; color: #e2e8f0; }
-    pre { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 12px; overflow: auto; font-size: 12px; color: #a3e635; max-height: 300px; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .stat-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1e293b; }
-    .stat-row:last-child { border-bottom: none; }
-    .stale { color: #fde68a; }
-    .fresh { color: #86efac; }
-    .tool-list { display: flex; flex-direction: column; gap: 6px; }
-    .tool-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; cursor: pointer; }
-    .tool-item:hover { border-color: #3b82f6; }
-    .tool-item.selected { border-color: #3b82f6; background: #1e3a5f; }
-    .tool-name { font-weight: 600; font-size: 13px; color: #f1f5f9; flex: 1; }
-    .split { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
-    input[type="search"] { margin-bottom: 8px; }
-    .results-list { display: flex; flex-direction: column; gap: 6px; }
-    .result-item { padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; }
-    .result-item .label { font-size: 11px; color: #94a3b8; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #334155; font-size: 13px; }
-    th { color: #94a3b8; font-weight: 500; }
-  </style>
 </head>
-<body x-data="appRoot()">
-
-  <!-- Header with connection status -->
-  <header x-data="connectionStatus()" x-init="init()">
-    <h1>Graphbase Devtools</h1>
-    <span class="badge" :class="`badge-${status}`" x-text="statusLabel()"></span>
-    <span style="color:#94a3b8;font-size:12px" x-text="toolCount ? `${toolCount} tools` : ''"></span>
-    <span style="margin-left:auto;color:#94a3b8;font-size:12px">bolt://localhost:7687</span>
-  </header>
-
-  <!-- Tab navigation -->
-  <nav>
-    <button @click="tab='projects'" :class="tab==='projects'&&'active'">Projects</button>
-    <button @click="tab='tools'"    :class="tab==='tools'&&'active'">Tools</button>
-    <button @click="tab='health'"   :class="tab==='health'&&'active'">Health</button>
-    <button @click="tab='memory'"   :class="tab==='memory'&&'active'">Memory</button>
-    <button @click="tab='hygiene'"  :class="tab==='hygiene'&&'active'">Hygiene</button>
-    <button onclick="window.location.href='/ui/graph.html'">Graph</button>
-  </nav>
-
-  <main>
-
-    <!-- Projects tab -->
-    <div class="panel" :class="tab==='projects'&&'active'" x-data="projectsPanel()"
-         x-effect="if ($store.neo4j.status === 'ok' && !projects.length && !loading) init()">
-      <template x-if="loading"><p style="color:#94a3b8">Loading projects…</p></template>
-      <template x-if="!loading && projects.length===0">
-        <p style="color:#94a3b8">No projects registered. Run the MCP server to create projects.</p>
-      </template>
-      <div class="grid-2">
-        <template x-for="p in projects" :key="p.id">
-          <div class="card">
-            <h2 x-text="p.name || p.id"></h2>
-            <p style="color:#94a3b8;font-size:12px;margin-bottom:8px" x-text="p.id"></p>
-            <div class="stat-row">
-              <span>Status</span>
-              <span x-text="p.status || 'idle'" :class="p.status==='active'?'fresh':''"></span>
-            </div>
-            <div class="stat-row">
-              <span>Staleness</span>
-              <span :class="p.is_stale?'stale':'fresh'"
-                    x-text="p.staleness_days!=null ? p.staleness_days.toFixed(1)+' days' : '—'"></span>
-            </div>
-            <div class="stat-row" x-show="p.node_counts">
-              <span>Decisions</span><span x-text="p.node_counts?.Decision ?? 0"></span>
-            </div>
-            <div class="stat-row" x-show="p.node_counts">
-              <span>Sessions</span><span x-text="p.node_counts?.Session ?? 0"></span>
-            </div>
-            <div class="stat-row" x-show="p.node_counts">
-              <span>Entities</span><span x-text="p.node_counts?.EntityFact ?? 0"></span>
-            </div>
-          </div>
-        </template>
-      </div>
+<body
+  class="shell"
+  x-data="{ helpOpen: false }"
+  x-on:devtools:toggle-help.window="helpOpen = !helpOpen"
+>
+  <div class="topbar">
+    <button class="btn btn--ghost btn--sm btn--icon" aria-label="Toggle sidebar" @click="$store.nav.toggleSidebar()">
+      <span class="icon" x-html="window.DevtoolsUI.icon('menu')"></span>
+    </button>
+    <div class="topbar-title">
+      <h1>Graphbase DevTools</h1>
+      <p>Memory, topology, and tool operations</p>
     </div>
+    <div class="topbar-spacer"></div>
+    <span :class="$store.neo4j.badgeClass()" x-text="$store.neo4j.statusLabel()"></span>
+    <span class="muted" x-text="`${$store.neo4j.toolCount} tools`"></span>
+    <label class="field topbar-field">
+      <span class="field-label">Write Token</span>
+      <input
+        class="input input--compact mono"
+        name="devtools-token"
+        placeholder="Paste startup token"
+        :value="$store.auth.token"
+        @input="$store.auth.setToken($event.target.value)"
+      >
+    </label>
+    <button class="btn btn--ghost btn--sm" x-show="$store.auth.token" @click="$store.auth.clear()">
+      Clear Token
+    </button>
+    <button class="btn btn--ghost btn--sm" @click="toggleTheme()">
+      <span class="icon" x-html="window.DevtoolsUI.icon(window.DevtoolsUI.getTheme() === 'dark' ? 'sun' : 'moon')"></span>
+      <span x-text="window.DevtoolsUI.getTheme() === 'dark' ? 'Light' : 'Dark'"></span>
+    </button>
+    <button class="btn btn--ghost btn--sm btn--icon" aria-label="Help" @click="helpOpen = !helpOpen">
+      <span class="icon" x-html="window.DevtoolsUI.icon('help')"></span>
+    </button>
+  </div>
 
-    <!-- Tools tab -->
-    <div class="panel" :class="tab==='tools'&&'active'" x-data="toolsPanel()"
-         x-effect="if ($store.neo4j.status === 'ok' && !tools.length) init()">
-      <div class="split">
-        <div>
-          <input type="search" placeholder="Filter tools…" x-model="filter">
-          <div class="tool-list">
-            <template x-for="t in filteredTools()" :key="t.name">
-              <div class="tool-item" :class="selected&&selected.name===t.name&&'selected'"
-                   @click="select(t)">
-                <span class="tool-name" x-text="t.name"></span>
-                <span class="tag" :class="t.requires_confirmation?'tag-write':'tag-read'"
-                      x-text="t.requires_confirmation?'write':'read'"></span>
-              </div>
-            </template>
-          </div>
-        </div>
-        <div x-show="selected">
-          <div class="card">
-            <h2 x-text="selected?.name"></h2>
-            <p style="color:#94a3b8;font-size:12px;margin-bottom:12px" x-text="selected?.description"></p>
-            <div style="display:flex;gap:6px;margin-bottom:12px">
-              <span class="tag tag-module" x-text="selected?.module"></span>
-              <span class="tag" :class="selected?.requires_confirmation?'tag-write':'tag-read'"
-                    x-text="selected?.requires_confirmation?'requires confirmation':'read-only'"></span>
-              <span class="tag" :class="selected?.http_invocable?'tag-read':'tag-write'"
-                    x-text="selected?.http_invocable?'http-invocable':'stdio-only'"></span>
+  <div class="app-shell">
+    <aside class="sidebar" :class="$store.nav.sidebarCollapsed && 'sidebar--collapsed'">
+      <div class="sidebar-brand">
+        <span class="icon" x-html="window.DevtoolsUI.icon('database')"></span>
+      </div>
+      <nav class="sidebar-nav">
+        <button
+          class="sidebar-item"
+          :class="$store.nav.view === 'projects' && 'sidebar-item--active'"
+          @click="$store.nav.navigate('projects')"
+        >
+          <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('folder')"></span>
+          <span class="sidebar-label">Projects</span>
+        </button>
+        <button
+          class="sidebar-item"
+          :class="$store.nav.view === 'memory' && 'sidebar-item--active'"
+          @click="$store.nav.navigate('memory')"
+        >
+          <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('search')"></span>
+          <span class="sidebar-label">Memory</span>
+        </button>
+        <button
+          class="sidebar-item"
+          :class="$store.nav.view === 'graph' && 'sidebar-item--active'"
+          @click="$store.nav.navigate('graph')"
+        >
+          <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('share-2')"></span>
+          <span class="sidebar-label">Graph</span>
+        </button>
+        <button
+          class="sidebar-item"
+          :class="$store.nav.view === 'tools' && 'sidebar-item--active'"
+          @click="$store.nav.navigate('tools')"
+        >
+          <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('wrench')"></span>
+          <span class="sidebar-label">Tools</span>
+        </button>
+        <button
+          class="sidebar-item"
+          :class="$store.nav.view === 'operations' && 'sidebar-item--active'"
+          @click="$store.nav.navigate('operations')"
+        >
+          <span class="sidebar-icon" x-html="window.DevtoolsUI.icon('activity')"></span>
+          <span class="sidebar-label">Operations</span>
+        </button>
+      </nav>
+    </aside>
+
+    <div class="main-shell">
+      <main class="view-frame">
+        <div class="view-stack">
+          <header class="context-header">
+            <div>
+              <p class="context-path">Workspace</p>
+              <h2 x-text="$store.nav.contextLabel()"></h2>
             </div>
-            <template x-if="selected?.http_invocable">
-              <div>
-                <h2 style="margin-bottom:8px">Parameters</h2>
-                <template x-for="[key, schema] in Object.entries(selected?.input_schema?.properties||{})" :key="key">
-                  <div style="margin-bottom:8px">
-                    <label style="font-size:12px;color:#94a3b8" x-text="key + (selected?.input_schema?.required?.includes(key)?' *':'')"></label>
-                    <input :placeholder="schema.description||schema.type||''" x-model="params[key]">
+            <div class="context-actions muted">
+              <span x-text="$store.neo4j.uri"></span>
+              <span x-show="$store.neo4j.lastHeartbeat" x-text="`Heartbeat ${$store.neo4j.lastHeartbeat ? 'active' : 'pending'}`"></span>
+            </div>
+          </header>
+
+          <section x-show="$store.nav.view === 'projects'" x-cloak x-data="projectsView">
+            <div class="view-stack">
+              <div class="grid-2">
+                <article class="card">
+                  <div class="card-header">
+                    <h3>Connection</h3>
+                    <span :class="$store.neo4j.badgeClass()" x-text="$store.neo4j.statusLabel()"></span>
                   </div>
-                </template>
-                <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
-                  <button class="btn btn-primary" @click="invoke()" :disabled="invoking"
-                          x-text="invoking?'Running…':'Run tool'"></button>
-                  <template x-if="awaitingConfirm">
-                    <button class="btn btn-danger" @click="confirm()">Confirm write</button>
+                  <div class="card-body stack">
+                    <div class="field">
+                      <span class="field-label">Neo4j URI</span>
+                      <span class="field-value mono" x-text="$store.neo4j.uri"></span>
+                    </div>
+                    <div class="stat-grid">
+                      <div class="stat-chip">
+                        <strong x-text="$store.neo4j.toolCount"></strong>
+                        <span class="muted">Registered tools</span>
+                      </div>
+                      <div class="stat-chip">
+                        <strong x-text="$store.neo4j.lastHeartbeat ? 'Live' : 'Pending'"></strong>
+                        <span class="muted">SSE heartbeat</span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="card">
+                  <div class="card-header">
+                    <h3>Quick Actions</h3>
+                    <span class="muted">Phase 1 landing view</span>
+                  </div>
+                  <div class="card-body stack">
+                    <div class="toolbar-actions">
+                      <button class="btn btn--primary" @click="openMemorySearch()">
+                        <span class="icon" x-html="window.DevtoolsUI.icon('search')"></span>
+                        Search Memory
+                      </button>
+                      <button class="btn btn--secondary" @click="openOperations()">
+                        <span class="icon" x-html="window.DevtoolsUI.icon('activity')"></span>
+                        Run Hygiene
+                      </button>
+                      <button class="btn btn--ghost" @click="openGraph()">
+                        <span class="icon" x-html="window.DevtoolsUI.icon('external-link')"></span>
+                        Open Graph
+                      </button>
+                    </div>
+                    <div class="toolbar">
+                      <label class="field">
+                        <span class="field-label">Sort</span>
+                        <select class="input" name="project-sort" x-model="sortBy">
+                          <option value="staleness">Staleness</option>
+                          <option value="name">Name</option>
+                          <option value="last_seen">Last seen</option>
+                          <option value="entity_count">Entity count</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span class="field-label">Status</span>
+                        <select class="input" name="project-status" x-model="statusFilter">
+                          <option value="all">All</option>
+                          <option value="active">Active</option>
+                          <option value="idle">Idle</option>
+                          <option value="stale">Stale</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                </article>
+              </div>
+
+              <template x-if="error">
+                <article class="card">
+                  <div class="card-body">
+                    <p class="badge badge--danger" x-text="error"></p>
+                  </div>
+                </article>
+              </template>
+
+              <template x-if="loading">
+                <div class="project-grid">
+                  <template x-for="index in 4" :key="index">
+                    <article class="card skeleton" style="min-height: 220px;"></article>
                   </template>
                 </div>
-                <template x-if="result">
-                  <div style="margin-top:12px">
-                    <p style="font-size:12px;color:#94a3b8;margin-bottom:4px"
-                       x-text="result.status==='preview'?'Preview (confirm to execute)':
-                               `Result (${result.duration_ms}ms)`"></p>
-                    <pre x-text="JSON.stringify(result.result||result,null,2)"></pre>
+              </template>
+
+              <template x-if="!loading && !detailProject">
+                <div class="project-grid">
+                  <template x-for="project in filteredProjects()" :key="project.id">
+                    <article
+                      class="card card--interactive"
+                      role="button"
+                      tabindex="0"
+                      @click="openProject(project)"
+                      @keydown.enter.prevent="openProject(project)"
+                      @keydown.space.prevent="openProject(project)"
+                    >
+                      <div class="card-header">
+                        <div>
+                          <h3 x-text="project.name || project.id"></h3>
+                          <p class="muted mono" x-text="project.id"></p>
+                        </div>
+                        <span :class="projectStatusClass(project)" x-text="projectStatusLabel(project)"></span>
+                      </div>
+                      <div class="card-body stack">
+                        <div class="stat-grid">
+                          <div class="stat-chip">
+                            <strong x-text="project.node_counts?.Session || 0"></strong>
+                            <span class="muted">Sessions</span>
+                          </div>
+                          <div class="stat-chip">
+                            <strong x-text="project.node_counts?.Decision || 0"></strong>
+                            <span class="muted">Decisions</span>
+                          </div>
+                          <div class="stat-chip">
+                            <strong x-text="project.node_counts?.Pattern || 0"></strong>
+                            <span class="muted">Patterns</span>
+                          </div>
+                          <div class="stat-chip">
+                            <strong x-text="project.node_counts?.EntityFact || 0"></strong>
+                            <span class="muted">Entities</span>
+                          </div>
+                        </div>
+                        <div class="grid-2">
+                          <div class="field">
+                            <span class="field-label">Staleness</span>
+                            <span class="field-value" x-text="project.staleness_days != null ? `${project.staleness_days.toFixed(1)} days` : '—'"></span>
+                          </div>
+                          <div class="field">
+                            <span class="field-label">Last Seen</span>
+                            <span class="field-value" x-text="relativeTime(project.last_seen)"></span>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  </template>
+                </div>
+              </template>
+
+              <template x-if="!loading && !detailProject && filteredProjects().length === 0">
+                <article class="card">
+                  <div class="empty-state">
+                    No projects registered. Run the MCP server to create projects.
+                  </div>
+                </article>
+              </template>
+
+              <template x-if="detailProject">
+                <div class="view-stack">
+                  <article class="card">
+                    <div class="card-header">
+                      <div>
+                        <h3 x-text="detailProject.name || detailProject.id"></h3>
+                        <p class="muted mono" x-text="detailProject.id"></p>
+                      </div>
+                      <button class="btn btn--ghost btn--sm" @click="closeProjectDetail()">
+                        Back to Projects
+                      </button>
+                    </div>
+                    <div class="card-body grid-3">
+                      <div class="field">
+                        <span class="field-label">Project ID</span>
+                        <span class="field-value mono" x-text="detailProject.id"></span>
+                      </div>
+                      <div class="field">
+                        <span class="field-label">Status</span>
+                        <span class="field-value" x-text="detailProject.status || 'idle'"></span>
+                      </div>
+                      <div class="field">
+                        <span class="field-label">Workspace</span>
+                        <span class="field-value" x-text="detailProject.workspace_id || '—'"></span>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="card">
+                    <div class="card-header">
+                      <h3>Project Memory</h3>
+                      <span class="muted" x-text="detailStatusLabel()"></span>
+                    </div>
+                    <div class="card-body stack">
+                      <template x-if="detailLoading">
+                        <div class="empty-state">Loading project detail…</div>
+                      </template>
+                      <template x-if="!detailLoading && detailItems.length === 0">
+                        <div class="empty-state">No memory linked to this project yet.</div>
+                      </template>
+                      <div class="results-list" x-show="!detailLoading && detailItems.length > 0">
+                        <template x-for="item in pagedDetailItems()" :key="item.id">
+                          <article
+                            class="result-card"
+                            role="button"
+                            tabindex="0"
+                            @click="$store.inspector.open(item.id)"
+                            @keydown.enter.prevent="$store.inspector.open(item.id)"
+                            @keydown.space.prevent="$store.inspector.open(item.id)"
+                          >
+                            <div class="result-meta">
+                              <span :class="labelClass(item._label)" x-text="item._label"></span>
+                              <span class="muted" x-text="relativeTime(item.created_at)"></span>
+                            </div>
+                            <strong x-text="item.title || item.entity_name || item.id"></strong>
+                            <p class="result-snippet" x-text="(item.content || item.summary || item.fact || '').slice(0, 160) || 'No preview'"></p>
+                          </article>
+                        </template>
+                      </div>
+                      <div class="pagination">
+                        <div class="pagination-meta" x-text="`Page ${detailPage} of ${detailPageCount()}`"></div>
+                        <div class="toolbar-actions">
+                          <button class="btn btn--ghost btn--sm" @click="prevDetailPage()" :disabled="detailPage <= 1">Prev</button>
+                          <button class="btn btn--ghost btn--sm" @click="nextDetailPage()" :disabled="detailPage >= detailPageCount()">Next</button>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </template>
+            </div>
+          </section>
+
+          <section x-show="$store.nav.view === 'memory'" x-cloak x-data="memoryBrowser">
+            <article class="card">
+              <div class="card-header">
+                <h3>Memory Browser</h3>
+                <span class="muted" x-text="`${totalCount} results`"></span>
+              </div>
+              <div class="card-body stack">
+                <div class="toolbar-grid">
+                  <label class="field" style="grid-column: span 2;">
+                    <span class="field-label">Search</span>
+                    <input class="input" type="search" name="memory-query" x-model="query" placeholder="Search title, content, summary, entity name, or fact">
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Label</span>
+                    <select class="input" name="memory-label" x-model="label">
+                      <option value="">All</option>
+                      <option>Session</option>
+                      <option>Decision</option>
+                      <option>Pattern</option>
+                      <option>Context</option>
+                      <option>EntityFact</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Project</span>
+                    <select class="input" name="memory-project" x-model="projectId">
+                      <option value="">All projects</option>
+                      <template x-for="project in projects" :key="project.id">
+                        <option :value="project.id" x-text="project.name || project.id"></option>
+                      </template>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Since Days</span>
+                    <input class="input" type="number" min="0" name="memory-since-days" x-model="sinceDays" placeholder="Any age">
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Sort</span>
+                    <select class="input" name="memory-sort" x-model="sortBy">
+                      <option value="created_at">Created date</option>
+                      <option value="title">Title</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Order</span>
+                    <select class="input" name="memory-sort-order" x-model="sortOrder">
+                      <option value="desc">Descending</option>
+                      <option value="asc">Ascending</option>
+                    </select>
+                  </label>
+                </div>
+
+                <template x-if="error">
+                  <p class="badge badge--danger" x-text="error"></p>
+                </template>
+
+                <div class="memory-bulk-toolbar">
+                  <label class="memory-check-toggle">
+                    <input
+                      type="checkbox"
+                      name="memory-select-visible"
+                      :checked="allVisibleSelected()"
+                      :disabled="visibleResults().length === 0"
+                      @change="toggleVisibleSelection()"
+                    >
+                    <span x-text="allVisibleSelected() ? 'Clear visible' : 'Select visible'"></span>
+                  </label>
+                  <span class="badge badge--info" x-text="selectedCount() ? `${selectedCount()} selected` : 'No selection'"></span>
+                  <div class="toolbar-actions">
+                    <button class="btn btn--ghost btn--sm" @click="clearSelection()" :disabled="selectedCount() === 0">
+                      Clear
+                    </button>
+                    <button class="btn btn--danger btn--sm" @click="openBulkDeleteModal()" :disabled="selectedCount() === 0">
+                      <span class="icon" x-html="window.DevtoolsUI.icon('trash')"></span>
+                      Delete Selected
+                    </button>
+                  </div>
+                </div>
+
+                <template x-if="loading">
+                  <div class="results-list">
+                    <template x-for="index in 4" :key="index">
+                      <article class="result-card skeleton" style="min-height: 118px;"></article>
+                    </template>
                   </div>
                 </template>
+
+                <div class="results-list" x-show="!loading && visibleResults().length > 0">
+                  <template x-for="(item, index) in visibleResults()" :key="item.id">
+                    <article
+                      class="result-card"
+                      role="button"
+                      tabindex="0"
+                      :class="[$store.inspector.nodeId === item.id && 'result-card--selected', isSelected(index) && 'result-card--selected']"
+                      @click="selectNode(item.id)"
+                      @keydown.enter.prevent="selectNode(item.id)"
+                      @keydown.space.prevent="selectNode(item.id)"
+                    >
+                      <div class="memory-card-select" @click.stop>
+                        <label class="memory-check-toggle">
+                          <input
+                            type="checkbox"
+                            :name="`memory-select-${item.id}`"
+                            :checked="isChecked(item.id)"
+                            @change="toggleSelection(item.id)"
+                          >
+                          <span>Select</span>
+                        </label>
+                      </div>
+                      <div class="result-meta">
+                        <span :class="labelClass(item._label)" x-text="item._label"></span>
+                        <span class="muted" x-text="relativeTime(item.created_at)"></span>
+                        <span class="muted mono" x-text="item.project_id || item.workspace_id || 'global'"></span>
+                      </div>
+                      <strong x-text="item.title || item.entity_name || item.id"></strong>
+                      <p class="result-snippet" x-text="preview(item)"></p>
+                    </article>
+                  </template>
+                </div>
+
+                <template x-if="!loading && visibleResults().length === 0">
+                  <div class="empty-state">No memory matched the current filters.</div>
+                </template>
+
+                <div class="pagination">
+                  <div class="pagination-meta" x-text="statusLabel()"></div>
+                  <div class="toolbar-actions">
+                    <button class="btn btn--ghost btn--sm" @click="loadMore()" :disabled="!canLoadMore()">
+                      <span x-text="loadingMore ? 'Loading…' : hasMore() ? 'Load More' : 'All Loaded'"></span>
+                    </button>
+                  </div>
+                </div>
+                <div
+                  class="memory-scroll-sentinel"
+                  x-show="canLoadMore()"
+                  x-intersect.margin.240px="loadMore()"
+                  aria-hidden="true"
+                ></div>
               </div>
-            </template>
-            <template x-if="!selected?.http_invocable">
-              <p style="color:#fde68a;font-size:12px">This tool requires Pydantic-structured input. Use the MCP stdio server.</p>
-            </template>
-          </div>
+            </article>
+
+            <div
+              class="modal-backdrop modal-backdrop--elevated"
+              x-show="bulkDeleteModalOpen"
+              x-cloak
+              @click="closeBulkDeleteModal()"
+            >
+              <div class="modal" @click.stop x-trap.inert.noscroll="bulkDeleteModalOpen">
+                <div class="card-header">
+                  <div>
+                    <h3 class="modal-title">Confirm Bulk Delete</h3>
+                    <p class="muted">
+                      This will permanently remove
+                      <strong x-text="selectedCount()"></strong>
+                      memory nodes and their relationships. Type <strong>DELETE</strong> to continue.
+                    </p>
+                  </div>
+                  <button class="btn btn--ghost btn--sm btn--icon" aria-label="Close" @click="closeBulkDeleteModal()">
+                    <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
+                  </button>
+                </div>
+                <div class="card-body stack">
+                  <div class="field">
+                    <span class="field-label">Selected Nodes</span>
+                    <pre class="schema-block" x-text="selectionPreview()"></pre>
+                  </div>
+                  <label class="field">
+                    <span class="field-label">Type DELETE To Confirm</span>
+                    <input
+                      class="input mono"
+                      name="bulk-delete-confirm"
+                      x-model="bulkDeleteConfirmValue"
+                      placeholder="DELETE"
+                    >
+                  </label>
+                  <div class="modal-actions">
+                    <button class="btn btn--ghost" @click="closeBulkDeleteModal()">Cancel</button>
+                    <button
+                      class="btn btn--danger"
+                      @click="bulkDeleteSelected()"
+                      :disabled="!canBulkDelete() || bulkDeleting"
+                    >
+                      <span x-text="bulkDeleting ? 'Deleting…' : 'Confirm Bulk Delete'"></span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section x-show="$store.nav.view === 'tools'" x-cloak x-data="toolsView">
+            <div class="split-panel">
+              <article class="card">
+                <div class="card-header">
+                  <h3>Tool Registry</h3>
+                  <span class="muted" x-text="`${tools.length} tools`"></span>
+                </div>
+                <div class="card-body stack">
+                  <label class="field">
+                    <span class="field-label">Filter</span>
+                    <input class="input" type="search" name="tool-filter" x-model="filter" placeholder="Search tools, modules, or descriptions">
+                  </label>
+                  <div class="module-stack">
+                    <template x-for="[module, moduleTools] in groupedTools()" :key="module">
+                      <details class="module-group" :open="openModules[module]">
+                        <summary @click.prevent="toggleModule(module)">
+                          <strong x-text="module"></strong>
+                          <span class="muted" x-text="`${moduleTools.length} tools`"></span>
+                        </summary>
+                        <template x-for="tool in moduleTools" :key="tool.name">
+                          <button class="tool-item" :class="selected?.name === tool.name && 'selected'" @click="select(tool)">
+                            <span class="status-dot" :class="tool.http_invocable ? 'status-dot--success' : 'status-dot--warning'"></span>
+                            <div style="flex: 1;">
+                              <strong x-text="tool.name"></strong>
+                              <div class="muted" x-text="tool.description || 'No description'"></div>
+                            </div>
+                            <span :class="statusClass(tool)" x-text="statusLabel(tool)"></span>
+                          </button>
+                        </template>
+                      </details>
+                    </template>
+                  </div>
+                </div>
+              </article>
+
+              <article class="card">
+                <template x-if="selected">
+                  <div>
+                    <div class="card-header">
+                      <div>
+                        <h3 x-text="selected.name"></h3>
+                        <p class="muted" x-text="selected.description || 'No description'"></p>
+                      </div>
+                      <div class="toolbar-actions">
+                        <span :class="selected.http_invocable ? 'badge badge--success' : 'badge badge--warning'" x-text="selected.http_invocable ? 'http-invocable' : 'stdio-only'"></span>
+                        <span :class="selected.requires_confirmation ? 'badge badge--danger' : 'badge badge--info'" x-text="selected.requires_confirmation ? 'confirm-write' : 'read-only'"></span>
+                      </div>
+                    </div>
+                    <div class="card-body stack">
+                      <template x-if="selected.http_invocable">
+                        <div class="stack">
+                          <div class="toolbar-grid">
+                            <template x-for="[key, schema] in schemaProperties()" :key="key">
+                              <label class="field">
+                                <span class="field-label" x-text="selected.input_schema?.required?.includes(key) ? `${key} *` : key"></span>
+                                <input class="input" :name="key" :placeholder="schema.description || schema.type || ''" x-model="params[key]">
+                              </label>
+                            </template>
+                          </div>
+                          <div class="toolbar-actions">
+                            <button class="btn btn--primary" @click="invoke(false)" :disabled="invoking">
+                              <span class="icon" x-html="window.DevtoolsUI.icon('activity')"></span>
+                              <span x-text="invoking ? 'Running…' : 'Run Tool'"></span>
+                            </button>
+                            <button class="btn btn--danger" x-show="awaitingConfirm" @click="invoke(true)" :disabled="invoking">
+                              Confirm Write
+                            </button>
+                          </div>
+                        </div>
+                      </template>
+
+                      <template x-if="!selected.http_invocable">
+                        <div class="stack">
+                          <p class="muted">This tool is documentation-only in DevTools. Use the MCP stdio server for structured input execution.</p>
+                          <pre class="schema-block" x-text="JSON.stringify(selected.input_schema || {}, null, 2)"></pre>
+                        </div>
+                      </template>
+
+                      <template x-if="result">
+                        <div class="stack">
+                          <h4>Result</h4>
+                          <pre class="schema-block" x-text="JSON.stringify(result, null, 2)"></pre>
+                        </div>
+                      </template>
+
+                      <div class="stack">
+                        <h4>Invocation History</h4>
+                        <template x-if="invocationHistory().length === 0">
+                          <p class="muted">No invocations recorded in this session.</p>
+                        </template>
+                        <div class="history-list" x-show="invocationHistory().length > 0">
+                          <template x-for="entry in invocationHistory()" :key="entry.timestamp">
+                            <article class="result-card">
+                              <div class="result-meta">
+                                <span class="badge badge--info" x-text="entry.status"></span>
+                                <span class="muted" x-text="entry.timestamp"></span>
+                              </div>
+                              <div class="muted" x-text="`${entry.duration_ms} ms`"></div>
+                            </article>
+                          </template>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+                <template x-if="!selected">
+                  <div class="empty-state">Select a tool to inspect its schema and invocation history.</div>
+                </template>
+              </article>
+            </div>
+          </section>
+
+          <section x-show="$store.nav.view === 'operations'" x-cloak x-data="operationsView">
+            <div class="grid-2">
+              <article class="card">
+                <div class="card-header">
+                  <h3>Health</h3>
+                  <button class="btn btn--ghost btn--sm" @click="load()">
+                    <span class="icon" x-html="window.DevtoolsUI.icon('refresh')"></span>
+                    Refresh
+                  </button>
+                </div>
+                <div class="card-body stack">
+                  <template x-if="stats">
+                    <div class="stack">
+                      <div class="grid-2">
+                        <div>
+                          <h4>Node Counts</h4>
+                          <table class="table">
+                            <tbody>
+                              <template x-for="[label, count] in Object.entries(stats.node_counts || {})" :key="label">
+                                <tr>
+                                  <td x-text="label"></td>
+                                  <td class="mono" x-text="count"></td>
+                                </tr>
+                              </template>
+                            </tbody>
+                          </table>
+                        </div>
+                        <div>
+                          <h4>Relationship Counts</h4>
+                          <table class="table">
+                            <tbody>
+                              <template x-for="[label, count] in Object.entries(stats.relationship_counts || {})" :key="label">
+                                <tr>
+                                  <td x-text="label"></td>
+                                  <td class="mono" x-text="count"></td>
+                                </tr>
+                              </template>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div class="divider"></div>
+
+                      <div class="stack">
+                        <h4>Workspace Health</h4>
+                        <div class="toolbar-actions">
+                          <input class="input" name="workspace-id" x-model="workspaceId" placeholder="Workspace ID">
+                          <button class="btn btn--primary" @click="loadWorkspaceHealth()" :disabled="loadingWorkspace">
+                            <span x-text="loadingWorkspace ? 'Loading…' : 'Load'"></span>
+                          </button>
+                        </div>
+                        <template x-if="workspaceReport">
+                          <div class="stack">
+                            <div class="grid-2">
+                              <div class="stat-chip">
+                                <strong x-text="workspaceReport.service_count"></strong>
+                                <span class="muted">Services</span>
+                              </div>
+                              <div class="stat-chip">
+                                <strong x-text="workspaceReport.total_conflicts"></strong>
+                                <span class="muted">Conflicts</span>
+                              </div>
+                              <div class="stat-chip">
+                                <strong x-text="workspaceReport.orphaned_entity_count || 0"></strong>
+                                <span class="muted">Orphaned entities</span>
+                              </div>
+                            </div>
+                            <template x-if="(workspaceReport.orphaned_entity_count || 0) > 0">
+                              <section class="callout callout--warning">
+                                <div class="stack">
+                                  <strong>Orphaned EntityFact nodes detected</strong>
+                                  <p class="muted" style="margin: 0;">
+                                    These nodes are not linked to any project. Repair will relink them to a project in the loaded workspace and refresh the health report.
+                                  </p>
+                                </div>
+                                <div class="toolbar-actions">
+                                  <button class="btn btn--danger" @click="repairOrphans()" :disabled="repairing">
+                                    <span class="icon" x-html="window.DevtoolsUI.icon('wrench')"></span>
+                                    <span x-text="repairing ? 'Repairing…' : 'Repair Orphans'"></span>
+                                  </button>
+                                </div>
+                              </section>
+                            </template>
+                            <template x-if="(workspaceReport.orphaned_entity_count || 0) === 0">
+                              <p class="badge badge--success" style="display: flex; white-space: normal;">
+                                No orphaned EntityFact nodes detected for this workspace.
+                              </p>
+                            </template>
+                            <template x-if="workspaceReport.conflict_records?.length">
+                              <table class="table">
+                                <thead>
+                                  <tr>
+                                    <th>Source</th>
+                                    <th>Target</th>
+                                    <th>Confidence</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <template x-for="(row, index) in workspaceReport.conflict_records" :key="index">
+                                    <tr>
+                                      <td x-text="row.source_project"></td>
+                                      <td x-text="row.target_project"></td>
+                                      <td x-text="row.link_confidence != null ? `${Math.round(row.link_confidence * 100)}%` : '—'"></td>
+                                    </tr>
+                                  </template>
+                                </tbody>
+                              </table>
+                            </template>
+                            <template x-if="repairResult">
+                              <p class="badge badge--success" x-text="repairResult.message"></p>
+                            </template>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </article>
+
+              <article class="card">
+                <div class="card-header">
+                  <h3>Hygiene</h3>
+                  <span class="muted">Report-only controls</span>
+                </div>
+                <div class="card-body stack">
+                  <template x-if="status">
+                    <div class="stack">
+                      <div class="stat-chip">
+                        <strong x-text="status.pending_saves_total"></strong>
+                        <span class="muted">Pending saves</span>
+                      </div>
+                      <table class="table">
+                        <thead>
+                          <tr>
+                            <th>Project</th>
+                            <th>Days Since</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <template x-for="project in status.projects" :key="project.project_id">
+                            <tr>
+                              <td class="mono" x-text="project.project_id"></td>
+                              <td x-text="project.days_since != null ? project.days_since.toFixed(1) : 'never'"></td>
+                              <td>
+                                <span :class="project.needs_hygiene ? 'badge badge--warning' : 'badge badge--success'" x-text="project.needs_hygiene ? 'needs hygiene' : 'clean'"></span>
+                              </td>
+                            </tr>
+                          </template>
+                        </tbody>
+                      </table>
+                    </div>
+                  </template>
+
+                  <div class="toolbar-grid">
+                    <label class="field">
+                      <span class="field-label">Project ID</span>
+                      <input class="input" name="hygiene-project-id" x-model="runProjectId" placeholder="Leave blank for global">
+                    </label>
+                    <label class="field">
+                      <span class="field-label">Scope</span>
+                      <select class="input" name="hygiene-scope" x-model="runScope">
+                        <option value="global">global</option>
+                        <option value="project">project</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span class="field-label">Pending Only</span>
+                      <select class="input" name="hygiene-pending-only" x-model="checkPendingOnly">
+                        <option :value="false">false</option>
+                        <option :value="true">true</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="toolbar-actions">
+                    <button class="btn btn--primary" @click="runHygiene()" :disabled="running">
+                      <span class="icon" x-html="window.DevtoolsUI.icon('activity')"></span>
+                      <span x-text="running ? 'Running…' : 'Run Hygiene'"></span>
+                    </button>
+                  </div>
+
+                  <template x-if="report">
+                    <div class="stack">
+                      <h4>Run Output</h4>
+                      <pre class="schema-block" x-text="JSON.stringify(report, null, 2)"></pre>
+                    </div>
+                  </template>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section x-show="$store.nav.view === 'graph'" x-cloak>
+            <article class="card graph-embed-card">
+              <div class="card-header">
+                <div>
+                  <h3>Graph Canvas</h3>
+                  <p class="muted">Embedded overview with the existing graph filters, focus mode, and export tools.</p>
+                </div>
+                <div class="toolbar-actions">
+                  <button class="btn btn--ghost btn--sm" @click="$store.graph.reload()">
+                    <span class="icon" x-html="window.DevtoolsUI.icon('refresh')"></span>
+                    Reload
+                  </button>
+                  <a
+                    class="btn btn--ghost btn--sm"
+                    :href="$store.graph.standaloneUrl($store.nav.subView)"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <span class="icon" x-html="window.DevtoolsUI.icon('external-link')"></span>
+                    Open Standalone
+                  </a>
+                </div>
+              </div>
+              <div class="graph-embed-shell">
+                <iframe
+                  class="graph-embed-frame"
+                  :src="$store.graph.embedUrl($store.nav.subView)"
+                  title="Embedded graph overview"
+                ></iframe>
+              </div>
+            </article>
+          </section>
         </div>
+      </main>
+    </div>
+  </div>
+
+  <template x-if="$store.inspector.isOpen || helpOpen">
+    <div class="modal-backdrop" @click="$store.inspector.isOpen ? $store.inspector.close() : helpOpen = false"></div>
+  </template>
+
+  <aside
+    class="drawer"
+    :class="$store.inspector.isOpen && 'open'"
+    x-data="inspectorDrawer"
+    x-show="$store.inspector.isOpen"
+    x-cloak
+    x-trap.inert.noscroll="$store.inspector.isOpen"
+  >
+    <div class="drawer-header">
+      <div>
+        <span
+          :class="labelClass($store.inspector.nodeData?._label)"
+          x-text="$store.inspector.nodeData?._label || 'Inspector'"
+        ></span>
+        <h3 style="margin-top: 0.5rem;" x-text="$store.inspector.nodeData?.title || $store.inspector.nodeData?.entity_name || $store.inspector.nodeData?.id || 'Loading node'"></h3>
+      </div>
+      <div class="toolbar-actions">
+        <button class="btn btn--ghost btn--sm btn--icon" aria-label="Back" x-show="$store.inspector.history.length" @click="$store.inspector.back()">
+          <span class="icon" x-html="window.DevtoolsUI.icon('chevron-right')"></span>
+        </button>
+        <button class="btn btn--ghost btn--sm btn--icon" aria-label="Close inspector" @click="$store.inspector.close()">
+          <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
+        </button>
       </div>
     </div>
 
-    <!-- Health tab -->
-    <div class="panel" :class="tab==='health'&&'active'" x-data="healthPanel()"
-         x-effect="if ($store.neo4j.status === 'ok' && !stats) init()">
-      <template x-if="stats">
-        <div class="grid-2">
-          <div class="card">
-            <h2>Node Counts</h2>
-            <template x-for="[label,cnt] in Object.entries(stats.node_counts||{})" :key="label">
-              <div class="stat-row"><span x-text="label"></span><span x-text="cnt"></span></div>
-            </template>
-          </div>
-          <div class="card">
-            <h2>Relationship Counts</h2>
-            <template x-for="[type,cnt] in Object.entries(stats.relationship_counts||{})" :key="type">
-              <div class="stat-row"><span x-text="type"></span><span x-text="cnt"></span></div>
-            </template>
-            <p style="color:#94a3b8;font-size:11px;margin-top:8px" x-text="'As of: '+stats.checked_at"></p>
-          </div>
+    <div class="drawer-body">
+      <template x-if="$store.inspector.loading">
+        <div class="stack">
+          <div class="card skeleton" style="min-height: 80px;"></div>
+          <div class="card skeleton" style="min-height: 160px;"></div>
+          <div class="card skeleton" style="min-height: 180px;"></div>
         </div>
       </template>
-      <template x-if="!stats"><p style="color:#94a3b8">Loading health data…</p></template>
 
-      <!-- Workspace health + conflict_records -->
-      <div class="card" style="margin-top:12px">
-        <h2>Workspace Health</h2>
-        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:12px">
-          <div style="flex:1">
-            <label style="font-size:12px;color:#94a3b8">Workspace ID</label>
-            <input placeholder="e.g. my-workspace" x-model="workspaceId"
-                   @keydown.enter="loadWorkspaceHealth()">
-          </div>
-          <button class="btn btn-primary" @click="loadWorkspaceHealth()" :disabled="loadingWorkspace"
-                  x-text="loadingWorkspace?'Loading…':'Load'"></button>
-        </div>
-        <template x-if="workspaceReport">
-          <div>
-            <div class="grid-2" style="margin-bottom:12px">
-              <div>
-                <div class="stat-row">
-                  <span>Services</span><span x-text="workspaceReport.service_count"></span>
-                </div>
-                <div class="stat-row">
-                  <span>Total conflicts</span>
-                  <span :class="workspaceReport.total_conflicts>0?'stale':'fresh'"
-                        x-text="workspaceReport.total_conflicts"></span>
-                </div>
-                <div class="stat-row">
-                  <span>Checked at</span>
-                  <span style="color:#94a3b8;font-size:11px" x-text="workspaceReport.checked_at"></span>
-                </div>
-                <template x-if="workspaceReport.next_step">
-                  <p style="font-size:12px;color:#fde68a;margin-top:8px" x-text="workspaceReport.next_step"></p>
-                </template>
+      <template x-if="!$store.inspector.loading && $store.inspector.nodeData">
+        <div class="stack">
+          <section class="drawer-section">
+            <div class="field">
+              <span class="field-label">ID</span>
+              <div class="toolbar-actions">
+                <span class="field-value mono" x-text="$store.inspector.nodeData.id"></span>
+                <button class="btn btn--ghost btn--sm" @click="copyId()">
+                  <span class="icon" x-html="window.DevtoolsUI.icon('copy')"></span>
+                  Copy
+                </button>
               </div>
-              <div>
-                <p style="font-size:12px;color:#94a3b8;margin-bottom:4px">Services</p>
-                <template x-for="svc in workspaceReport.services" :key="svc.service_id">
-                  <div class="stat-row">
-                    <span x-text="svc.service_id"></span>
-                    <span :class="svc.hygiene_status==='clean'?'fresh':'stale'"
-                          x-text="svc.hygiene_status"></span>
+            </div>
+            <div class="grid-2" style="margin-top: 1rem;">
+              <div class="field">
+                <span class="field-label">Created</span>
+                <span class="field-value" x-text="$store.inspector.nodeData.created_at || '—'"></span>
+              </div>
+              <div class="field">
+                <span class="field-label">Workspace</span>
+                <span class="field-value" x-text="$store.inspector.nodeData.workspace_id || '—'"></span>
+              </div>
+            </div>
+            <template x-if="$store.inspector.editMode">
+              <p class="badge badge--danger" style="display: flex; margin-top: 1rem; white-space: normal;">
+                Direct edit bypasses MCP governance checks
+              </p>
+            </template>
+            <div class="drawer-actions">
+              <button
+                class="btn btn--secondary btn--sm"
+                x-show="!$store.inspector.editMode"
+                @click="$store.inspector.beginEdit()"
+              >
+                <span class="icon" x-html="window.DevtoolsUI.icon('edit')"></span>
+                Edit
+              </button>
+              <button
+                class="btn btn--primary btn--sm"
+                x-show="$store.inspector.editMode"
+                @click="$store.inspector.saveEdits()"
+                :disabled="$store.inspector.saving"
+              >
+                <span class="icon" x-html="window.DevtoolsUI.icon('check-circle')"></span>
+                <span x-text="$store.inspector.saving ? 'Saving…' : 'Save'"></span>
+              </button>
+              <button
+                class="btn btn--ghost btn--sm"
+                x-show="$store.inspector.editMode"
+                @click="$store.inspector.cancelEdit()"
+                :disabled="$store.inspector.saving"
+              >
+                Cancel
+              </button>
+              <button class="btn btn--danger btn--sm" @click="$store.inspector.openDeleteModal()">
+                <span class="icon" x-html="window.DevtoolsUI.icon('trash')"></span>
+                Delete
+              </button>
+              <button
+                class="btn btn--primary btn--sm"
+                @click="viewInGraph()"
+                :disabled="!canViewInGraph()"
+                :title="viewInGraphTitle()"
+              >
+                <span class="icon" x-html="window.DevtoolsUI.icon('external-link')"></span>
+                View in Graph
+              </button>
+              <button class="btn btn--ghost btn--sm" @click="copyJson()">
+                <span class="icon" x-html="window.DevtoolsUI.icon('copy')"></span>
+                Copy JSON
+              </button>
+              <button class="btn btn--ghost btn--sm" @click="downloadJson()">
+                <span class="icon" x-html="window.DevtoolsUI.icon('download')"></span>
+                Download JSON
+              </button>
+            </div>
+          </section>
+
+          <section class="drawer-section">
+            <h4>Editable Fields</h4>
+            <div class="kv-grid" style="margin-top: 1rem;">
+              <template x-for="field in editableFields()" :key="field.key">
+                <article class="kv-row">
+                  <div class="field-label" x-text="field.label"></div>
+                  <template x-if="$store.inspector.editMode && !field.multiline">
+                    <input class="input" :name="`edit-${field.key}`" x-model="$store.inspector.form[field.key]">
+                  </template>
+                  <template x-if="$store.inspector.editMode && field.multiline">
+                    <textarea class="input" :name="`edit-${field.key}`" x-model="$store.inspector.form[field.key]"></textarea>
+                  </template>
+                  <template x-if="!$store.inspector.editMode">
+                    <div>
+                      <pre class="schema-block" style="margin-top: 0.5rem;" x-text="visibleValue(field.key, fieldValue(field.key))"></pre>
+                      <button class="btn btn--ghost btn--sm" x-show="isLongValue(fieldValue(field.key))" @click="toggleValue(field.key)">
+                        <span x-text="expanded[field.key] ? 'Collapse' : 'Expand'"></span>
+                      </button>
+                    </div>
+                  </template>
+                </article>
+              </template>
+            </div>
+          </section>
+
+          <section class="drawer-section">
+            <h4>Properties</h4>
+            <div class="kv-grid" style="margin-top: 1rem;">
+              <template x-for="[key, value] in propertyEntries()" :key="key">
+                <article class="kv-row">
+                  <div class="field-label" x-text="key"></div>
+                  <pre class="schema-block" style="margin-top: 0.5rem;" x-text="visibleValue(key, value)"></pre>
+                  <button class="btn btn--ghost btn--sm" x-show="isLongValue(value)" @click="toggleValue(key)">
+                    <span x-text="expanded[key] ? 'Collapse' : 'Expand'"></span>
+                  </button>
+                </article>
+              </template>
+            </div>
+          </section>
+
+          <section class="drawer-section">
+            <h4>Outgoing</h4>
+            <div class="results-list" style="margin-top: 1rem;">
+              <template x-if="relationItems('outgoing').length === 0">
+                <p class="muted">No outgoing relationships.</p>
+              </template>
+              <template x-for="relation in relationItems('outgoing')" :key="`${relation.type}:${relation.to_id}`">
+                <article
+                  class="result-card"
+                  role="button"
+                  tabindex="0"
+                  @click="$store.inspector.open(relation.to_id)"
+                  @keydown.enter.prevent="$store.inspector.open(relation.to_id)"
+                  @keydown.space.prevent="$store.inspector.open(relation.to_id)"
+                >
+                  <div class="result-meta">
+                    <span class="badge badge--info" x-text="relation.type"></span>
+                    <span :class="labelClass(relation.to_label)" x-text="relation.to_label"></span>
                   </div>
-                </template>
-              </div>
-            </div>
-            <template x-if="workspaceReport.conflict_records?.length > 0">
-              <div>
-                <p style="font-size:12px;color:#fca5a5;margin-bottom:6px"
-                   x-text="`${workspaceReport.conflict_records.length} conflict(s) detected`"></p>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Source</th><th>Target</th><th>Confidence</th><th>Rationale</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <template x-for="(c, i) in workspaceReport.conflict_records" :key="i">
-                      <tr>
-                        <td>
-                          <span style="font-size:11px;color:#94a3b8" x-text="c.source_project+' › '"></span>
-                          <span x-text="(c.source_summary||'').slice(0,40)"></span>
-                        </td>
-                        <td>
-                          <span style="font-size:11px;color:#94a3b8" x-text="c.target_project+' › '"></span>
-                          <span x-text="(c.target_summary||'').slice(0,40)"></span>
-                        </td>
-                        <td x-text="c.link_confidence!=null ? (c.link_confidence*100).toFixed(0)+'%' : '—'"></td>
-                        <td style="font-size:11px;color:#94a3b8"
-                            x-text="(c.link_rationale||'').slice(0,60)"></td>
-                      </tr>
-                    </template>
-                  </tbody>
-                </table>
-              </div>
-            </template>
-            <template x-if="workspaceReport.conflict_records?.length === 0">
-              <p style="font-size:12px;color:#86efac">No conflicts detected.</p>
-            </template>
-          </div>
-        </template>
-      </div>
-    </div>
-
-    <!-- Memory tab -->
-    <div class="panel" :class="tab==='memory'&&'active'" x-data="memoryPanel()">
-      <div class="card" style="margin-bottom:12px">
-        <div style="display:flex;gap:8px;align-items:flex-end">
-          <div style="flex:1">
-            <label style="font-size:12px;color:#94a3b8">Search</label>
-            <input type="search" placeholder="Type to search memory…" x-model="query"
-                   @keydown.enter="search()">
-          </div>
-          <div>
-            <label style="font-size:12px;color:#94a3b8">Label</label>
-            <select x-model="label">
-              <option value="">All</option>
-              <option>Session</option><option>Decision</option>
-              <option>Pattern</option><option>Context</option><option>EntityFact</option>
-            </select>
-          </div>
-          <button class="btn btn-primary" @click="search()" x-text="searching?'Searching…':'Search'"></button>
-        </div>
-      </div>
-      <div class="results-list">
-        <template x-for="item in results" :key="item.id">
-          <div class="result-item">
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-              <span class="tag tag-module" x-text="item._label"></span>
-              <span style="font-size:11px;color:#94a3b8" x-text="item.created_at||''"></span>
-            </div>
-            <p style="font-weight:600;font-size:13px" x-text="item.title||item.entity_name||item.id"></p>
-            <p style="font-size:12px;color:#94a3b8;margin-top:2px"
-               x-text="(item.content||item.fact||item.summary||'').slice(0,120)"></p>
-          </div>
-        </template>
-        <template x-if="results.length===0&&searched">
-          <p style="color:#94a3b8">No results for your query.</p>
-        </template>
-      </div>
-    </div>
-
-    <!-- Hygiene tab -->
-    <div class="panel" :class="tab==='hygiene'&&'active'" x-data="hygienePanel()"
-         x-effect="if ($store.neo4j.status === 'ok' && !status) init()">
-      <div class="grid-2">
-        <div class="card">
-          <h2>Project Status</h2>
-          <template x-if="status">
-            <div>
-              <template x-for="p in status.projects" :key="p.project_id">
-                <div class="stat-row">
-                  <span x-text="p.project_id"></span>
-                  <span :class="p.needs_hygiene?'stale':'fresh'"
-                        x-text="p.days_since!=null ? p.days_since.toFixed(1)+'d' : 'never'"></span>
-                </div>
+                  <strong x-text="relation.to_title || relation.to_id"></strong>
+                  <p class="muted mono" x-text="relation.to_id"></p>
+                </article>
               </template>
-              <div class="stat-row" style="margin-top:8px">
-                <span>Pending saves</span>
-                <span :class="status.pending_saves_total>0?'stale':'fresh'"
-                      x-text="status.pending_saves_total"></span>
-              </div>
             </div>
-          </template>
-        </div>
-        <div class="card">
-          <h2>Run Hygiene</h2>
-          <div style="margin-bottom:12px">
-            <label style="font-size:12px;color:#94a3b8">Project ID (leave blank for global)</label>
-            <input placeholder="e.g. my-project" x-model="runProjectId">
-          </div>
-          <div style="margin-bottom:12px">
-            <label style="font-size:12px;color:#94a3b8">Scope</label>
-            <select x-model="runScope">
-              <option value="global">global</option>
-              <option value="project">project</option>
-            </select>
-          </div>
-          <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="checkPendingOnly" x-model="checkPendingOnly"
-                   style="width:auto;margin-top:0">
-            <label for="checkPendingOnly" style="font-size:12px;color:#94a3b8;cursor:pointer">
-              Check pending only (skip full content scan)
-            </label>
-          </div>
-          <button class="btn btn-primary" @click="runHygiene()" :disabled="running"
-                  x-text="running?'Running…':'Run Hygiene'"></button>
-          <template x-if="report">
-            <div style="margin-top:12px">
-              <p style="font-size:12px;color:#94a3b8;margin-bottom:4px"
-                 x-text="report.pending_only ? 'Report (pending check only — last_hygiene_at not updated)' : 'Report'"></p>
-              <div style="margin-bottom:8px">
-                <div class="stat-row">
-                  <span>Pending saves</span>
-                  <span :class="report.pending_saves>0?'stale':'fresh'" x-text="report.pending_saves ?? 0"></span>
-                </div>
-                <div class="stat-row" x-show="!report.pending_only">
-                  <span>Stale items</span>
-                  <span :class="(report.stale_items?.length??0)>0?'stale':'fresh'"
-                        x-text="report.stale_items?.length ?? 0"></span>
-                </div>
-                <div class="stat-row" x-show="!report.pending_only">
-                  <span>Last hygiene</span>
-                  <span style="color:#94a3b8" x-text="report.last_hygiene_at ?? '—'"></span>
-                </div>
-              </div>
-              <template x-if="report.stale_items?.length > 0">
-                <div>
-                  <p style="font-size:12px;color:#fde68a;margin-bottom:4px">Stale Items</p>
-                  <table>
-                    <thead><tr><th>ID</th><th>Label</th><th>Staleness (days)</th></tr></thead>
-                    <tbody>
-                      <template x-for="item in report.stale_items" :key="item.id">
-                        <tr>
-                          <td style="font-size:11px;color:#94a3b8" x-text="item.id"></td>
-                          <td x-text="item.label ?? '—'"></td>
-                          <td class="stale" x-text="item.staleness_days?.toFixed(1) ?? '—'"></td>
-                        </tr>
-                      </template>
-                    </tbody>
-                  </table>
-                </div>
+          </section>
+
+          <section class="drawer-section">
+            <h4>Incoming</h4>
+            <div class="results-list" style="margin-top: 1rem;">
+              <template x-if="relationItems('incoming').length === 0">
+                <p class="muted">No incoming relationships.</p>
               </template>
-              <details style="margin-top:8px">
-                <summary style="font-size:11px;color:#475569;cursor:pointer">Raw JSON</summary>
-                <pre x-text="JSON.stringify(report,null,2)"></pre>
-              </details>
+              <template x-for="relation in relationItems('incoming')" :key="`${relation.type}:${relation.from_id}`">
+                <article
+                  class="result-card"
+                  role="button"
+                  tabindex="0"
+                  @click="$store.inspector.open(relation.from_id)"
+                  @keydown.enter.prevent="$store.inspector.open(relation.from_id)"
+                  @keydown.space.prevent="$store.inspector.open(relation.from_id)"
+                >
+                  <div class="result-meta">
+                    <span class="badge badge--info" x-text="relation.type"></span>
+                    <span :class="labelClass(relation.from_label)" x-text="relation.from_label"></span>
+                  </div>
+                  <strong x-text="relation.from_title || relation.from_id"></strong>
+                  <p class="muted mono" x-text="relation.from_id"></p>
+                </article>
+              </template>
             </div>
-          </template>
+          </section>
+        </div>
+      </template>
+    </div>
+  </aside>
+
+  <div
+    class="modal-backdrop modal-backdrop--elevated"
+    x-show="$store.inspector.deleteModalOpen"
+    x-cloak
+    @click="$store.inspector.closeDeleteModal()"
+  >
+    <div class="modal" @click.stop x-trap.inert.noscroll="$store.inspector.deleteModalOpen">
+      <div class="card-header">
+        <div>
+          <h3 class="modal-title">Confirm Deletion</h3>
+          <p class="muted">
+            This will permanently remove this node and its
+            <strong x-text="$store.inspector.relationshipCount()"></strong>
+            relationships. Type the node ID to confirm.
+          </p>
+        </div>
+        <button class="btn btn--ghost btn--sm btn--icon" aria-label="Close" @click="$store.inspector.closeDeleteModal()">
+          <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
+        </button>
+      </div>
+      <div class="card-body stack">
+        <div class="field">
+          <span class="field-label">Node ID</span>
+          <span class="field-value mono" x-text="$store.inspector.nodeId"></span>
+        </div>
+        <label class="field">
+          <span class="field-label">Type ID To Confirm</span>
+          <input
+            class="input mono"
+            name="delete-confirm-id"
+            x-model="$store.inspector.deleteConfirmValue"
+            placeholder="Paste the node ID exactly"
+          >
+        </label>
+        <div class="modal-actions">
+          <button class="btn btn--ghost" @click="$store.inspector.closeDeleteModal()">Cancel</button>
+          <button
+            class="btn btn--danger"
+            @click="$store.inspector.deleteNode()"
+            :disabled="!$store.inspector.canDelete() || $store.inspector.deleting"
+          >
+            <span x-text="$store.inspector.deleting ? 'Deleting…' : 'Confirm Delete'"></span>
+          </button>
         </div>
       </div>
     </div>
+  </div>
 
-  </main>
+  <div
+    class="modal-backdrop"
+    x-show="helpOpen"
+    x-cloak
+    @click="helpOpen = false"
+  >
+    <div class="modal" @click.stop x-trap.inert.noscroll="helpOpen">
+      <div class="card-header">
+        <div>
+          <h3 class="modal-title">Keyboard Shortcuts</h3>
+          <p class="muted">Use quick navigation while the DevTools UI is focused.</p>
+        </div>
+        <button class="btn btn--ghost btn--sm btn--icon" aria-label="Close help" @click="helpOpen = false">
+          <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
+        </button>
+      </div>
+      <div class="card-body stack">
+        <article class="result-card"><strong>1</strong><p class="muted">Projects view</p></article>
+        <article class="result-card"><strong>2</strong><p class="muted">Memory view</p></article>
+        <article class="result-card"><strong>3</strong><p class="muted">Graph view</p></article>
+        <article class="result-card"><strong>4</strong><p class="muted">Tools view</p></article>
+        <article class="result-card"><strong>5</strong><p class="muted">Operations view</p></article>
+        <article class="result-card"><strong>Escape</strong><p class="muted">Close the Inspector Drawer</p></article>
+        <article class="result-card"><strong>?</strong><p class="muted">Toggle this help overlay</p></article>
+        <div class="modal-actions">
+          <button class="btn btn--primary" @click="helpOpen = false">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-  <script src="static/app.js"></script>
+  <div class="toast-container">
+    <template x-for="item in $store.toast.items" :key="item.id">
+      <article class="toast" :class="`toast--${item.type}`">
+        <span class="icon" x-html="window.DevtoolsUI.icon(item.type === 'success' ? 'check-circle' : item.type === 'warning' ? 'alert-triangle' : item.type === 'danger' ? 'x' : 'activity')"></span>
+        <div style="flex: 1;" x-text="item.message"></div>
+        <button class="btn btn--ghost btn--sm btn--icon" aria-label="Dismiss" @click="$store.toast.remove(item.id)">
+          <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
+        </button>
+      </article>
+    </template>
+  </div>
 </body>
 </html>

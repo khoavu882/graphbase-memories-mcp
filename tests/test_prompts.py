@@ -48,9 +48,9 @@ async def test_impact_before_edit_prompt_structure():
     text = _text(msg)
     assert "ent-abc-123" in text
     assert "rename authentication provider" in text
-    assert "route_analysis" in text
-    assert "governance_token" in text
-    assert "propagate_impact_event" in text
+    assert "traverse up to 2 hops" in text
+    assert "request_global_write_approval" in text
+    assert "propagate_impact" in text
 
 
 async def test_federated_sync_prompt_structure():
@@ -72,8 +72,8 @@ async def test_federated_sync_prompt_structure():
     assert "svc-api-gateway" in text
     assert "wks-platform" in text
     assert "graphbase://services" in text
-    assert "link_cross_service_entities" in text
-    assert "detect_workspace_conflicts" in text
+    assert "link_cross_service" in text
+    assert "graph_health" in text
 
 
 async def test_memory_review_default_scope():

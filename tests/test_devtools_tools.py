@@ -80,7 +80,6 @@ async def test_list_tools_write_tools_require_confirmation(driver):
         "propagate_impact",
         "link_cross_service",
         "register_federated_service",
-        "deregister_service",
     ]
     for name in write_tools:
         if name in by_name:
@@ -127,13 +126,21 @@ async def test_get_tool_not_found_raises_404(driver):
 
 async def test_invoke_tool_write_without_confirm_returns_preview(driver):
     """POST /tools/propagate_impact/invoke without confirm=True returns status=preview."""
+    from graphbase_memories.devtools.deps import set_devtools_token
     from graphbase_memories.devtools.routes.tools import InvokeRequest, invoke_tool
+
+    set_devtools_token("test-devtools-token")
 
     body = InvokeRequest(
         params={"entity_id": "test-entity", "change_description": "breaking change"},
         confirm=False,
     )
-    result = await invoke_tool("propagate_impact", body, driver)
+    result = await invoke_tool(
+        "propagate_impact",
+        body,
+        driver,
+        x_devtools_token="test-devtools-token",
+    )
 
     assert result["status"] == "preview"
     assert "params_received" in result
@@ -164,3 +171,23 @@ async def test_invoke_read_tool_executes_immediately(driver):
     assert result["status"] == "ok"
     assert "result" in result
     assert "duration_ms" in result
+
+
+async def test_invoke_write_tool_requires_token(driver):
+    """POST /tools/{name}/invoke rejects write-capable tools without the startup token."""
+    from fastapi import HTTPException
+
+    from graphbase_memories.devtools.deps import set_devtools_token
+    from graphbase_memories.devtools.routes.tools import InvokeRequest, invoke_tool
+
+    set_devtools_token("expected-token")
+    body = InvokeRequest(
+        params={"entity_id": "test-entity", "change_description": "breaking change"},
+        confirm=False,
+    )
+
+    try:
+        await invoke_tool("propagate_impact", body, driver)
+        raise AssertionError("Should have raised HTTPException 403")
+    except HTTPException as exc:
+        assert exc.status_code == 403

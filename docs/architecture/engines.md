@@ -1,153 +1,151 @@
 # Engine Specifications
 
-The business logic layer contains five specialized engines. Each engine is stateless — it receives all required inputs as parameters and produces a result without storing state between calls.
+The business logic layer is split into focused, stateless engines. Each engine receives all required inputs as parameters and returns structured result models without keeping in-process session state.
 
 ---
 
 ## ScopeEngine
 
-**Purpose:** Validate scope resolution before every MCP read or write.
-
-**Input:** `project_id: str | None`, `focus: str | None`
+**Purpose:** Resolve whether a `project_id` and optional `focus` refer to an addressable memory scope before reads and writes run.
 
 ```mermaid
 stateDiagram-v2
     [*] --> unresolved : project_id is None
     [*] --> uncertain : project_id given, no Project node found
-    [*] --> resolved_project : project_id given, Project node exists, no focus
-    [*] --> resolved_focus : project_id given, Project + FocusArea both exist
-
-    resolved_project --> resolved_focus : focus provided and FocusArea exists
-    resolved_focus --> resolved_project : focus cleared
+    [*] --> resolved : project_id maps to Project
+    resolved --> resolved : optional focus resolved
 ```
 
-**Write gate:** Only `resolved` states permit writes. All others return `blocked_scope`.
-
-**Read gate:** `unresolved` → empty result. `uncertain` → allows project-scope reads only.
+- `unresolved` blocks writes and returns empty reads
+- `uncertain` allows discovery-style reads but still blocks writes
+- `resolved` permits normal reads and writes
 
 ---
 
 ## RetrievalEngine
 
-**Purpose:** Query Neo4j across scopes with priority merge, timeout, and retry.
+**Purpose:** Load scoped memory bundles with retry, freshness, conflict, and hygiene metadata.
 
-```mermaid
-stateDiagram-v2
-    [*] --> in_progress
-    in_progress --> succeeded
-    in_progress --> empty : no records found
-    in_progress --> timed_out : > 5s
-    in_progress --> failed : Neo4j error
+- Merge order is **focus → project → global**
+- Default limits are:
+  - focus: `10`
+  - project: `20`
+  - global: `5`
+- Retrieval supports timeout + retry (`GRAPHBASE_RETRIEVAL_TIMEOUT_S`, `GRAPHBASE_RETRIEVAL_MAX_RETRIES`)
+- Results surface `conflicts_found`, `hygiene_due`, `truncated_scopes`, and `next_step`
 
-    timed_out --> succeeded : retry
-    timed_out --> empty : retry
-    timed_out --> failed : retry exhausted
+`RetrievalStatus` values:
 
-    failed --> failed : retry exhausted
-    succeeded --> conflicted : CONFLICTS_WITH edge in results
-```
-
-**Priority merge** — results from three scope levels are concatenated in order:
-
-1. `focus` scope — up to 10 items (if focus is set)
-2. `project` scope — up to 10 items
-3. `global` scope — up to 5 items
-
-**Supersession filter** — nodes connected by an incoming `[:SUPERSEDES]` edge from a newer node are excluded from results automatically.
-
-**`hygiene_due` flag** — if `Project.last_hygiene_at` is `NULL` or older than 30 days, the engine sets `hygiene_due=true` in the returned `ContextBundle`.
+| Status | Meaning |
+|---|---|
+| `succeeded` | Results returned |
+| `empty` | No matching memory found |
+| `timed_out` | Query exceeded timeout and retry handling took over |
+| `failed` | Neo4j or query execution error |
+| `conflicted` | Result set contains conflicting memory while still returning data |
 
 ---
 
-## DedupEngine
+## SurfaceEngine
 
-**Purpose:** Prevent duplicate decisions and patterns from accumulating in the graph.
+**Purpose:** Provide fast BM25 keyword lookup without a full scope-aware context bundle.
 
-**Input:** `title: str`, `rationale: str`, `scope`, `project_id`
+- Backing indexes: `decision_fulltext`, `pattern_fulltext`, `context_fulltext`, `entity_fulltext`
+- Hybrid search behavior is controlled by `GRAPHBASE_FTS_ENABLED`, `GRAPHBASE_FTS_LIMIT`, and `GRAPHBASE_RRF_K`
+- Used by the `memory_surface` tool and the `graphbase surface` CLI
 
-**Step 1 — Exact hash match (O(1)):**
-
-```
-content_hash = SHA-256(normalize(title + rationale))
-if hash found in graph → DedupOutcome.duplicate_skip  (no write)
-```
-
-**Step 2 — Full-text + Jaccard (top-5 candidates):**
-
-```
-CALL db.index.fulltext.queryNodes("decision_fulltext", title + " " + rationale)
-For each candidate: Jaccard(title_tokens, candidate.title_tokens)
-
-best_score ≥ 0.70 → DedupOutcome.supersede      (write + [:SUPERSEDES] → old)
-best_score ≥ 0.50 → DedupOutcome.manual_review   (write blocked, candidate id returned)
-best_score <  0.50 → DedupOutcome.new             (write proceeds)
-```
-
-Pattern dedup uses Step 1 only — patterns are structured enough that exact hash match is sufficient.
-
-!!! note "Transaction boundary"
-    DedupEngine runs **inside** the write transaction function. This ensures the hash check and
-    the write are atomic — no TOCTOU race condition when multiple agents write concurrently.
+This engine is optimized for “quick topic scan” workflows, especially before editing or delegating work.
 
 ---
 
-## WriteEngine
+## WriteEngine And Dedup
 
-**Purpose:** Orchestrate governance gate → dedup → write → retry for all memory writes.
+**Purpose:** Persist sessions, decisions, patterns, context, and entity facts while enforcing governance and deduplication rules.
 
 ```mermaid
 stateDiagram-v2
     [*] --> in_progress
     in_progress --> saved
-    in_progress --> partial : batch — some saved, some failed
-    in_progress --> pending_retry : transient ServiceUnavailable
-    in_progress --> failed : non-transient error
-    in_progress --> blocked_scope : scope != resolved
-
-    pending_retry --> saved : retry succeeded
-    pending_retry --> failed : retry exhausted
+    in_progress --> partial
+    in_progress --> pending_retry
+    in_progress --> failed
+    in_progress --> blocked_scope
+    in_progress --> duplicate_skip
 ```
 
-**Business output guarantee (FR-48):** The tool handler returns the business result to the caller
-_before_ the write is confirmed. Write status is a field in the response, not an exception.
+Key behaviors:
 
-**Governance gate:** If `scope == global`, the engine validates the `governance_token` via
-`token_repo` before attempting the write. Invalid or expired tokens return `status: "failed"`.
-
----
-
-## AnalysisRouter
-
-**Purpose:** Route a task description to the appropriate reasoning mode.
-
-**Routing logic:**
-
-| Keywords | Mode |
-|---|---|
-| `strategic`, `multi-factor`, `planning` | `sequential` |
-| `trade-off`, `compare`, `debate` | `debate` |
-| `unclear`, `requirements`, `discovery` | `socratic` |
-| (none / unknown) | `sequential` (safe default) |
-
-Returns `AnalysisResult` with `mode`, `rationale`, and `suggested_steps`.
+- Global writes require `request_global_write_approval`
+- Decision dedup uses:
+  - exact SHA-256 hash lookup
+  - candidate search + Jaccard similarity
+- Pattern dedup uses exact hash lookup only
+- Transient write failures return `pending_retry` instead of crashing the caller
 
 ---
 
 ## HygieneEngine
 
-**Purpose:** Detect memory quality problems across a project or global scope.
+**Purpose:** Report memory quality issues without mutating graph state automatically.
 
-**Trigger:** Manual via `run_hygiene` tool or `graphbase hygiene` CLI.
+Checks performed in the full scan path:
 
-**Five checks run in sequence:**
+1. Duplicate decisions
+2. Outdated decisions
+3. Obsolete patterns
+4. Entity drift
+5. Unresolved saves
 
-1. **Duplicate detection** — full-text similarity scan for pairs with score > 0.9
-2. **Outdated decisions** — `date < now - 180d` AND no outgoing `[:SUPERSEDES]` edge
-3. **Obsolete patterns** — `last_validated_at < now - 90d`
-4. **EntityFact normalization** — same `entity_name` across multiple nodes → propose `[:MERGES_INTO]`
-5. **Unresolved saves** — nodes with `status IN [pending_retry, failed]`
+Important runtime behavior:
 
-**Read-only contract:** HygieneEngine never auto-mutates. It returns a `HygieneReport` with
-`candidate_ids` per category. All mutations require explicit caller confirmation.
+- `check_pending_only=True` skips content scans and returns pending-save status only
+- `last_hygiene_at` is updated only after a successful full report
+- Expired or used governance tokens are cleaned up during the full hygiene cycle
 
-`Project.last_hygiene_at` is updated only after a successful report is generated.
+The engine returns `HygieneReport`, including `candidate_ids`, `unresolved_saves`, and optional pending-save detail fields.
+
+---
+
+## FederationEngine
+
+**Purpose:** Manage workspace membership, liveness, and cross-service search.
+
+Responsibilities:
+
+- register/deregister federated services
+- list active services in a workspace
+- search memory across services
+- create typed cross-service links between entity facts
+
+This engine is the bridge between per-project memory and multi-service workspace coordination.
+
+---
+
+## ImpactEngine
+
+**Purpose:** Assess downstream risk of changes across cross-service links and summarize workspace health.
+
+Responsibilities:
+
+- BFS impact propagation from a source entity
+- risk scoring by depth and contradiction edges
+- workspace health summaries
+- inline conflict reporting
+
+This engine powers both `propagate_impact` and `graph_health`.
+
+---
+
+## TopologyWriteEngine
+
+**Purpose:** Maintain the service topology graph: services, shared infrastructure, feature flows, and dependency traversal.
+
+Responsibilities:
+
+- register dual-label `:Project:Service` nodes
+- validate and write typed topology edges
+- batch upsert shared infrastructure
+- traverse service dependencies
+- return ordered feature workflows
+
+Topology operations are separate from memory artifact writes but share the same Neo4j store and workspace model.

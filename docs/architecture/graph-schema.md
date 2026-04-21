@@ -1,6 +1,6 @@
 # Graph Schema
 
-Neo4j schema DDL is defined in `src/graphbase_memories/graph/queries/schema.cypher` and runs automatically on server startup (idempotent — all statements use `IF NOT EXISTS`).
+Neo4j schema DDL is defined in `src/graphbase_memories/graph/queries/schema.cypher` and runs automatically on server startup (idempotent — all statements use `IF NOT EXISTS`). The current release baseline is the unified **v3** schema that includes memory, federation, impact, and topology nodes.
 
 ---
 
@@ -35,6 +35,24 @@ CREATE CONSTRAINT entity_fact_id_unique IF NOT EXISTS
 
 CREATE CONSTRAINT governance_token_id_unique IF NOT EXISTS
   FOR (t:GovernanceToken) REQUIRE t.id IS UNIQUE;
+
+CREATE CONSTRAINT workspace_id_unique IF NOT EXISTS
+  FOR (w:Workspace) REQUIRE w.id IS UNIQUE;
+
+CREATE CONSTRAINT impact_event_id_unique IF NOT EXISTS
+  FOR (ie:ImpactEvent) REQUIRE ie.id IS UNIQUE;
+
+CREATE CONSTRAINT datasource_id_unique IF NOT EXISTS
+  FOR (ds:DataSource) REQUIRE ds.id IS UNIQUE;
+
+CREATE CONSTRAINT mq_id_unique IF NOT EXISTS
+  FOR (mq:MessageQueue) REQUIRE mq.id IS UNIQUE;
+
+CREATE CONSTRAINT feature_id_unique IF NOT EXISTS
+  FOR (f:Feature) REQUIRE f.id IS UNIQUE;
+
+CREATE CONSTRAINT bc_id_unique IF NOT EXISTS
+  FOR (bc:BoundedContext) REQUIRE bc.id IS UNIQUE;
 ```
 
 ---
@@ -48,27 +66,41 @@ CREATE FULLTEXT INDEX decision_fulltext IF NOT EXISTS
   FOR (d:Decision) ON EACH [d.title, d.rationale];
 
 CREATE FULLTEXT INDEX pattern_fulltext IF NOT EXISTS
-  FOR (p:Pattern) ON EACH [p.trigger, p.repeatable_steps];
+  FOR (p:Pattern) ON EACH [p.trigger, p.repeatable_steps_text];
 
 CREATE FULLTEXT INDEX context_fulltext IF NOT EXISTS
   FOR (c:Context) ON EACH [c.content, c.topic];
 
 CREATE FULLTEXT INDEX entity_fulltext IF NOT EXISTS
   FOR (e:EntityFact) ON EACH [e.entity_name, e.fact];
+
+CREATE FULLTEXT INDEX topology_fulltext IF NOT EXISTS
+  FOR (n:Service|Feature|BoundedContext) ON EACH [n.name, n.bounded_context];
 ```
 
 ---
 
 ## Property indexes
 
+Selected exact-match and operational indexes:
+
 ```cypher
 // Exact hash dedup for Decision (O(1) lookup)
 CREATE INDEX decision_content_hash IF NOT EXISTS
   FOR (d:Decision) ON (d.content_hash);
 
+CREATE INDEX pattern_content_hash IF NOT EXISTS
+  FOR (p:Pattern) ON (p.content_hash);
+
 // TTL cleanup for GovernanceToken
-CREATE INDEX governance_token_expires_at IF NOT EXISTS
+CREATE INDEX governance_token_expires IF NOT EXISTS
   FOR (t:GovernanceToken) ON (t.expires_at);
+
+CREATE INDEX project_hygiene IF NOT EXISTS
+  FOR (p:Project) ON (p.last_hygiene_at);
+
+CREATE INDEX entity_fact_name_scope IF NOT EXISTS
+  FOR (e:EntityFact) ON (e.entity_name, e.scope);
 ```
 
 ---
@@ -78,7 +110,7 @@ CREATE INDEX governance_token_expires_at IF NOT EXISTS
 === "Session"
     | Property | Type | Description |
     |---|---|---|
-    | `id` | UUID | Primary key |
+    | `id` | string | Primary key |
     | `objective` | string | Session goal |
     | `actions_taken` | string[] | What was done |
     | `decisions_made` | string[] | Key decisions (brief) |
@@ -91,7 +123,7 @@ CREATE INDEX governance_token_expires_at IF NOT EXISTS
 === "Decision"
     | Property | Type | Description |
     |---|---|---|
-    | `id` | UUID | Primary key |
+    | `id` | string | Primary key |
     | `title` | string | Short title (full-text indexed) |
     | `rationale` | string | Why this decision was made (full-text indexed) |
     | `owner` | string | Who owns the decision |
@@ -107,7 +139,8 @@ CREATE INDEX governance_token_expires_at IF NOT EXISTS
     |---|---|---|
     | `id` | UUID | Primary key |
     | `trigger` | string | When to apply this pattern (full-text indexed) |
-    | `repeatable_steps` | string[] | Ordered steps (full-text indexed) |
+    | `repeatable_steps` | string[] | Ordered steps |
+    | `repeatable_steps_text` | string | Space-joined helper field for full-text indexing |
     | `exclusions` | string[] | When NOT to apply |
     | `scope` | enum | `global / project / focus` |
     | `last_validated_at` | datetime | Last validation timestamp |
@@ -116,7 +149,7 @@ CREATE INDEX governance_token_expires_at IF NOT EXISTS
 === "Context"
     | Property | Type | Description |
     |---|---|---|
-    | `id` | UUID | Primary key |
+    | `id` | string | Primary key |
     | `content` | string | Free-form text (full-text indexed) |
     | `topic` | string | Short tag (full-text indexed) |
     | `scope` | enum | `global / project / focus` |
@@ -126,7 +159,7 @@ CREATE INDEX governance_token_expires_at IF NOT EXISTS
 === "EntityFact"
     | Property | Type | Description |
     |---|---|---|
-    | `id` | UUID | Primary key |
+    | `id` | string | Primary key |
     | `entity_name` | string | Canonical name (MERGE key, full-text indexed) |
     | `fact` | string | A single fact statement (full-text indexed) |
     | `scope` | enum | `global / project / focus` |

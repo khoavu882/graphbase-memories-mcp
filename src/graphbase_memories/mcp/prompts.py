@@ -9,8 +9,67 @@ from __future__ import annotations
 from fastmcp import Context
 from fastmcp.prompts import Message
 
-from graphbase_memories.engines.analysis import route as analysis_route
 from graphbase_memories.mcp.server import mcp
+
+# ── analysis_routing internals ────────────────────────────────────────────────
+
+_SEQUENTIAL_KEYWORDS = {
+    "strategic", "strategy", "multi-factor", "planning", "roadmap",
+    "prioritize", "milestone", "initiative", "phase",
+}
+_DEBATE_KEYWORDS = {
+    "trade-off", "tradeoff", "compare", "versus", "vs", "debate",
+    "alternatives", "option", "choose", "decision between",
+}
+_SOCRATIC_KEYWORDS = {
+    "unclear", "requirements", "discovery", "explore", "what do you mean",
+    "clarify", "understand", "not sure", "ambiguous",
+}
+_SUGGESTED_STEPS: dict[str, list[str]] = {
+    "sequential": [
+        "1. Define the problem statement and success criteria.",
+        "2. Gather relevant context from memory (retrieve_context).",
+        "3. Break the problem into sequential steps or phases.",
+        "4. Analyze each step for dependencies and risks.",
+        "5. Synthesize conclusions and save durable decisions.",
+    ],
+    "debate": [
+        "1. Enumerate the competing options or trade-offs.",
+        "2. Retrieve prior decisions on similar trade-offs.",
+        "3. Evaluate each option against criteria (cost, risk, fit).",
+        "4. State the recommended option with rationale.",
+        "5. Save the final decision with confidence score.",
+    ],
+    "socratic": [
+        "1. Identify what is unclear or ambiguous in the request.",
+        "2. Ask targeted clarifying questions (one at a time).",
+        "3. Confirm understanding before proceeding.",
+        "4. Restate requirements in your own words for validation.",
+        "5. Proceed with analysis only after requirements are resolved.",
+    ],
+}
+
+
+def _route_analysis(task_description: str, task_type_hint: str | None) -> tuple[str, str]:
+    """Return (mode, rationale) for a task description."""
+    text = (task_description + " " + (task_type_hint or "")).lower()
+    if task_type_hint:
+        hint = task_type_hint.lower()
+        if any(k in hint for k in _SEQUENTIAL_KEYWORDS):
+            return "sequential", "task_type_hint matched sequential keywords"
+        if any(k in hint for k in _DEBATE_KEYWORDS):
+            return "debate", "task_type_hint matched debate keywords"
+        if any(k in hint for k in _SOCRATIC_KEYWORDS):
+            return "socratic", "task_type_hint matched socratic keywords"
+    debate_score = sum(1 for k in _DEBATE_KEYWORDS if k in text)
+    socratic_score = sum(1 for k in _SOCRATIC_KEYWORDS if k in text)
+    sequential_score = sum(1 for k in _SEQUENTIAL_KEYWORDS if k in text)
+    if debate_score > max(sequential_score, socratic_score):
+        return "debate", "task description suggests trade-off evaluation"
+    if socratic_score > max(sequential_score, debate_score):
+        return "socratic", "task description suggests requirements discovery"
+    return "sequential", "default: structured multi-step analysis"
+
 
 # ── analysis_routing ──────────────────────────────────────────────────────────
 
@@ -20,21 +79,20 @@ def analysis_routing(
     task_description: str,
     task_type_hint: str | None = None,
 ) -> list[Message]:
-    """
-    Route a task to the appropriate analysis mode (sequential/debate/socratic).
+    """Route a task to the appropriate analysis mode (sequential/debate/socratic).
+
     Returns guidance messages describing which mode to enter and suggested steps.
-    Replaces the deprecated route_analysis tool.
     """
-    result = analysis_route(task_description, task_type_hint)
+    mode, rationale = _route_analysis(task_description, task_type_hint)
     return [
         Message(
             role="user",
             content=(
                 f"Analysis routing for: {task_description}\n\n"
-                f"Recommended mode: {result.mode}\n"
-                f"Rationale: {result.rationale}\n\n"
+                f"Recommended mode: {mode}\n"
+                f"Rationale: {rationale}\n\n"
                 "Suggested steps:\n"
-                + "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(result.suggested_steps))
+                + "\n".join(f"  {s}" for s in _SUGGESTED_STEPS[mode])
             ),
         )
     ]
@@ -86,15 +144,15 @@ async def impact_before_edit(
                 f"Before modifying entity '{entity_id}', you must assess downstream impact.\n\n"
                 f"Proposed change: {proposed_change}\n\n"
                 "Steps:\n"
-                f"1. Call `route_analysis(entity_id='{entity_id}', max_depth=2)` to map "
-                "   which nodes depend on this entity.\n"
+                f"1. Query the graph to map which nodes depend on entity '{entity_id}' "
+                "   (traverse up to 2 hops and identify dependents with impact_level = critical or high).\n"
                 "2. If any critical dependencies are found (impact_level = critical or high), "
                 "   pause and report them to the user before proceeding.\n"
-                "3. If the change is safe to proceed, call `request_governance_token()` "
-                "   to obtain write authorization.\n"
+                "3. If the change is safe to proceed and you need a global-scope write, "
+                "   call `request_global_write_approval` to obtain write authorization.\n"
                 "4. Apply the change using the appropriate upsert tool "
                 "   (e.g. `upsert_entity_with_deps`, `save_decision`).\n"
-                "5. Call `propagate_impact_event` with a description of what changed.\n\n"
+                "5. Call `propagate_impact` with a description of what changed.\n\n"
                 "Never skip the governance token step for entities with critical dependents."
             ),
         )
@@ -120,12 +178,11 @@ async def federated_sync(
                 "Steps:\n"
                 "1. Read `graphbase://services` to list all active services in the workspace.\n"
                 "2. Call `retrieve_context` for each peer service to identify shared concepts.\n"
-                "3. For each shared entity, call `find_cross_service_links` to detect existing "
-                "   links and gaps.\n"
-                "4. Where gaps exist, call `link_cross_service_entities` with an appropriate "
-                "   `link_type` (DEPENDS_ON, SHARES_CONCEPT, EXTENDS, or CONTRADICTS).\n"
-                "5. After linking, call `detect_workspace_conflicts` to surface any "
-                "   contradictions introduced by the new links.\n"
+                "3. Use `search_cross_service` to inspect existing related entities and gaps.\n"
+                "4. Where gaps exist, call `link_cross_service` with an appropriate "
+                "   `relationship_type` (DEPENDS_ON, SHARES_CONCEPT, EXTENDS, or CONTRADICTS).\n"
+                "5. After linking, call `graph_health` to surface any contradictions introduced "
+                "   by the new links.\n"
                 "6. Report: how many new links were created, how many conflicts detected, "
                 "   and which services now share the most cross-service entities.\n\n"
                 "Use `CONTRADICTS` only when the entity facts are mutually exclusive"
