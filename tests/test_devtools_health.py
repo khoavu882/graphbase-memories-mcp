@@ -56,6 +56,30 @@ async def test_memory_search_returns_list(driver):
     assert "total" in result
 
 
+async def test_memory_search_request_rejects_invalid_query_bounds():
+    """POST /memory/search body validation matches the GET list route bounds."""
+    from pydantic import ValidationError
+
+    from graphbase_memories.devtools.routes.memory import MemorySearchRequest
+
+    invalid_payloads = [
+        {"query": "   "},
+        {"query": "test", "limit": 0},
+        {"query": "test", "limit": 101},
+        {"query": "test", "offset": -1},
+        {"query": "test", "since_days": -1},
+        {"query": "test", "sort_by": "id"},
+        {"query": "test", "sort_order": "sideways"},
+    ]
+
+    for payload in invalid_payloads:
+        try:
+            MemorySearchRequest(**payload)
+            raise AssertionError(f"Expected validation failure for {payload!r}")
+        except ValidationError:
+            pass
+
+
 async def test_memory_search_with_label_filter(driver, fresh_project):
     """POST /memory/search with label=Session filters correctly."""
     from graphbase_memories.devtools.routes.memory import MemorySearchRequest, search_memory

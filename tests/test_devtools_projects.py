@@ -118,3 +118,16 @@ async def test_hygiene_run_global_scope(driver):
     result = await run_hygiene(body, driver, "test-token")
 
     assert isinstance(result, dict)
+
+
+async def test_hygiene_run_request_rejects_invalid_scope():
+    """POST /hygiene/run accepts only the scopes exposed by the devtools UI."""
+    from pydantic import ValidationError
+
+    from graphbase_memories.devtools.routes.hygiene import HygieneRunRequest
+
+    try:
+        HygieneRunRequest(scope="workspace")
+        raise AssertionError("Expected validation failure for invalid hygiene scope")
+    except ValidationError:
+        pass

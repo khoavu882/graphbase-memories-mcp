@@ -22,17 +22,14 @@ async def list_projects(driver: DriverDep):
             """
             MATCH (p:Project)
             WITH p ORDER BY p.created_at DESC LIMIT 50
-            OPTIONAL MATCH (s:Session)-[:BELONGS_TO]->(p)
-            OPTIONAL MATCH (d:Decision)-[:BELONGS_TO]->(p)
-            OPTIONAL MATCH (pat:Pattern)-[:BELONGS_TO]->(p)
-            OPTIONAL MATCH (c:Context)-[:BELONGS_TO]->(p)
-            OPTIONAL MATCH (e:EntityFact)-[:BELONGS_TO]->(p)
+            OPTIONAL MATCH (n)-[rel]->(p)
+            WHERE type(rel) = "BELONGS_TO"
             RETURN p {.*} AS project,
-                   count(DISTINCT s) AS sessions,
-                   count(DISTINCT d) AS decisions,
-                   count(DISTINCT pat) AS patterns,
-                   count(DISTINCT c) AS contexts,
-                   count(DISTINCT e) AS entities
+                   count(DISTINCT CASE WHEN n IS NOT NULL AND "Session" IN labels(n) THEN n END) AS sessions,
+                   count(DISTINCT CASE WHEN n IS NOT NULL AND "Decision" IN labels(n) THEN n END) AS decisions,
+                   count(DISTINCT CASE WHEN n IS NOT NULL AND "Pattern" IN labels(n) THEN n END) AS patterns,
+                   count(DISTINCT CASE WHEN n IS NOT NULL AND "Context" IN labels(n) THEN n END) AS contexts,
+                   count(DISTINCT CASE WHEN n IS NOT NULL AND "EntityFact" IN labels(n) THEN n END) AS entities
             """
         )
         projects = []

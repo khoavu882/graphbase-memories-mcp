@@ -1,7 +1,7 @@
 ---
 name: graphbase-session
 description: Manage Claude Code session lifecycle with graphbase. Use at session start to load context, and at session end to persist decisions, patterns, and open items.
-version: 2.0.0
+version: 2.1.0
 tools:
   - retrieve_context
   - memory_surface
@@ -17,8 +17,8 @@ tools:
 1. retrieve_context(project_id="<project>", scope="project")
    → ContextBundle.scope_state:
      "resolved"   — project exists, context loaded
-     "uncertain"  — project exists but has few memories
-     "unresolved" — project not found; first save_* call will auto-create it
+     "uncertain"  — project_id was provided but no Project node exists
+     "unresolved" — no project_id was provided
 
 2. (Optional) memory_surface(query="<task topic>", project_id="<project>")
    → targeted BM25 lookup for a specific symbol or topic
@@ -30,8 +30,8 @@ tools:
 | `scope_state` | Action |
 |---|---|
 | `resolved` | Proceed — full context loaded |
-| `uncertain` | Proceed with caution — limited prior context |
-| `unresolved` | Verify `project_id` with user; first write will create the project automatically |
+| `uncertain` | Register the service/project first; writes return `blocked_scope` |
+| `unresolved` | Provide a project_id before reading or writing |
 
 ## Session End Protocol
 
@@ -43,7 +43,7 @@ store_session_with_learnings(
     "decisions_made": ["<decisions recorded this session>"],
     "open_items":   ["<unresolved items>"],
     "next_actions": ["<what to do next session>"],
-    "scope":        "project"
+    "save_scope":   "project"
   },
   project_id="<project>",
   decisions=[
@@ -81,5 +81,5 @@ This does **not** run a full hygiene scan and does **not** update `last_hygiene_
 | Scope | When to use |
 |-------|------------|
 | `project` | Decisions and patterns specific to this service/repo |
-| `global` | Cross-service standards (requires governance token) |
+| `global` | Cross-service decisions (requires governance token when saved as a decision) |
 | `focus` | Focus area (e.g. "auth", "payments") within a project |

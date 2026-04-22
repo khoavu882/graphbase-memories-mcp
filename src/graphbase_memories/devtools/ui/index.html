@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="static/tokens.css">
-  <link rel="stylesheet" href="static/app.css">
+  <link rel="stylesheet" href="static/app.css?v=2.1.0-ui.3">
   <script defer src="static/alpine-focus.min.js"></script>
   <script defer src="static/alpine-intersect.min.js"></script>
   <script defer src="static/stores.js"></script>
@@ -22,7 +22,7 @@
 </head>
 <body
   class="shell"
-  x-data="{ helpOpen: false }"
+  x-data="{ helpOpen: false, theme: window.DevtoolsUI.getTheme() }"
   x-on:devtools:toggle-help.window="helpOpen = !helpOpen"
 >
   <div class="topbar">
@@ -52,9 +52,9 @@
       <button class="btn btn--ghost btn--sm topbar-clear" x-show="$store.auth.token" @click="$store.auth.clear()">
         Clear
       </button>
-      <button class="btn btn--ghost btn--sm topbar-theme" @click="toggleTheme()">
-        <span class="icon" x-html="window.DevtoolsUI.icon(window.DevtoolsUI.getTheme() === 'dark' ? 'sun' : 'moon')"></span>
-        <span x-text="window.DevtoolsUI.getTheme() === 'dark' ? 'Light' : 'Dark'"></span>
+      <button class="btn btn--ghost btn--sm topbar-theme" @click="theme = window.DevtoolsUI.toggleTheme()">
+        <span class="icon" x-html="window.DevtoolsUI.icon(theme === 'dark' ? 'sun' : 'moon')"></span>
+        <span x-text="theme === 'dark' ? 'Light' : 'Dark'"></span>
       </button>
       <button class="btn btn--ghost btn--sm btn--icon topbar-help" aria-label="Help" @click="helpOpen = !helpOpen">
         <span class="icon" x-html="window.DevtoolsUI.icon('help')"></span>
@@ -134,13 +134,12 @@
       <main class="view-frame">
         <div class="view-stack">
           <header class="context-header">
-            <div>
-              <p class="context-path">Workspace</p>
+            <div class="context-title">
               <h2 x-text="$store.nav.contextLabel()"></h2>
             </div>
-            <div class="context-actions muted">
-              <span x-text="$store.neo4j.uri"></span>
-              <span class="context-heartbeat" x-text="`Heartbeat ${$store.neo4j.lastHeartbeat ? 'active' : 'pending'}`"></span>
+            <div class="context-actions">
+              <span class="context-chip mono" x-text="$store.neo4j.uri"></span>
+              <span class="context-chip" x-text="`Heartbeat ${$store.neo4j.lastHeartbeat ? 'active' : 'pending'}`"></span>
             </div>
           </header>
 
@@ -173,7 +172,7 @@
                 <article class="card">
                   <div class="card-header">
                     <h3>Quick Actions</h3>
-                    <span class="muted">Phase 1 landing view</span>
+                    <span class="muted">Workspace actions</span>
                   </div>
                   <div class="card-body stack">
                     <div class="toolbar-actions">
@@ -1164,24 +1163,25 @@
     x-cloak
     @click="helpOpen = false"
   >
-    <div class="modal" @click.stop x-trap.inert.noscroll="helpOpen">
-      <div class="card-header">
+    <div class="modal help-modal" @click.stop x-trap.inert.noscroll="helpOpen">
+      <div class="card-header help-modal-header">
         <div>
           <h3 class="modal-title">Keyboard Shortcuts</h3>
-          <p class="muted">Use quick navigation while the DevTools UI is focused.</p>
         </div>
         <button class="btn btn--ghost btn--sm btn--icon" aria-label="Close help" @click="helpOpen = false">
           <span class="icon" x-html="window.DevtoolsUI.icon('x')"></span>
         </button>
       </div>
-      <div class="card-body stack">
-        <article class="result-card"><strong>1</strong><p class="muted">Projects view</p></article>
-        <article class="result-card"><strong>2</strong><p class="muted">Memory view</p></article>
-        <article class="result-card"><strong>3</strong><p class="muted">Graph view</p></article>
-        <article class="result-card"><strong>4</strong><p class="muted">Tools view</p></article>
-        <article class="result-card"><strong>5</strong><p class="muted">Operations view</p></article>
-        <article class="result-card"><strong>Escape</strong><p class="muted">Close the Inspector Drawer</p></article>
-        <article class="result-card"><strong>?</strong><p class="muted">Toggle this help overlay</p></article>
+      <div class="card-body help-modal-body">
+        <div class="shortcut-grid">
+          <article class="shortcut-item"><kbd>1</kbd><span>Projects</span></article>
+          <article class="shortcut-item"><kbd>2</kbd><span>Memory</span></article>
+          <article class="shortcut-item"><kbd>3</kbd><span>Graph</span></article>
+          <article class="shortcut-item"><kbd>4</kbd><span>Tools</span></article>
+          <article class="shortcut-item"><kbd>5</kbd><span>Operations</span></article>
+          <article class="shortcut-item"><kbd>Esc</kbd><span>Close inspector</span></article>
+          <article class="shortcut-item shortcut-item--wide"><kbd>?</kbd><span>Toggle shortcuts</span></article>
+        </div>
         <div class="modal-actions">
           <button class="btn btn--primary" @click="helpOpen = false">Close</button>
         </div>

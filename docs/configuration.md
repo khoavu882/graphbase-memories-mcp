@@ -90,9 +90,6 @@ All settings are read from **environment variables** with the `GRAPHBASE_` prefi
 `GRAPHBASE_NEO4J_CONNECTION_TIMEOUT` controls how long the driver waits when opening a connection
 to Neo4j. Increase it if your database is remote or often cold-starts.
 
-`GRAPHBASE_NEO4J_CONNECTION_TIMEOUT` controls how long the driver waits when opening a connection
-to Neo4j. Increase it if your database is remote or often cold-starts.
-
 ---
 
 ## Retrieval timeout and retries

@@ -88,21 +88,21 @@ async def _fetch_projects(
     base_query = """
         {match_clause}
         WITH p ORDER BY p.last_seen DESC LIMIT $max_nodes
-        OPTIONAL MATCH (s:Session)-[:BELONGS_TO]->(p)
-        OPTIONAL MATCH (d:Decision)-[:BELONGS_TO]->(p)
-        OPTIONAL MATCH (pat:Pattern)-[:BELONGS_TO]->(p)
-        OPTIONAL MATCH (c:Context)-[:BELONGS_TO]->(p)
-        OPTIONAL MATCH (e:EntityFact)-[:BELONGS_TO]->(p)
+        OPTIONAL MATCH (n)-[rel]->(p)
+        WHERE type(rel) = "BELONGS_TO"
         RETURN p {{.*}} AS project,
-               count(DISTINCT s)   AS sessions,
-               count(DISTINCT d)   AS decisions,
-               count(DISTINCT pat) AS patterns,
-               count(DISTINCT c)   AS contexts,
-               count(DISTINCT e)   AS entities
+               count(DISTINCT CASE WHEN n IS NOT NULL AND "Session" IN labels(n) THEN n END)    AS sessions,
+               count(DISTINCT CASE WHEN n IS NOT NULL AND "Decision" IN labels(n) THEN n END)   AS decisions,
+               count(DISTINCT CASE WHEN n IS NOT NULL AND "Pattern" IN labels(n) THEN n END)    AS patterns,
+               count(DISTINCT CASE WHEN n IS NOT NULL AND "Context" IN labels(n) THEN n END)    AS contexts,
+               count(DISTINCT CASE WHEN n IS NOT NULL AND "EntityFact" IN labels(n) THEN n END) AS entities
     """
     if workspace_id:
         query = base_query.format(
-            match_clause="MATCH (p:Project)-[:MEMBER_OF]->(w:Workspace {id: $workspace_id})"
+            match_clause=(
+                "MATCH (p:Project)-[member]->(w:Workspace {id: $workspace_id}) "
+                'WHERE type(member) = "MEMBER_OF"'
+            )
         )
         result = await session.run(query, workspace_id=workspace_id, max_nodes=max_nodes)
     else:
@@ -128,7 +128,8 @@ async def _fetch_structural_edges(session: AsyncSession) -> tuple[list[dict], li
     """Q3 + Q4: MEMBER_OF edges and signal edges (CROSS_SERVICE_LINK / AFFECTS)."""
     member_result = await session.run(
         """
-        MATCH (p:Project)-[:MEMBER_OF]->(w:Workspace)
+        MATCH (p:Project)-[rel]->(w:Workspace)
+        WHERE type(rel) = "MEMBER_OF"
         RETURN p.id AS source, w.id AS target, "MEMBER_OF" AS type
         """
     )
@@ -161,12 +162,16 @@ async def _fetch_topology_data(
     if workspace_id:
         ent_result = await session.run(
             """
-            MATCH (e:EntityFact)-[:BELONGS_TO]->(p:Project)
-            WHERE (
+            MATCH (e:EntityFact)-[belongs]->(p:Project)
+            WHERE type(belongs) = "BELONGS_TO"
+              AND (
               p.workspace_id = $workspace_id
               OR p.id = $workspace_id
-              OR EXISTS { MATCH (p)-[:MEMBER_OF]->(w:Workspace {id: $workspace_id}) }
-            )
+              OR EXISTS {
+                MATCH (p)-[member]->(w:Workspace {id: $workspace_id})
+                WHERE type(member) = "MEMBER_OF"
+              }
+              )
             RETURN e.id AS id, e.entity_name AS name, e.fact AS fact,
                    e.scope AS scope
             LIMIT $topo_cap

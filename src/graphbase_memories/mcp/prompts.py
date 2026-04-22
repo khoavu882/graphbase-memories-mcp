@@ -14,16 +14,38 @@ from graphbase_memories.mcp.server import mcp
 # ── analysis_routing internals ────────────────────────────────────────────────
 
 _SEQUENTIAL_KEYWORDS = {
-    "strategic", "strategy", "multi-factor", "planning", "roadmap",
-    "prioritize", "milestone", "initiative", "phase",
+    "strategic",
+    "strategy",
+    "multi-factor",
+    "planning",
+    "roadmap",
+    "prioritize",
+    "milestone",
+    "initiative",
+    "phase",
 }
 _DEBATE_KEYWORDS = {
-    "trade-off", "tradeoff", "compare", "versus", "vs", "debate",
-    "alternatives", "option", "choose", "decision between",
+    "trade-off",
+    "tradeoff",
+    "compare",
+    "versus",
+    "vs",
+    "debate",
+    "alternatives",
+    "option",
+    "choose",
+    "decision between",
 }
 _SOCRATIC_KEYWORDS = {
-    "unclear", "requirements", "discovery", "explore", "what do you mean",
-    "clarify", "understand", "not sure", "ambiguous",
+    "unclear",
+    "requirements",
+    "discovery",
+    "explore",
+    "what do you mean",
+    "clarify",
+    "understand",
+    "not sure",
+    "ambiguous",
 }
 _SUGGESTED_STEPS: dict[str, list[str]] = {
     "sequential": [
@@ -91,8 +113,7 @@ def analysis_routing(
                 f"Analysis routing for: {task_description}\n\n"
                 f"Recommended mode: {mode}\n"
                 f"Rationale: {rationale}\n\n"
-                "Suggested steps:\n"
-                + "\n".join(f"  {s}" for s in _SUGGESTED_STEPS[mode])
+                "Suggested steps:\n" + "\n".join(f"  {s}" for s in _SUGGESTED_STEPS[mode])
             ),
         )
     ]

@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/graphbase-tools/codex/hooks/graphbase-codex-hook.js\"",
+            "timeout": 10,
+            "statusMessage": "Preparing graph memory guidance"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/graphbase-tools/codex/hooks/graphbase-codex-hook.js\"",
+            "timeout": 10,
+            "statusMessage": "Surfacing graph memories"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/graphbase-tools/codex/hooks/graphbase-codex-hook.js\"",
+            "timeout": 10,
+            "statusMessage": "Checking memory freshness"
+          }
+        ]
+      }
+    ]
+  }
+}

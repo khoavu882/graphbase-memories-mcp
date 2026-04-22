@@ -1,7 +1,7 @@
 ---
 name: graphbase-entity
 description: Create, update, and retrieve entity facts with linked decisions and patterns. Use when tracking a symbol, API, service component, or concept in the knowledge graph.
-version: 1.0.0
+version: 2.1.0
 tools:
   - upsert_entity_with_deps
   - retrieve_context
@@ -22,18 +22,23 @@ or concept). It can link to:
 
 ```
 upsert_entity_with_deps(
-  entity_name="HygieneEngine",
-  fact="Runs four-phase dedup/staleness cycle. Batch size controlled by max_candidates setting.",
+  entity={
+    "entity_name": "HygieneEngine",
+    "fact": "Runs dedup, staleness, drift, and pending-save checks.",
+    "scope": "project"
+  },
   project_id="<project>",
-  decision_titles=["Use batch deletion for hygiene performance"],
-  pattern_triggers=["run hygiene before retrieval in long sessions"]
+  related_entities=[],
+  focus=None
 )
 ```
 
 The `upsert_entity_with_deps` tool:
-- Creates the entity if it does not exist (MERGE on entity_name + scope)
-- Updates the `fact` if it does exist (sets `updated_at`)
-- Links the listed decisions and patterns (creates them if absent)
+- Creates the entity if it does not exist (MERGE on `entity_name` + `scope`)
+- Updates the `fact` if it does exist
+- Optionally links to existing `EntityFact` nodes by ID using typed relationships:
+  `BELONGS_TO`, `CONFLICTS_WITH`, `PRODUCED`, `MERGES_INTO`, `PRODUCES`, `CONSUMES`,
+  `READS`, `WRITES`, or `INVOLVES`
 
 ## Finding Cross-Service Entities
 
@@ -45,7 +50,7 @@ search_cross_service(
 )
 ```
 
-Returns `CrossServiceBundle` — entities, decisions, or patterns from other services in the
+Returns `CrossServiceBundle` — entities or decisions from other services in the
 workspace that match the query. Useful before introducing a pattern that may already exist
 elsewhere.
 
@@ -54,9 +59,9 @@ elsewhere.
 | Scope | project_id required? | Who can write? |
 |-------|---------------------|---------------|
 | `project` | Yes | Anyone with project scope |
-| `global` | No | Governance token required |
+| `global` | Yes | Governance token required for global artifact writes; entity writes still require resolved project scope |
 
 ## Freshness
 
-Entity facts have `updated_at` set on every MERGE. If `_freshness == "stale"` in a retrieval
-result, call `upsert_entity_with_deps` with the latest fact to refresh it.
+Freshness is derived from graph timestamps. If `freshness == "stale"` in a surface or hygiene
+result, call `upsert_entity_with_deps` with the latest fact to refresh the stored content.

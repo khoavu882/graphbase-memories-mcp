@@ -54,7 +54,7 @@ list_active_services(
 
 ## Cross-Service Search
 
-Find decisions, entities, or patterns that appear across multiple services in the workspace:
+Find decisions or entity facts that appear across multiple services in the workspace:
 
 ```
 search_cross_service(
@@ -65,8 +65,10 @@ search_cross_service(
   limit=50
 )
 → CrossServiceBundle {
-    results: [{ node_id, project_id, label, summary, score }],
-    total
+    items: [{ node_id, node_type, source_project, score, summary }],
+    total_count,
+    queried_projects,
+    retrieval_status
   }
 ```
 
@@ -110,19 +112,19 @@ After linking entities, assess blast radius before making a breaking change:
 
 ```
 propagate_impact(
-  source_entity_id="<entity id>",
+  entity_id="<entity id>",
   change_description="<what is changing>",
-  impact_type="breaking_change"   # or "deprecation", "behavior_change"
+  impact_type="breaking"   # or "deprecation", "behavior_change"
 )
 → ImpactReport {
     affected_services: [{ project_id, depth, risk_level, entity_count }],
-    overall_risk: "low" | "medium" | "high",
+    overall_risk: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
     impact_event_id,
     next_step
   }
 ```
 
-If `overall_risk == "high"`, review `affected_services` and notify those teams before merging.
+If `overall_risk` is `HIGH` or `CRITICAL`, review `affected_services` and notify those teams before merging.
 
 ---
 
@@ -146,6 +148,7 @@ Review and resolve before running hygiene to avoid false merges.
 
 | Level | Meaning | Action |
 |-------|---------|--------|
-| `low` | Only this service affected | Proceed with awareness |
-| `medium` | 2–4 services affected | Notify affected teams |
-| `high` | 5+ services or deep graph | Coordinate before merging |
+| `LOW` | Low-depth or contained impact | Proceed with awareness |
+| `MEDIUM` | Depth-2 impact | Notify affected teams |
+| `HIGH` | Direct dependency impact | Coordinate before merging |
+| `CRITICAL` | Contradicting cross-service link involved | Resolve conflict before merging |

@@ -1,0 +1,8 @@
+[mcp_servers.graphbase-memories]
+command = "graphbase"
+args = ["serve"]
+
+[mcp_servers.graphbase-memories.env]
+GRAPHBASE_NEO4J_URI = "bolt://localhost:7687"
+GRAPHBASE_NEO4J_USER = "neo4j"
+GRAPHBASE_NEO4J_PASSWORD = "graphbase"

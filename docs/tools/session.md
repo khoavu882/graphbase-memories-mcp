@@ -18,6 +18,7 @@ save, pass `decisions=[]` and `patterns=[]` or omit both fields.
 | `decisions` | `list[DecisionSchema]` | No | Decisions made this session |
 | `patterns` | `list[PatternSchema]` | No | Patterns observed or validated |
 | `project_id` | `string` | Yes | Project identifier |
+| `governance_token` | `string \| null` | Conditional | Required when any batched decision has `scope="global"` |
 
 ### Returns: `BatchSaveResult`
 
