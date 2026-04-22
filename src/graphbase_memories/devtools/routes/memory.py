@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from graphbase_memories.config import settings
 from graphbase_memories.devtools.deps import DevtoolsTokenDep, DriverDep
@@ -250,15 +250,23 @@ async def get_node(node_id: str, driver: DriverDep):
 
 
 class MemorySearchRequest(BaseModel):
-    query: str
+    query: str = Field(min_length=1)
     project_id: str | None = None
     label: str | None = None
     labels: list[str] | None = None
-    limit: int = 20
-    since_days: int | None = None
-    offset: int = 0
+    limit: int = Field(default=20, ge=1, le=100)
+    since_days: int | None = Field(default=None, ge=0)
+    offset: int = Field(default=0, ge=0)
     sort_by: str = "created_at"
     sort_order: str = "desc"
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, v: str) -> str:
+        query = v.strip()
+        if not query:
+            raise ValueError("query must contain non-whitespace text")
+        return query
 
     @field_validator("label")
     @classmethod
@@ -276,6 +284,20 @@ class MemorySearchRequest(BaseModel):
             raise ValueError(
                 f"Invalid labels {invalid!r}. Must be drawn from: {sorted(_ALLOWED_LABELS)}"
             )
+        return v
+
+    @field_validator("sort_by")
+    @classmethod
+    def validate_sort_by(cls, v: str) -> str:
+        if v not in _ALLOWED_SORT_FIELDS:
+            raise ValueError(f"Invalid sort_by {v!r}. Must be one of: {sorted(_ALLOWED_SORT_FIELDS)}")
+        return v
+
+    @field_validator("sort_order")
+    @classmethod
+    def validate_sort_order(cls, v: str) -> str:
+        if v not in {"asc", "desc"}:
+            raise ValueError("sort_order must be 'asc' or 'desc'")
         return v
 
 

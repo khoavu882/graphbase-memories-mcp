@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -66,7 +67,7 @@ async def hygiene_status(driver: DriverDep):
 
 class HygieneRunRequest(BaseModel):
     project_id: str | None = None
-    scope: str = "global"
+    scope: Literal["global", "project"] = "global"
     check_pending_only: bool = False
 
 
