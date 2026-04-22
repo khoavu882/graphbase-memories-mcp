@@ -2,7 +2,7 @@
 
 **Graph-backed persistent memory for AI coding agents, exposed as an MCP server.**
 
-Agents (Claude, Codex, Gemini, and others) call **20 structured MCP tools** to read and write scoped memory into a **Neo4j** graph database. `graphbase` also exposes **4 prompts** and **4 read-only resources** for guided workflows and passive context. Memory survives across sessions, accumulates decisions and patterns over time, and surfaces the most relevant context when you need it.
+Agents (Claude, Codex, Gemini, and others) call **20 structured MCP tools** to read and write scoped memory into a **Neo4j** graph database. `graphbase` also exposes **4 prompts**, **2 read-only resources**, and **2 resource templates** for guided workflows and passive context. Memory survives across sessions, accumulates decisions and patterns over time, and surfaces the most relevant context when you need it.
 
 ---
 
@@ -17,7 +17,7 @@ Most agent memory is flat — a list of notes, a vector store of embeddings, or 
 ```mermaid
 graph TD
     A["AI Agent<br/>(Claude / Codex / Gemini)"]
-    B["MCP Server — FastMCP<br/>20 async tools · 4 prompts · 4 resources<br/>stdio JSON-RPC 2.0"]
+    B["MCP Server — FastMCP<br/>20 async tools · 4 prompts<br/>2 resources · 2 resource templates<br/>stdio JSON-RPC 2.0"]
     C["Business Logic Layer<br/>engines/"]
     I[("Neo4j 5<br/>Graph Store")]
 
@@ -39,7 +39,7 @@ graph TD
 | Save a repeatable workflow pattern | `save_pattern` |
 | Save a free-form context snippet | `save_context` |
 | Upsert a named entity and its relationships | `upsert_entity_with_deps` |
-| Obtain a global-scope write token | `request_global_write_approval` |
+| Obtain a governance token for global decisions or guarded batch topology writes | `request_global_write_approval` |
 | Run memory hygiene (detect duplicates, stale items, freshness) | `run_hygiene` |
 | Register or deregister a service in a workspace | `register_federated_service` |
 | List services active in a workspace | `list_active_services` |
@@ -70,4 +70,4 @@ graph TD
 - [MCP Tools Overview](tools/index.md) — all 20 tools with prompts/resources side notes
 - [Memory Model](concepts/memory-model.md) — scopes, artifacts, graph edges
 - [Configuration](configuration.md) — all `GRAPHBASE_*` environment variables
-- [Release Notes v2.0.0](releases/v2.0.0.md) — release surface and upgrade notes
+- [Release Notes v2.1.0](releases/v2.1.0.md) — UI polish, release surface, and upgrade notes

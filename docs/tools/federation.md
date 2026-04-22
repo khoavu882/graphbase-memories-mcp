@@ -159,6 +159,11 @@ rejected. Duplicate links are silently skipped.
     `link_cross_service` validates that `source_entity_id` and `target_entity_id` belong to
     different projects. Linking within the same project returns `status: "failed"`.
 
+!!! note "Devtools HTTP parameter name"
+    The MCP tool parameter is `relationship_type`. The devtools flat JSON invocation route
+    (`POST /tools/link_cross_service/invoke`) dispatches directly to the engine and expects
+    `link_type` in `params`.
+
 ---
 
 ## Impact analysis

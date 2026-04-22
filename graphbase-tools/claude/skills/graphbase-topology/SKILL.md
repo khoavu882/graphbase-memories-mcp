@@ -1,7 +1,7 @@
 ---
 name: graphbase-topology
 description: Upsert service topology into the graph — register services, shared infrastructure, features, and all relationships between them. Use when onboarding a new service, after a dependency refactor, or before running blast-radius analysis.
-version: 2.0.0
+version: 2.1.0
 tools:
   - retrieve_context
   - register_service
@@ -65,7 +65,7 @@ Read Java/Python source code to infer topology:
 
 | Data point | Why it needs user input |
 |---|---|
-| `workspace_id` | Must match an existing `:Workspace` node |
+| `workspace_id` | Must be the workspace anchor used by `register_federated_service` or topology registration |
 | `criticality` on dependency edges | Business risk judgment |
 | `step_order` in feature workflows | Process ordering from documentation |
 | Feature membership | Which services belong to which feature |
@@ -83,21 +83,19 @@ Execute in strict order. Each phase is a prerequisite for the next.
 ### Phase 0 — Prerequisites
 
 ```
-retrieve_context(project_id=<workspace_id>, scope="project")
-→ ContextBundle.scope_state:
-    "resolved"   — workspace exists, context loaded → proceed
-    "uncertain"  — workspace exists but has few memories → proceed with caution
-    "unresolved" — workspace not found → ask user for correct workspace_id
+list_active_services(workspace_id=<workspace_id>)
+→ ServiceListResult:
+    "succeeded" — workspace exists and active services were listed
+    "empty" or no services — confirm whether this is a new workspace before continuing
 ```
 
 **Governance token (only when batch-upserting >1 infra node):**
 
 ```
 request_global_write_approval(
-  rationale="Batch-registering shared infra nodes for <workspace_id> topology upsert",
-  ttl_seconds=600
+  content_preview="Batch-registering shared infra nodes for <workspace_id> topology upsert"
 )
-→ save token.id — consumed once in Phase 1 Option B
+→ save token — consumed once in Phase 1 Option B
 ```
 
 Single-node `batch_upsert_shared_infrastructure` calls (N=1) do **not** require a token.
@@ -150,7 +148,7 @@ batch_upsert_shared_infrastructure(inp={
 ```
 batch_upsert_shared_infrastructure(inp={
   workspace_id: <workspace_id>,
-  governance_token: <token.id from Phase 0>,
+  governance_token: <token from Phase 0>,
   nodes: [
     { node_type: "datasource",    source_id: "redis-session", source_type: "redis", ... },
     { node_type: "messagequeue",  queue_id: "login-events",   queue_type: "kafka",  ... },

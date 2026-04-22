@@ -75,7 +75,29 @@ Beyond artifacts, the graph contains infrastructure nodes:
 | `Project` | Namespace for project-scoped artifacts; tracks `last_hygiene_at` |
 | `GlobalScope` | Singleton node (`id="global"`) for global-scoped artifacts |
 | `FocusArea` | Named focus context within a project |
-| `GovernanceToken` | One-time write token for global-scope writes; has TTL |
+| `GovernanceToken` | One-time token for global decision writes and guarded batch topology writes; has TTL |
+| `Workspace` | Federated service grouping |
+| `ImpactEvent` | Audit node for impact propagation runs |
+| `Service` | Dual-label `:Project:Service` topology node |
+| `DataSource` | Database, cache, object store, or other shared data dependency |
+| `MessageQueue` | Event bus, topic, queue, or exchange |
+| `Feature` | Cross-service feature workflow anchor |
+| `BoundedContext` | Domain boundary grouping services |
+
+## Federation and topology edges
+
+| Relationship | From -> To | Meaning |
+|---|---|---|
+| `[:MEMBER_OF]` | `Project` / `Service` -> `Workspace` | Service membership in a workspace |
+| `[:CROSS_SERVICE_LINK]` | `EntityFact` -> `EntityFact` | Typed cross-service knowledge link (`DEPENDS_ON`, `SHARES_CONCEPT`, `CONTRADICTS`, `SUPERSEDES`, `EXTENDS`) |
+| `[:AFFECTS]` | `ImpactEvent` -> `Project` | Impact propagation output with depth and risk metadata |
+| `[:PART_OF]` | `DataSource` / `MessageQueue` / `BoundedContext` -> `Workspace` | Shared infrastructure membership |
+| `[:HAS_FEATURE]` | `Workspace` -> `Feature` | Workspace feature catalog edge |
+| `[:CALLS_DOWNSTREAM]` / `[:CALLS_UPSTREAM]` | `Service` -> `Service` | Service dependency direction |
+| `[:READS_FROM]` / `[:WRITES_TO]` / `[:READS_WRITES]` | `Service` -> `DataSource` | Data dependency |
+| `[:PUBLISHES_TO]` / `[:SUBSCRIBES_TO]` | `Service` -> `MessageQueue` | Messaging dependency |
+| `[:INVOLVES]` | `Feature` -> `Service` | Ordered workflow step with role metadata |
+| `[:MEMBER_OF_CONTEXT]` | `Service` -> `BoundedContext` | Domain ownership/contribution |
 
 ---
 

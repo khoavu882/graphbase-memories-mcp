@@ -2,7 +2,7 @@
 
 Graph-backed persistent memory for AI coding agents, exposed as an MCP server (stdio transport).
 
-Agents call **20 MCP tools**, plus **4 prompts** and **4 read-only resources**, to read and write scoped memory into a **Neo4j** graph database. Memory is organized into three scopes — `global`, `project`, and `focus` — and five artifact types: sessions, decisions, patterns, context snippets, and entity facts.
+Agents call **20 MCP tools**, plus **4 prompts**, **2 read-only resources**, and **2 resource templates**, to read and write scoped memory into a **Neo4j** graph database. Memory is organized into three scopes — `global`, `project`, and `focus` — and five artifact types: sessions, decisions, patterns, context snippets, and entity facts.
 
 ---
 
@@ -94,7 +94,7 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
   "mcpServers": {
     "graphbase-memories": {
       "command": "uvx",
-      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase-memories-mcp@v2.0.0", "graphbase", "serve"],
+      "args": ["--python", "3.11", "--from", "git+https://github.com/khoavu882/graphbase-memories-mcp@v2.1.0", "graphbase", "serve"],
       "env": {
         "GRAPHBASE_NEO4J_URI": "bolt://localhost:7687",
         "GRAPHBASE_NEO4J_USER": "neo4j",
@@ -105,9 +105,9 @@ Copy `.mcp.json.example` to `.mcp.json` in your project root and adjust paths/en
 }
 ```
 
-After saving, restart Claude Code. The 20 MCP tools, 4 prompts, and 4 resources will appear in the host surface that your client supports.
+After saving, restart Claude Code. The 20 MCP tools, 4 prompts, 2 resources, and 2 resource templates will appear in the host surface that your client supports.
 
-> **Tip**: Use `@v2.0.0` (or the latest tag) to pin to a stable release. `@main` tracks the development branch and may include unreleased changes.
+> **Tip**: Use `@v2.1.0` (or the latest tag) to pin to a stable release. `@main` tracks the development branch and may include unreleased changes.
 
 ---
 
@@ -122,7 +122,7 @@ After saving, restart Claude Code. The 20 MCP tools, 4 prompts, and 4 resources 
 | `save_pattern` | Artifact | Save a repeatable workflow pattern with hash-based dedup |
 | `save_context` | Artifact | Save a free-form context snippet with relevance score |
 | `upsert_entity_with_deps` | Entity | Upsert a named entity fact and link related entities with typed relationships |
-| `request_global_write_approval` | Governance | Obtain a one-time token required for global-scope writes |
+| `request_global_write_approval` | Governance | Obtain a one-time token required for global decisions and guarded batch topology writes |
 | `run_hygiene` | Hygiene | Detect duplicates, stale decisions, obsolete patterns, entity drift; pass `check_pending_only=True` to list pending/failed saves |
 | `register_federated_service` | Federation | Register (or deactivate via `active=False`) a service in a named workspace |
 | `list_active_services` | Federation | List services active within a time window |
@@ -145,7 +145,8 @@ In addition to the tool surface, `graphbase` also registers reusable prompts and
 | Type | Names |
 |---|---|
 | Prompts | `analysis_routing`, `memory_review`, `impact_before_edit`, `federated_sync` |
-| Resources | `graphbase://schema`, `graphbase://services`, `graphbase://health/{workspace_id}`, `graphbase://session/{session_id}` |
+| Resources | `graphbase://schema`, `graphbase://services` |
+| Resource templates | `graphbase://health/{workspace_id}`, `graphbase://session/{session_id}` |
 
 Prompts return guided workflows; resources return read-only YAML context.
 
@@ -248,6 +249,9 @@ Graph edges (memory):
   [:MERGES_INTO]   EntityFact → EntityFact  (hygiene normalization)
 
 Graph edges (topology):
+  [:MEMBER_OF]                                 Project/Service → Workspace
+  [:PART_OF] / [:HAS_FEATURE]                  shared infra / features ↔ Workspace
+  [:AFFECTS]                                   ImpactEvent → Project
   [:CALLS_DOWNSTREAM] / [:CALLS_UPSTREAM]   Service → Service
   [:READS_FROM] / [:WRITES_TO] / [:READS_WRITES]  Service → DataSource
   [:PUBLISHES_TO] / [:SUBSCRIBES_TO]        Service → MessageQueue

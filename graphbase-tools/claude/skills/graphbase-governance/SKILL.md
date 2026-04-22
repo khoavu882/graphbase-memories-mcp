@@ -1,7 +1,7 @@
 ---
 name: graphbase-governance
-description: Govern global memory writes. Use when you need to write a cross-service standard, policy, or decision that affects all services in the workspace. Requires a governance token.
-version: 2.0.0
+description: Govern global decision writes. Use when you need to write a cross-service standard, policy, or decision that affects all services in the workspace. Requires a governance token.
+version: 2.1.0
 tools:
   - request_global_write_approval
 ---
@@ -10,19 +10,17 @@ tools:
 
 ## Why governance?
 
-Global-scope memories (scope="global") affect every service in the workspace. An accidental or
-poorly-considered global write can corrupt the shared knowledge base. Governance tokens are
-time-limited write approvals that ensure intentional global writes.
+Global-scope decisions (scope="global") affect every service in the workspace. An accidental or
+poorly-considered global decision can corrupt the shared knowledge base. Governance tokens are
+time-limited write approvals that ensure intentional global decision writes.
 
 ## Governance Workflow
 
 ```
 request_global_write_approval(
-  rationale="<why this write must be global — one clear sentence>",
-  content_preview="<brief summary of what will be written>",
-  ttl_seconds=300   # 5 minutes — enough for the write operation
+  content_preview="<brief summary of what will be written>"
 )
-→ GovernanceToken { id, expires_at }
+→ GovernanceTokenResult { token, expires_at, ttl_seconds, instructions }
 ```
 
 Pass the token immediately to the write call:
@@ -30,18 +28,18 @@ Pass the token immediately to the write call:
 ```
 store_session_with_learnings(
   ...,
+  governance_token="<token>",
   decisions=[{
     ...,
-    scope="global",
-    governance_token_id="<token.id>"
+    scope="global"
   }]
 )
 ```
 
 ## Token Rules
 
-- Tokens expire (TTL default: 300 seconds). Use promptly.
-- One token per global write operation.
+- Tokens expire (TTL default: 60 seconds). Use promptly.
+- One token per global decision write operation.
 - Tokens are consumed on use — request a new one if the write fails.
 - Never persist or reuse tokens across sessions.
 
@@ -51,9 +49,9 @@ store_session_with_learnings(
 |---|---|---|
 | Team convention specific to this service | `project` | No |
 | Auth pattern used only in this repo | `project` | No |
-| OpenTelemetry span standard for all services | `global` | **Yes** |
-| REST versioning policy for the platform | `global` | **Yes** |
+| OpenTelemetry decision standard for all services | `global` | **Yes** |
+| REST versioning decision for the platform | `global` | **Yes** |
 | ADR that governs multiple services | `global` | **Yes** |
 
-Only invoke this skill when the write scope is `global`. For project-scoped writes,
-use `store_session_with_learnings` directly without a token.
+Only invoke this skill when writing a global-scope decision. For project-scoped writes,
+use `save_decision` or `store_session_with_learnings` directly without a token.

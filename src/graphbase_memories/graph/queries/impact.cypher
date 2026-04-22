@@ -26,8 +26,9 @@ MATCH (p:Project)-[:MEMBER_OF]->(w:Workspace {id: $workspace_id})
 OPTIONAL MATCH (entity:EntityFact)-[:BELONGS_TO]->(p)
 OPTIONAL MATCH (decision:Decision)-[:BELONGS_TO]->(p)
 OPTIONAL MATCH (pattern:Pattern)-[:BELONGS_TO]->(p)
-OPTIONAL MATCH (d2:Decision)-[:CONFLICTS_WITH]-(other:Decision)
-  WHERE (d2)-[:BELONGS_TO]->(p) OR (other)-[:BELONGS_TO]->(p)
+OPTIONAL MATCH (d2:Decision)-[conflict_rel]-(other:Decision)
+  WHERE type(conflict_rel) = "CONFLICTS_WITH"
+    AND ((d2)-[:BELONGS_TO]->(p) OR (other)-[:BELONGS_TO]->(p))
 WITH p,
      count(DISTINCT entity)   AS entity_count,
      count(DISTINCT decision) AS decision_count,

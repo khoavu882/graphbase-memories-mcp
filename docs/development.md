@@ -93,7 +93,7 @@ src/graphbase_memories/
 │   └── resources.py      MCP resource handlers
 ├── engines/              Business logic engines
 ├── graph/
-│   ├── driver.py         AsyncDriver + lifespan context manager
+│   ├── driver.py         AsyncGraphDatabase setup + lifespan context manager
 │   ├── models.py         Node dataclasses
 │   ├── queries/          .cypher files (schema, retrieval, write, dedup, hygiene, topology, federation, impact, surface)
 │   └── repositories/     One repo class per node type

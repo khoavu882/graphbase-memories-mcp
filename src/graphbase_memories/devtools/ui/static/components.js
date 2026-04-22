@@ -756,7 +756,10 @@
         try {
           this.report = await ui.fetchJson("/hygiene/run", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...Alpine.store("auth").headers(),
+            },
             body: JSON.stringify({
               project_id: this.runProjectId || null,
               scope: this.runScope,
